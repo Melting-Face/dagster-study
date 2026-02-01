@@ -1,0 +1,10 @@
+.trunk/
+.venv/
+logs/
+minio/
+
+**/*.log
+**/*.duckdb
+
+.env
+.user.yml

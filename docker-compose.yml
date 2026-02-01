@@ -1,0 +1,67 @@
+x-docker-logging: &docker-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m" # 로그 파일의 최대 크기 (10MB)
+      max-file: "20" # 유지할 로그 파일 개수 (최대 10개)
+
+services:
+  dagster-dev:
+    container_name: dagster-dev
+    build:
+      context: dagster/dockerfile.d/
+    command:
+      - "dev"
+      - "-h"
+      - "0.0.0.0"
+      - "--verbose"
+    ports:
+      - 3000:3000
+    env_file:
+      - .env
+    volumes:
+      - ./shared:/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    container_name: postgres
+    image: postgres:11
+    env_file:
+      - .env
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$DAGSTER_POSTGRES_USER -d $$DAGSTER_POSTGRES_DB",
+        ]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+
+  # n8n:
+  #   container_name: n8n
+  #   image: n8nio/n8n:latest
+  #   ports:
+  #     - 5678:5678
+  #   env_file:
+  #     - .env
+
+  # discord-py:
+  #   container_name: discord-py
+  #   build:
+  #     context: discord-py/dockerfile.d/
+  #   env_file:
+  #     - .env
+
+  minio:
+    container_name: minio
+    image: quay.io/minio/minio
+    ports:
+      - 9000-9001:9000-9001
+    env_file:
+      - .env
+    volumes:
+      - ./minio/data:/data
+    command: ["minio", "server", "/data", "--console-address", ":9001"]

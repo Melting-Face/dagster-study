@@ -1,0 +1,11 @@
+.venv/
+logs/
+minio/
+shared/
+
+**/*.log
+**/*.duckdb
+
+.env
+.user.yml
+.DS_Store

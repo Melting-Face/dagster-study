@@ -7,6 +7,7 @@ x-docker-logging: &docker-logging
 
 services:
   dagster-dev:
+    <<: *docker-logging
     container_name: dagster-dev
     build:
       context: dagster/dockerfile.d/
@@ -26,6 +27,7 @@ services:
         condition: service_healthy
 
   postgres:
+    <<: *docker-logging
     container_name: postgres
     image: postgres:11
     env_file:
@@ -34,19 +36,15 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U $$DAGSTER_POSTGRES_USER -d $$DAGSTER_POSTGRES_DB",
+          "pg_isready",
+          "-U",
+          "$$DAGSTER_POSTGRES_USER",
+          "-d",
+          "$$DAGSTER_POSTGRES_DB",
         ]
       interval: 10s
       timeout: 8s
       retries: 5
-
-  # n8n:
-  #   container_name: n8n
-  #   image: n8nio/n8n:latest
-  #   ports:
-  #     - 5678:5678
-  #   env_file:
-  #     - .env
 
   # discord-py:
   #   container_name: discord-py
@@ -54,14 +52,22 @@ services:
   #     context: discord-py/dockerfile.d/
   #   env_file:
   #     - .env
+  ollma:
+    <<: *docker-logging
+    container_name: ollma
+    image: ollama/ollama:0.16.2
+    ports:
+      - 11434:11434
+    volumes:
+      - ./ollma:/root/.ollma:Z,U
 
-  minio:
-    container_name: minio
-    image: quay.io/minio/minio
+  rustfs:
+    <<: *docker-logging
+    container_name: rustfs
+    image: rustfs/rustfs:1.0.0-alpha.83
     ports:
       - 9000-9001:9000-9001
     env_file:
       - .env
     volumes:
-      - ./minio/data:/data
-    command: ["minio", "server", "/data", "--console-address", ":9001"]
+      - ./rustfs/data:/data:Z,U

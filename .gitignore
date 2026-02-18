@@ -1,6 +1,8 @@
 .venv/
 logs/
 minio/
+rustfs/
+ollma/
 shared/
 
 **/*.log

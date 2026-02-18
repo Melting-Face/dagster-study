@@ -19,8 +19,10 @@ dependencies = [
   "dagster-deltalake-polars==0.28.12",
   "dagster-duckdb==0.28.12",
   "dagster-duckdb-polars==0.28.12",
-  "dagster-polars==0.27.8",
+  "dagster-polars[patito]==0.27.8",
   "dagster-dg-cli==1.12.12",
+  "dagster-apprise==0.0.2",
+  "dagster-mlflow==0.28.12",
 ]
 
 [dependency-groups]

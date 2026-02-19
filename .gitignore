@@ -3,6 +3,7 @@ logs/
 minio/
 rustfs/
 ollma/
+postgres/
 shared/
 
 **/*.log

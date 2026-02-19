@@ -16,10 +16,10 @@ services:
       - "-h"
       - "0.0.0.0"
       - "--verbose"
-    ports:
-      - 3000:3000
     env_file:
       - .env
+    ports:
+      - ${DAGSTER_PORT}:${DAGSTER_PORT}
     volumes:
       - ./shared:/shared
     depends_on:
@@ -29,35 +29,49 @@ services:
   postgres:
     <<: *docker-logging
     container_name: postgres
-    image: postgres:11
-    env_file:
-      - .env
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready",
-          "-U",
-          "$$DAGSTER_POSTGRES_USER",
-          "-d",
-          "$$DAGSTER_POSTGRES_DB",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 8s
       retries: 5
 
-  # discord-py:
-  #   container_name: discord-py
-  #   build:
-  #     context: discord-py/dockerfile.d/
-  #   env_file:
-  #     - .env
+  mlflow:
+    <<: *docker-logging
+    container_name: mlflow
+    image: ghcr.io/mlflow/mlflow:${MLFLOW_VERSION}
+    ports:
+      - ${MLFLOW_PORT}:${MLFLOW_PORT}
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --no-cache-dir psycopg2-binary boto3
+        mlflow server \
+          --backend-store-uri "${MLFLOW_BACKEND_STORE_URI}" \
+          --artifacts-destination "${MLFLOW_ARTIFACTS_DESTINATION}" \
+          --serve-artifacts \
+          --host "${MLFLOW_HOST}" \
+          --port "${MLFLOW_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   ollma:
     <<: *docker-logging
     container_name: ollma
-    image: ollama/ollama:0.16.2
+    image: ollama/ollama:${OLLMA_VERSION}
     ports:
-      - 11434:11434
+      - ${OLLMA_PORT}:${OLLMA_PORT}
     volumes:
       - ./ollma:/root/.ollma:Z,U
 
@@ -67,7 +81,10 @@ services:
     image: rustfs/rustfs:1.0.0-alpha.83
     ports:
       - 9000-9001:9000-9001
-    env_file:
-      - .env
     volumes:
       - ./rustfs/data:/data:Z,U
+
+  # discord-py:
+  #   container_name: discord-py
+  #   build:
+  #     context: discord-py/dockerfile.d/

@@ -6,6 +6,6 @@ WORKDIR $APP_HOME
 
 COPY src/ $APP_HOME/
 
-RUN pip install -r $APP_HOME/requirements.txt
+RUN pip install --no-cache-dir -r $APP_HOME/requirements.txt
 
 ENTRYPOINT ["python", "app.py"]

@@ -8,6 +8,7 @@ shared/
 
 **/*.log
 **/*.duckdb
+**/config.toml
 
 .env
 .user.yml

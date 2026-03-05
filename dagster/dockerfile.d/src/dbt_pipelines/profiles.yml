@@ -3,11 +3,16 @@ dbt_pipelines:
     dev:
       type: duckdb
       path: /shared/dev.duckdb
-      filesystems:
-        - fs: s3
-          anon: false
-          key: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
+      extensions:
+        - httpfs
+        - parquet
+        - iceberg
+      secrets:
+        - type: s3
+          region: "{{ env_var('AWS_DEFAULT_REGION') }}"
+          key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
           secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
+
           client_kwargs:
             endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
       threads: 1
@@ -15,11 +20,16 @@ dbt_pipelines:
     prod:
       type: duckdb
       path: /shared/prod.duckdb
-      filesystems:
-        - fs: s3
-          anon: false
-          key: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
+      extensions:
+        - httpfs
+        - parquet
+        - iceberg
+      secrets:
+        - type: s3
+          region: "{{ env_var('AWS_DEFAULT_REGION') }}"
+          key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
           secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
+
           client_kwargs:
             endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
       threads: 4

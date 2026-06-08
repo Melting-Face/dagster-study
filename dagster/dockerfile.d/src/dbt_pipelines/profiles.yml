@@ -12,9 +12,9 @@ dbt_pipelines:
           region: "{{ env_var('AWS_DEFAULT_REGION') }}"
           key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
           secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
-
-          client_kwargs:
-            endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
+          endpoint: "{{ env_var('ENDPOINT_URL') }}"
+          url_style: path
+          use_ssl: false
       threads: 1
 
     prod:
@@ -29,9 +29,9 @@ dbt_pipelines:
           region: "{{ env_var('AWS_DEFAULT_REGION') }}"
           key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
           secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
-
-          client_kwargs:
-            endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
+          endpoint: "{{ env_var('ENDPOINT_URL') }}"
+          url_style: path
+          use_ssl: false
       threads: 4
 
   target: dev

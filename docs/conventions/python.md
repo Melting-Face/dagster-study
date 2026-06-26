@@ -25,20 +25,42 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-# E,F,I,UP,B,D + ANN(annotations), FA(future-annotations), RUF
-select = ["E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF"]
-ignore = ["D100", "D104", "ANN401"]   # 모듈/패키지 docstring 미요구, 동적 Any 허용
+select = [
+    "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
+    "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
+]
+# docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819)·df네이밍(PD901) 제외
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819", "PD901"]
 # TC(flake8-type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.mccabe]
+max-complexity = 10   # C90 순환 복잡도 상한
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "D"]   # 테스트는 어노테이션·docstring 면제
+"tests/**" = ["ANN", "D", "S101"]   # 테스트는 어노테이션·docstring·assert 면제
 
 [tool.ruff.format]
 indent-style = "space"
 ```
+
+#### 선택 룰 그룹
+
+| 그룹 | 내용 |
+| --- | --- |
+| `E`·`F`·`I`·`UP`·`B`·`RUF` | pycodestyle·pyflakes·isort·pyupgrade·bugbear·Ruff |
+| `D`·`ANN`·`FA` | docstring·어노테이션·future-annotations |
+| `S` | bandit 보안(eval·subprocess·SQL injection 등) |
+| `DTZ` | tz-aware `datetime` 강제(naive 금지) |
+| `SIM`·`C4`·`PIE` | 코드 단순화·컴프리헨션·잡다 개선 |
+| `C90` | 순환 복잡도(mccabe, 상한 10) |
+| `COM`·`EM` | 트레일링 콤마·예외 메시지 |
+| `PD`·`NPY` | pandas·numpy 안티패턴(해당 라이브러리 사용 시) |
+
+> **충돌·제외**: `COM812`/`COM819`(포매터가 트레일링 콤마 처리), `PD901`(df 네이밍)은 ignore.
+> `TC`(type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류한다.
 
 ### 매직 트레일링 콤마로 줄바꿈 유도
 
@@ -52,18 +74,18 @@ ruff 포매터는 매직 트레일링 콤마가 있으면 인자를 **세로로 
 
 ```python
 # ❌ Before — 한 줄이 88자를 초과
-materialize_result = build_csv_to_iceberg_asset(asset_name, table_name, source_glob, chunk_rows=1_000_000)
+materialize_result = load_csv_gz_to_iceberg(context, identifier=identifier, source_glob=source_glob, chunk_rows=1_000_000)
 
 # ⚠️ 지양 — 인자를 괄호 안 한 줄에 몰아쓰기
-materialize_result = build_csv_to_iceberg_asset(
-    asset_name, table_name, source_glob, chunk_rows=1_000_000
+materialize_result = load_csv_gz_to_iceberg(
+    context, identifier=identifier, source_glob=source_glob, chunk_rows=1_000_000
 )
 
 # ✅ After — 마지막 인자에 ',' → 한 줄에 하나씩 펼침
-materialize_result = build_csv_to_iceberg_asset(
-    asset_name,
-    table_name,
-    source_glob,
+materialize_result = load_csv_gz_to_iceberg(
+    context,
+    identifier=identifier,
+    source_glob=source_glob,
     chunk_rows=1_000_000,
 )
 ```
@@ -232,7 +254,7 @@ def load_config(path: Path, retries: int = 3) -> dict[str, str] | None:
 - `RUF013` — 암묵적 Optional(`x: int = None`) 금지.
 - `UP` — `Optional`/`List` 등 구문법을 모던 문법으로 자동 수정.
 - `TC`(type-checking import 분리)는 **Dagster 런타임 타입 introspection과 충돌**해 보류한다.
-- 테스트(`tests/**`)는 `ANN`·`D` 면제(`per-file-ignores`).
+- 테스트(`tests/**`)는 `ANN`·`D`·`S101`(assert) 면제(`per-file-ignores`).
 
 ## 타입 체커 (mypy)
 

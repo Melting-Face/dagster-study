@@ -51,20 +51,28 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-# pycodestyle(E), pyflakes(F), isort(I), pyupgrade(UP), bugbear(B),
-# pydocstyle(D), flake8-annotations(ANN), flake8-future-annotations(FA), Ruff(RUF)
-select = ["E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF"]
-# D100/D104: 모듈·패키지 docstring 미요구 / ANN401: 동적 Any 허용
-ignore = ["D100", "D104", "ANN401"]
-# flake8-type-checking(TC)은 Dagster 런타임 타입 introspection과 충돌 위험으로 보류
+# E,F,I,UP,B,D,ANN,FA,RUF + S(bandit) DTZ(datetimez) SIM C4 C90(mccabe)
+# PIE COM(commas) EM(errmsg) PD(pandas-vet) NPY(numpy)
+select = [
+    "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
+    "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
+]
+# docstring 미요구(D100/D104), 동적 Any 허용(ANN401),
+# 포매터와 충돌하는 COM812/COM819 제외, pandas df 네이밍(PD901) 제외
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819", "PD901"]
+# flake8-type-checking(TC)은 Dagster 런타임 타입 introspection과 충돌해 계속 보류
 
 # docstring 컨벤션: Google 스타일
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-# 테스트 코드는 어노테이션·docstring 강제 면제
+# 순환 복잡도 상한 (C90 / mccabe)
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# 테스트 코드는 어노테이션·docstring·assert(S101) 면제
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "D"]
+"tests/**" = ["ANN", "D", "S101"]
 
 [tool.ruff.format]
 indent-style = "space"

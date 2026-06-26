@@ -1,5 +1,12 @@
 # DAGSTER STUDY
 
+## 문서 (docs)
+
+아키텍처와 코딩 규칙은 [`docs/`](docs/README.md)에 정리되어 있다.
+
+- [전체 아키텍처 / 데이터 흐름](docs/architecture.md)
+- 코딩 규칙: [공통](docs/conventions/general.md) · [Python](docs/conventions/python.md) · [Dagster](docs/conventions/dagster.md) · [dbt](docs/conventions/dbt.md)
+
 ## 실행방법
 
 1. 디렉토리 하위에 `./.env` 생성 후 아래의 정보 기입

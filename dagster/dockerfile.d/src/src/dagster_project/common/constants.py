@@ -1,4 +1,4 @@
-"""S3(csv.gz) → Iceberg 적재 템플릿 상수."""
+"""S3(csv.gz) → Iceberg 적재 공통 상수 (데이터셋 무관)."""
 
 import os
 

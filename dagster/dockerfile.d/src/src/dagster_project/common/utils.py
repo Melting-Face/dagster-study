@@ -1,4 +1,4 @@
-"""S3/Iceberg 접속 유틸.
+"""S3/Iceberg 접속 유틸 (데이터셋 무관 공통).
 
 메타스토어 없이 Trino와 동일한 Iceberg JDBC 카탈로그(Postgres)를 pyiceberg로 재사용한다.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from dagster_project.template.constants import (
+from dagster_project.common.constants import (
     CATALOG_NAME,
     ICEBERG_CATALOG_DB,
     S3_ENDPOINT,

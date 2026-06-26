@@ -1,13 +1,17 @@
-"""csv.gz → Iceberg 스트리밍 적재 헬퍼.
+"""csv.gz → Iceberg 스트리밍 적재 헬퍼 (데이터셋 무관 공통).
 
 무거운 파일은 pyarrow 블록 스트리밍 + 청크 단위 append로 메모리를 일정하게 유지한다.
+서브프로젝트의 명시적 @asset 본문은 load_csv_gz_to_iceberg()를 호출해 중복을 제거한다(DRY).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-from dagster_project.template.constants import DEFAULT_CHUNK_ROWS
+import dagster as dg
+
+from dagster_project.common.constants import DEFAULT_CHUNK_ROWS
+from dagster_project.common.utils import get_s3_filesystem, load_iceberg_catalog
 
 
 def _table_exists(catalog, identifier: str) -> bool:
@@ -85,3 +89,35 @@ def stream_csv_gz_to_iceberg(
                     flush()
     flush()
     return total_rows
+
+
+def load_csv_gz_to_iceberg(
+    context: dg.AssetExecutionContext,
+    *,
+    identifier: str,
+    source_glob: str,
+    mode: str = "replace",
+    chunk_rows: int = DEFAULT_CHUNK_ROWS,
+) -> dg.MaterializeResult:
+    """S3 csv.gz → Iceberg 적재 공통 오케스트레이션 (에셋 본문이 호출).
+
+    identifier: Iceberg 식별자 "<namespace>.<table>" (예: bronze_mimiciv.patients)
+    source_glob: 소스 경로/글롭 (예: s3://warehouse/raw/mimiciv/hosp/patients.csv.gz)
+    """
+    catalog = load_iceberg_catalog()
+    fs = get_s3_filesystem()
+    paths = sorted(fs.glob(source_glob))
+    if not paths:
+        raise dg.Failure(description=f"소스 파일 없음: {source_glob}")
+    context.log.info(f"{len(paths)}개 파일 → {identifier} 적재 (mode={mode})")
+    rows = stream_csv_gz_to_iceberg(
+        catalog, identifier, paths, fs, chunk_rows=chunk_rows, mode=mode
+    )
+    return dg.MaterializeResult(
+        metadata={
+            "table": identifier,
+            "source_glob": source_glob,
+            "files": len(paths),
+            "rows": rows,
+        }
+    )

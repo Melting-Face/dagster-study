@@ -1,9 +1,14 @@
+---
+name: dagster
+
 x-docker-logging: &docker-logging
   logging:
     driver: "json-file"
     options:
-      max-size: "10m" # 로그 파일의 최대 크기 (10MB)
-      max-file: "20" # 유지할 로그 파일 개수 (최대 10개)
+      # 로그 파일의 최대 크기 (10MB)
+      max-size: "10m"
+      # 유지할 로그 파일 개수 (최대 10개)
+      max-file: "20"
 
 services:
   dagster-dev:
@@ -47,60 +52,67 @@ services:
       interval: 10s
       timeout: 8s
       retries: 5
-  master:
-    image: chrislusf/seaweedfs # use a remote image
+  trino:
+    <<: *docker-logging
+    container_name: trino
+    image: trinodb/trino:468
     ports:
-      - 9333:9333
-      - 19333:19333
-      - 9324:9324
-    command: 'master -ip=master -ip.bind=0.0.0.0 -metricsPort=9324'
-  volume:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 8080:8080
-      - 18080:18080
-      - 9325:9325
-    command: 'volume -ip=volume -master="master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
+      - "8080:8080"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      # 카탈로그 정의만 읽기전용 마운트 (비밀정보는 ${ENV:..}로 치환)
+      - ./trino/etc/catalog:/etc/trino/catalog:ro
     depends_on:
-      - master
-  filer:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/v1/info"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+  # SeaweedFS standalone: master/volume/filer/s3를 단일 컨테이너로 통합
+  seaweedfs:
+    <<: *docker-logging
+    container_name: seaweedfs
     image: chrislusf/seaweedfs # use a remote image
     ports:
-      - 8888:8888
-      - 18888:18888
-      - 9326:9326
-    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326'
-    tty: true
-    stdin_open: true
-    depends_on:
-      - master
-      - volume
-  s3:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 8181:8181
-      - 8333:8333
-      - 9327:9327
-    command: 's3 -filer="filer:8888" -ip.bind=0.0.0.0 -metricsPort=9327'
-    depends_on:
-      - master
-      - volume
-      - filer
-  webdav:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 7333:7333
-    command: 'webdav -filer="filer:8888"'
-    depends_on:
-      - master
-      - volume
-      - filer
+      - 9333:9333 # master UI
+      - 8333:8333 # S3 API
+      - 8888:8888 # filer UI
+      # volume(8080)·grpc·metrics(9324)는 컨테이너 네트워크 내부 통신만 사용 → host 미게시 (Trino 8080 충돌 회피)
+    command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -dir=/data -filer -s3 -metricsPort=9324"
+    volumes:
+      - ./seaweedfs/data:/data
+  discord-bot:
+    <<: *docker-logging
+    container_name: discord-bot
+    build:
+      context: discord-py/dockerfile.d/
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      # Ollama Cloud(ollama.com) 연동 설정
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+    restart: unless-stopped
   prometheus:
     image: prom/prometheus:v2.21.0
     ports:
       - 9000:9090
     volumes:
       - ./prometheus:/etc/prometheus
-    command: '--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml'
+    command: "--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml"
     depends_on:
-      - s3
+      - seaweedfs

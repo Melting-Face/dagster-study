@@ -2,10 +2,12 @@
 logs/
 minio/
 rustfs/
+seaweedfs/
 ollma/
 postgres/
 shared/
 
+**/__pycache__/
 **/*.log
 **/*.duckdb
 **/secrets.toml

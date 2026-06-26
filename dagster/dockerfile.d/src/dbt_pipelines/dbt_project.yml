@@ -29,6 +29,5 @@ clean-targets: # directories to be removed by `dbt clean`
 # files using the `{{ config(...) }}` macro.
 models:
   dbt_pipelines:
-    # Config indicated by + and applies to all files under models/example/
-    example:
-      +materialized: view
+    # bronze layer 리셋됨: 기존 example 모델 제거.
+    # 새 모델은 models/ 하위에 추가하고 필요 시 여기에 +config 정의

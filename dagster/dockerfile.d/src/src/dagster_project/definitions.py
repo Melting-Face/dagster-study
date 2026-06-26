@@ -9,11 +9,6 @@ from dagster import (
 )
 
 
-dlt_all_job = define_asset_job(
-    "dlt_all_job",
-    selection=AssetSelection.groups("dlt_ingest"),
-)
-
 dbt_all_job = define_asset_job(
     "dbt_all_job",
     selection=AssetSelection.groups("dbt_ingest"),
@@ -25,16 +20,10 @@ dbt_all_schedule = ScheduleDefinition(
     cron_schedule="0 * * * *",
 )
 
-dlt_all_schedule = ScheduleDefinition(
-    name="dlt_all_schedule",
-    job=dlt_all_job,
-    cron_schedule="0 * * * *",
-)
-
 defs = Definitions.merge(
     load_from_defs_folder(path_within_project=Path(__file__).parent),
     Definitions(
-        jobs=[dbt_all_job, dlt_all_job],
-        schedules=[dbt_all_schedule, dlt_all_schedule],
+        jobs=[dbt_all_job],
+        schedules=[dbt_all_schedule],
     ),
 )

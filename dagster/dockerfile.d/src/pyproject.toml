@@ -50,8 +50,14 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-# pycodestyle(E), pyflakes(F), isort(I), pyupgrade(UP), bugbear(B)
-select = ["E", "F", "I", "UP", "B"]
+# pycodestyle(E), pyflakes(F), isort(I), pyupgrade(UP), bugbear(B), pydocstyle(D)
+select = ["E", "F", "I", "UP", "B", "D"]
+# 모듈(D100)·패키지(D104) docstring은 강제하지 않음
+ignore = ["D100", "D104"]
+
+# docstring 컨벤션: Google 스타일
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 indent-style = "space"

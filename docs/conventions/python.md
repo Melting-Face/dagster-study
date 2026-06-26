@@ -25,16 +25,155 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]   # pycodestyle, pyflakes, isort, pyupgrade, bugbear
+# pycodestyle, pyflakes, isort, pyupgrade, bugbear, pydocstyle(D)
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D100", "D104"]   # 모듈/패키지 docstring 미요구
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 indent-style = "space"
 ```
 
+### 매직 트레일링 콤마로 줄바꿈 유도
+
+함수 호출·정의의 인자가 한 줄 **88자를 넘으면, 마지막 인자 뒤에 `,`(트레일링 콤마)를
+추가해 인자를 한 줄에 하나씩 펼치도록 줄바꿈을 유도**한다.
+ruff 포매터는 매직 트레일링 콤마가 있으면 인자를 **세로로 펼친 형태로 강제**한다.
+(콤마가 줄바꿈을 유발하는 트리거 — 콤마를 빼면 다시 한 줄로 합쳐진다.)
+이 동작은 ruff 기본값(`skip-magic-trailing-comma = false`)이라 별도 설정이 필요 없다.
+
+**1) 함수 호출**
+
+```python
+# ❌ Before — 한 줄이 88자를 초과
+materialize_result = build_csv_to_iceberg_asset(asset_name, table_name, source_glob, chunk_rows=1_000_000)
+
+# ⚠️ 지양 — 인자를 괄호 안 한 줄에 몰아쓰기
+materialize_result = build_csv_to_iceberg_asset(
+    asset_name, table_name, source_glob, chunk_rows=1_000_000
+)
+
+# ✅ After — 마지막 인자에 ',' → 한 줄에 하나씩 펼침
+materialize_result = build_csv_to_iceberg_asset(
+    asset_name,
+    table_name,
+    source_glob,
+    chunk_rows=1_000_000,
+)
+```
+
+**2) 함수 정의**
+
+```python
+# ❌ Before — 88자 초과
+def stream_csv_gz_to_iceberg(catalog, table_identifier, source_path, chunk_rows=1_000_000, mode="replace"):
+    ...
+
+# ✅ After — 마지막 파라미터 뒤 ',' → 세로 펼침
+def stream_csv_gz_to_iceberg(
+    catalog,
+    table_identifier,
+    source_path,
+    chunk_rows=1_000_000,
+    mode="replace",
+):
+    ...
+```
+
+**3) 리스트·딕셔너리 리터럴도 동일**
+
+```python
+TABLES = [
+    ("mimiciv_hosp_patients", "bronze_mimiciv.patients", "s3://warehouse/raw/.../patients.csv.gz"),
+    ("mimiciv_hosp_admissions", "bronze_mimiciv.admissions", "s3://warehouse/raw/.../admissions.csv.gz"),
+]
+```
+
+> 88자 안에 들어가는 짧은 호출은 콤마 없이 한 줄로 둔다.
+
 ## 주석 / 네이밍
 
 - 주석은 **한국어**로 작성한다.
 - 식별자(변수·함수·클래스)는 **영어**, `snake_case`(함수·변수) / `PascalCase`(클래스).
+
+## Docstring (Google 스타일)
+
+ruff `pydocstyle`(`convention = "google"`)로 강제한다.
+
+### 규칙
+
+- **언어**: docstring의 모든 산문 텍스트 — **요약 줄과 `Args`·`Returns`·`Raises`의 설명** — 은 **한국어**로 쓴다. (식별자·타입·예시 코드만 영어)
+- **요약 줄**: 첫 줄은 **한 줄 요약**, 평서문, **마침표(`.`)** 로 끝낸다.
+  여는 `"""`와 같은 줄에서 시작한다.
+- **모듈/패키지** docstring은 강제하지 않는다(`D100`·`D104` ignore). 필요할 때만 작성.
+- **public 함수·클래스·메서드**에는 docstring을 단다(`D101`·`D102`·`D103`).
+- **타입은 docstring에 중복 기재하지 않는다** — 타입 힌트가 단일 출처. `Args`엔 이름·설명만.
+
+#### 섹션은 조건부 (Google 원전 규칙)
+
+세 섹션은 표준이지만 **항상 강제되는 것은 아니다.** 필요한 섹션만 쓰고 아래 경우엔 생략한다.
+
+| 섹션 | 생략 조건 |
+| --- | --- |
+| `Args` | 파라미터가 없거나, 이름·시그니처만으로 충분한 한 줄 docstring일 때 |
+| `Returns` / `Yields` | `None`을 반환하거나, 요약 줄이 반환값을 충분히 설명할 때 |
+| `Raises` | 인터페이스상 의미 있는 예외가 없을 때 |
+
+> `Args` 섹션을 **쓰는 경우** 모든 파라미터를 빠짐없이 기재한다(ruff `D417`이 검사).
+> 단, 섹션의 **존재 자체**는 `D` 룰이 강제하지 않는다(누락까지 강제하려면 `DOC` preview 룰 필요).
+
+### 한 줄 docstring
+
+설명이 짧으면 한 줄로 끝낸다.
+
+```python
+def slugify(name: str) -> str:
+    """문자열을 URL-safe 슬러그로 변환한다."""
+    ...
+```
+
+### 여러 줄 docstring
+
+```python
+def stream_csv_gz_to_iceberg(
+    catalog: SqlCatalog,
+    table_identifier: str,
+    source_path: str,
+    chunk_rows: int = 1_000_000,
+    mode: str = "replace",
+) -> int:
+    """S3의 csv.gz를 Iceberg 테이블로 스트리밍 적재한다.
+
+    pyarrow로 블록 단위 스트리밍하며 chunk_rows 단위로 모아 append 한다.
+
+    Args:
+        catalog: pyiceberg SqlCatalog 인스턴스.
+        table_identifier: "<namespace>.<table>" 형식의 대상 테이블.
+        source_path: 원본 csv.gz의 s3 경로.
+        chunk_rows: 한 번에 append 할 행 수.
+        mode: "replace"(재적재) 또는 "append"(누적).
+
+    Returns:
+        적재한 총 행 수.
+
+    Raises:
+        FileNotFoundError: source_path가 존재하지 않을 때.
+    """
+    ...
+```
+
+### Dagster 에셋
+
+에셋 함수의 docstring은 **Dagster UI의 description으로 노출**되므로, 에셋엔 요약 docstring을 권장한다.
+
+```python
+@asset(group_name="bronze")
+def raw_patients() -> None:
+    """MIMIC-IV hosp.patients 원본을 bronze Iceberg 테이블로 적재한다."""
+    ...
+```
 
 ## 타입 힌트
 
@@ -91,5 +230,8 @@ dagster-postgres == 0.28.12
 ## 참고
 
 - ruff: https://docs.astral.sh/ruff/
+- ruff pydocstyle(D) 규칙: https://docs.astral.sh/ruff/rules/#pydocstyle-d
+- Google Python Style Guide — Docstrings: https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
 - uv: https://docs.astral.sh/uv/
 - PEP 604 (`X | Y` 타입): https://peps.python.org/pep-0604/
+- PEP 257 (docstring 규약): https://peps.python.org/pep-0257/

@@ -166,6 +166,7 @@ ruff `pydocstyle`(`convention = "google"`)로 강제한다.
 - **모듈/패키지** docstring은 강제하지 않는다(`D100`·`D104` ignore). 필요할 때만 작성.
 - **public 함수·클래스·메서드**에는 docstring을 단다(`D101`·`D102`·`D103`).
 - **타입은 docstring에 중복 기재하지 않는다** — 타입 힌트가 단일 출처. `Args`엔 이름·설명만.
+- **출처 명시(기본 규칙)**: 알고리즘·수식·스펙·외부 구현 등 **참고한 출처가 있으면 docstring에 남긴다.** `References:` 섹션에 **제목과 URL**을 적는다.
 
 #### 섹션은 조건부 (Google 원전 규칙)
 
@@ -216,6 +217,28 @@ def stream_csv_gz_to_iceberg(
 
     Raises:
         FileNotFoundError: source_path가 존재하지 않을 때.
+    """
+    ...
+```
+
+### 출처 표기 (References)
+
+알고리즘·수식·스펙 등 외부 출처를 참고했다면 **기본으로** `References:` 섹션에 제목과 URL을 남긴다.
+
+```python
+def winsorize(values: list[float], limits: tuple[float, float]) -> list[float]:
+    """양극단 값을 한계치로 절단(winsorize)한다.
+
+    Args:
+        values: 입력 수치 리스트.
+        limits: (하한, 상한) 절단 비율.
+
+    Returns:
+        절단된 수치 리스트.
+
+    References:
+        Tukey, J. W. (1962). The Future of Data Analysis.
+        https://en.wikipedia.org/wiki/Winsorizing
     """
     ...
 ```

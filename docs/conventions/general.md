@@ -57,28 +57,44 @@ mypy src                             # Python 타입 정합성
   - `gitleaks` → `.gitleaks.toml`
 - 세부 예시는 [Python](python.md) · [dbt](dbt.md) 문서 참고.
 
-## 커밋 메시지 (Git Commit)
+## 커밋 메시지 (Conventional Commits)
 
-- 한국어로 작성한다.
-- 형식: **`type: 설명`**
+[Conventional Commits](https://www.conventionalcommits.org/) 규약을 따른다.
+gitlint `contrib-title-conventional-commits` 룰로 강제한다(`pyproject.toml`).
 
-### type 종류
+- **형식**: `type(scope): 설명` — `scope`는 선택, **설명은 한국어**.
+- 제목은 **72자 이내**(`title-max-length`).
+- 파괴적 변경은 `type!: ...` 또는 본문에 `BREAKING CHANGE:` 표기.
 
-| type       | 용도                 |
-| ---------- | -------------------- |
-| `feat`     | 새 기능 추가         |
-| `fix`      | 버그 수정            |
-| `mod`      | 기능 수정(동작 변경) |
-| `add`      | 파일·리소스 추가     |
-| `del`      | 파일·리소스 삭제     |
-| `docs`     | 문서 변경            |
-| `refactor` | 리팩터링(동작 불변)  |
-| `test`     | 테스트 추가·수정     |
+### type 종류 (표준 11종)
+
+| type | 용도 | SemVer |
+| --- | --- | --- |
+| `feat` | 새 기능 | MINOR ↑ |
+| `fix` | 버그 수정 | PATCH ↑ |
+| `docs` | 문서만 변경 | — |
+| `style` | 포맷·세미콜론 등(동작 불변) | — |
+| `refactor` | 리팩터링(기능·버그 변화 없음) | — |
+| `perf` | 성능 개선 | PATCH |
+| `test` | 테스트 추가·수정 | — |
+| `build` | 빌드 시스템·의존성 | — |
+| `ci` | CI 설정·스크립트 | — |
+| `chore` | 잡무(설정·도구 등, src·test 무관) | — |
+| `revert` | 커밋 되돌리기 | — |
+
+> 기존 커스텀 type(`mod`·`add`·`del`)은 **폐지**하고 아래로 매핑한다.
+
+| 기존 | → 전환 |
+| --- | --- |
+| `mod` | 상황별 `feat`(기능) / `fix`(수정) / `refactor` |
+| `add` | `feat`(기능) 또는 `chore`·`build`(설정·의존성) |
+| `del` | `refactor`(코드 정리) 또는 `chore` |
 
 ```text
 feat: discord 봇 Ollama Cloud 연동 추가
 refactor: DuckDB→Trino 전환, SeaweedFS standalone 및 dlt·bronze 리셋
-docs: docs 디렉토리에 코딩 규칙 문서 추가
+chore: ruff·gitlint 등 린터 설정 추가
+docs: 코딩 규칙 문서 추가
 ```
 
 ## 비밀정보 (Secrets)

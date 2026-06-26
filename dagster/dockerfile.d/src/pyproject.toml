@@ -99,14 +99,19 @@ tab_space_size = 4
 [tool.sqlfluff.rules.capitalisation.keywords]
 capitalisation_policy = "lower"
 
-# --- 커밋 메시지 린터: gitlint ---
+# --- 커밋 메시지 린터: gitlint (Conventional Commits) ---
 [tool.gitlint]
 # 짧은 커밋엔 본문이 없을 수 있어 허용
 ignore = "body-is-missing"
+# Conventional Commits 제목 규칙 강제
+contrib = ["contrib-title-conventional-commits"]
 
 [tool.gitlint.rules.title-max-length]
 line-length = 72
 
-[tool.gitlint.rules.title-match-regex]
-# 커밋 컨벤션: "type: 설명" (type = feat|fix|mod|add|del|docs|refactor|test)
-regex = "^(feat|fix|mod|add|del|docs|refactor|test): .+"
+# 허용 type (Conventional Commits 표준 11종)
+[tool.gitlint.rules.contrib-title-conventional-commits]
+types = [
+    "feat", "fix", "docs", "style", "refactor",
+    "perf", "test", "build", "ci", "chore", "revert",
+]

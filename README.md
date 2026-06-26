@@ -3,7 +3,9 @@
 ## 문서 (docs)
 
 아키텍처와 코딩 규칙은 [`docs/`](docs/README.md)에 정리되어 있다.
+이 프로젝트에서 정한 **규칙·결정·작업 패턴은 최대한 문서로 남기며**, `CLAUDE.md`·`docs/`·`README.md`를 함께 갱신해 단일 출처(single source of truth)를 유지한다.
 
+- [코딩 철학](docs/philosophy.md)
 - [전체 아키텍처 / 데이터 흐름](docs/architecture.md)
 - 코딩 규칙: [공통](docs/conventions/general.md) · [Python](docs/conventions/python.md) · [Dagster](docs/conventions/dagster.md) · [dbt](docs/conventions/dbt.md)
 

@@ -9,6 +9,10 @@
 
 - [전체 아키텍처 / 데이터 흐름](architecture.md) — Dagster · dbt · Trino · Iceberg · SeaweedFS 스택과 레이크하우스 구조, **bronze 적재 템플릿(S3→Iceberg)**
 
+### 철학
+
+- [코딩 철학](philosophy.md) — 단순함·명시적·가독성·비밀정보 참조·재사용 추출 (PEP 20 / 12-Factor / Rule of Three)
+
 ### 코딩 규칙 (conventions)
 
 | 문서                                | 내용                                                   |
@@ -28,7 +32,8 @@
 
 ## 문서 작성·유지 규칙
 
+- 이 프로젝트에서 정한 **규칙·결정·작업 패턴은 최대한 문서로 남긴다**.
 - 문서는 한국어로 작성한다.
 - 코드 식별자·명령어·경로는 영어/원문 그대로 표기한다.
-- 규칙을 바꿀 때는 **이 docs와 `CLAUDE.md`를 함께 갱신**하여 단일 출처(single source of truth)를 유지한다.
+- 규칙을 바꿀 때는 **`CLAUDE.md`·이 `docs/`·`README.md`를 함께 갱신**하여 단일 출처(single source of truth)를 유지한다.
 - 외부 레퍼런스는 각 문서 하단 `참고` 섹션에 링크와 함께 남긴다.

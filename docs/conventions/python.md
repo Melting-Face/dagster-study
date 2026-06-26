@@ -25,12 +25,16 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-# pycodestyle, pyflakes, isort, pyupgrade, bugbear, pydocstyle(D)
-select = ["E", "F", "I", "UP", "B", "D"]
-ignore = ["D100", "D104"]   # 모듈/패키지 docstring 미요구
+# E,F,I,UP,B,D + ANN(annotations), FA(future-annotations), RUF
+select = ["E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF"]
+ignore = ["D100", "D104", "ANN401"]   # 모듈/패키지 docstring 미요구, 동적 Any 허용
+# TC(flake8-type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "D"]   # 테스트는 어노테이션·docstring 면제
 
 [tool.ruff.format]
 indent-style = "space"
@@ -97,6 +101,36 @@ TABLES = [
 
 - 주석은 **한국어**로 작성한다.
 - 식별자(변수·함수·클래스)는 **영어**, `snake_case`(함수·변수) / `PascalCase`(클래스).
+
+## `_` 접두어 함수는 중첩(inner) 함수 전용
+
+- 이름이 `_`로 시작하는 함수는 **다른 함수 안에 정의된 중첩 함수**로만 쓰고,
+  그 enclosing 함수 내부에서만 호출한다.
+- **모듈 레벨(top-level)에는 `_`로 시작하는 함수를 두지 않는다.**
+- 여러 함수가 공유하는 보조 로직은 `_` 없는 **일반 함수로 분리**한다(DRY).
+
+```python
+# ✅ enclosing 함수 안에서만 쓰는 보조 함수 → 중첩 + '_'
+def build_report(rows: list[dict]) -> str:
+    """행 목록을 리포트 문자열로 만든다."""
+
+    def _format_row(row: dict) -> str:
+        return f"{row['k']}={row['v']}"
+
+    return "\n".join(_format_row(r) for r in rows)
+
+
+# ❌ 모듈 레벨 '_' 함수를 여러 곳에서 호출 → 규칙 위반
+def _format_row(row: dict) -> str:   # 모듈 레벨엔 '_'를 두지 않는다
+    ...
+
+
+def build_report(rows: list[dict]) -> str: ...
+def build_csv(rows: list[dict]) -> str: ...   # 둘 다 _format_row 사용
+```
+
+> 공유 보조 함수는 `format_row`처럼 **`_` 없는 일반 함수**로 분리한다.
+> (에셋 정의 시 "공통 로직만 일반 함수로 분리" 원칙과 같은 선상)
 
 ## Docstring (Google 스타일)
 
@@ -189,6 +223,37 @@ from pathlib import Path
 def load_config(path: Path, retries: int = 3) -> dict[str, str] | None:
     # 설정 파일을 읽어 dict로 반환한다. 없으면 None.
     ...
+```
+
+### 강제 규칙 (ruff)
+
+- `ANN` — 함수 인자·반환 어노테이션 강제 (`ANN401` Any는 허용).
+- `FA` — 필요 시 `from __future__ import annotations` 권장.
+- `RUF013` — 암묵적 Optional(`x: int = None`) 금지.
+- `UP` — `Optional`/`List` 등 구문법을 모던 문법으로 자동 수정.
+- `TC`(type-checking import 분리)는 **Dagster 런타임 타입 introspection과 충돌**해 보류한다.
+- 테스트(`tests/**`)는 `ANN`·`D` 면제(`per-file-ignores`).
+
+## 타입 체커 (mypy)
+
+ruff는 어노테이션의 **존재·스타일**만 본다. **타입 정합성**(값과 타입 불일치)은
+[`mypy`](https://mypy-lang.org/)가 검사한다.
+
+```toml
+[tool.mypy]
+python_version = "3.10"          # 단일 MAJOR.MINOR만 가능 (범위 X)
+ignore_missing_imports = true    # dagster·dbt·pyiceberg 등 외부 스텁 부재 대응
+disallow_untyped_defs = true     # 함수에 타입 강제 (ruff ANN과 짝)
+no_implicit_optional = true
+# 전체 강화: strict = true
+```
+
+> ⚠️ `python_version`은 **단일 버전 문자열**(`"3.10"`)만 받는다.
+> `requires-python = ">=3.10,<3.15"` 같은 **범위 지정자는 쓸 수 없다.**
+> 가장 낮은 지원 버전(`3.10`)으로 두어 구버전 호환성까지 검사한다.
+
+```bash
+mypy src      # 타입 체크 실행
 ```
 
 ## 예외 처리 (LBYL 우선)

@@ -27,8 +27,9 @@
 | YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) |
 | Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) |
 | 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) |
+| Python 타입체크 | [`mypy`](https://mypy-lang.org/) | `pyproject.toml` `[tool.mypy]` |
 
-커밋 전 포매터·린터를 통과시킨다.
+커밋 전 포매터·린터를 통과시킨다. (`mypy`는 어노테이션이 아닌 **타입 정합성**을 검사)
 
 ### 실행
 
@@ -42,6 +43,7 @@ yamllint .                           # YAML
 hadolint **/Dockerfile               # Dockerfile
 gitleaks detect                      # 시크릿 스캔
 gitlint                              # 직전 커밋 메시지 검사
+mypy src                             # Python 타입 정합성
 ```
 
 > 일괄 실행이 필요하면 `pre-commit` 등으로 묶을 수 있다(현재 repo엔 미설정).

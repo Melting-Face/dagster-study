@@ -25,6 +25,8 @@ dev = [
   "ruff",
   "sqlfluff",
   "sqlfluff-templater-dbt",
+  "gitlint",
+  "yamllint",
 ]
 
 [build-system]
@@ -40,3 +42,40 @@ directory_type = "project"
 [tool.dg.project]
 root_module = "dagster_project"
 registry_modules = ["dagster_project.components.*"]
+
+# --- Python 린터/포매터: ruff ---
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+# pycodestyle(E), pyflakes(F), isort(I), pyupgrade(UP), bugbear(B)
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+indent-style = "space"
+
+# --- SQL 린터/포매터: sqlfluff (dbt-trino) ---
+[tool.sqlfluff.core]
+templater = "dbt"
+dialect = "trino"
+max_line_length = 88
+
+[tool.sqlfluff.indentation]
+tab_space_size = 4
+
+[tool.sqlfluff.rules.capitalisation.keywords]
+capitalisation_policy = "lower"
+
+# --- 커밋 메시지 린터: gitlint ---
+[tool.gitlint]
+# 짧은 커밋엔 본문이 없을 수 있어 허용
+ignore = "body-is-missing"
+
+[tool.gitlint.rules.title-max-length]
+line-length = 72
+
+[tool.gitlint.rules.title-match-regex]
+# 커밋 컨벤션: "type: 설명" (type = feat|fix|mod|add|del|docs|refactor|test)
+regex = "^(feat|fix|mod|add|del|docs|refactor|test): .+"

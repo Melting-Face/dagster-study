@@ -19,20 +19,41 @@
 
 ## 포매터 / 린터
 
-| 대상   | 도구                                                   |
-| ------ | ------------------------------------------------------ |
-| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) |
-| SQL    | [`sqlfluff`](https://docs.sqlfluff.com/)               |
+| 대상 | 도구 | 설정 위치 |
+| --- | --- | --- |
+| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | `pyproject.toml` `[tool.ruff]` |
+| SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | `pyproject.toml` `[tool.sqlfluff.*]` |
+| 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `pyproject.toml` `[tool.gitlint]` |
+| YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) |
+| Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) |
+| 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) |
 
 커밋 전 포매터·린터를 통과시킨다.
 
-> **설정 단일화**: `ruff`와 `sqlfluff`의 명세(룰·옵션)는 모두 **`pyproject.toml`에서 관리**한다.
->
-> - `ruff` → `[tool.ruff]` 섹션
-> - `sqlfluff` → `[tool.sqlfluff.*]` 섹션
->
-> 별도 `.ruff.toml` / `.sqlfluff` 파일로 분산시키지 않고 한 곳에 모은다.
-> 세부 예시는 [Python](python.md) · [dbt](dbt.md) 문서 참고.
+### 실행
+
+별도 오케스트레이터 없이 각 린터를 **직접 실행**한다.
+(규칙의 단일 출처는 위 표의 "설정 위치"인 도구 네이티브 파일이다.)
+
+```bash
+ruff check . && ruff format .        # Python
+sqlfluff lint . && sqlfluff fix .    # SQL
+yamllint .                           # YAML
+hadolint **/Dockerfile               # Dockerfile
+gitleaks detect                      # 시크릿 스캔
+gitlint                              # 직전 커밋 메시지 검사
+```
+
+> 일괄 실행이 필요하면 `pre-commit` 등으로 묶을 수 있다(현재 repo엔 미설정).
+
+### 설정 위치 원칙
+
+- `pyproject.toml`을 지원하는 도구(`ruff`·`sqlfluff`·`gitlint`)는 **`pyproject.toml`에 모은다.**
+- 지원하지 않는 도구는 **루트의 도구 네이티브 설정 파일**에 둔다.
+  - `yamllint` → `.yamllint.yaml` (pyproject 미지원)
+  - `hadolint` → `.hadolint.yaml`
+  - `gitleaks` → `.gitleaks.toml`
+- 세부 예시는 [Python](python.md) · [dbt](dbt.md) 문서 참고.
 
 ## 커밋 메시지 (Git Commit)
 

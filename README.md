@@ -7,6 +7,7 @@
 
 - [코딩 철학](docs/philosophy.md)
 - [전체 아키텍처 / 데이터 흐름](docs/architecture.md)
+- [리소스 산정](docs/resource-sizing.md)
 - 코딩 규칙: [공통](docs/conventions/general.md) · [Python](docs/conventions/python.md) · [Dagster](docs/conventions/dagster.md) · [dbt](docs/conventions/dbt.md)
 
 ## 실행방법

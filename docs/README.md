@@ -22,13 +22,18 @@
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 컴포넌트, 잡·스케줄, 그룹           |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg |
 
+### 운영 (operations)
+
+- [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino·Dagster·Postgres·SeaweedFS)
+
 ## 핵심 원칙 요약
 
-1. **에셋은 함수 + 데코레이터로 정의** — 클래스/서브클래싱 지양, 선언적 설정 우선
-2. **주석은 한국어, 식별자(변수·함수·모델명)는 영어**
-3. **들여쓰기 스페이스 4칸** (Python·YAML·SQL 공통)
-4. **포매터/린터 고정** — Python: `ruff`, SQL: `sqlfluff`
-5. **커밋 메시지는 한국어 `type: 설명`** 형식
+> 가치(왜)는 [코딩 철학](philosophy.md), 아래는 빠른 규칙 참조(어떻게).
+
+1. **주석은 한국어, 식별자(변수·함수·모델명)는 영어**
+2. **들여쓰기 스페이스 4칸** (Python·YAML·SQL 공통)
+3. **포매터/린터 고정** — Python: `ruff`, SQL: `sqlfluff`
+4. **커밋 메시지는 한국어 `type: 설명`** 형식
 
 ## 문서 작성·유지 규칙
 

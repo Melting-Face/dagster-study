@@ -144,19 +144,29 @@ sequenceDiagram
 - `database: iceberg` → Trino 카탈로그명(= `iceberg.properties`의 `catalog-name`)과 일치해야 한다.
 - `schema` → Trino 스키마. 없으면 dbt가 생성한다.
 
-## bronze 적재 (S3 csv.gz → Iceberg 템플릿)
+## bronze 적재 (S3 csv.gz → Iceberg)
 
-이미 S3에 적재된 `csv.gz` 원본을 **메타스토어 없이** Iceberg(JDBC 카탈로그) 테이블로 올리는
-재사용 템플릿. `dagster_project/template/` 에 기능별로 분리되어 있다.
+이미 S3에 적재된 `csv.gz` 원본을 **메타스토어 없이** Iceberg(JDBC 카탈로그) 테이블로 올린다.
+**공통 로직은 `dagster_project/common/`** 에 두고, **에셋은 데이터셋별 서브프로젝트**
+(`defs/mimic_iv/`, `defs/eicu/`)에서 **각각 명시적으로 정의**한다(팩토리 미사용).
 
-### 모듈 구조 (`dagster_project/template/`)
+### 공통 모듈 (`dagster_project/common/`) — 데이터셋 무관, 재사용
 
 | 파일           | 역할                                                                        |
 | -------------- | --------------------------------------------------------------------------- |
 | `constants.py` | 카탈로그명·warehouse·S3 엔드포인트·기본값(chunk/namespace/group)            |
 | `utils.py`     | `load_iceberg_catalog()`(pyiceberg SqlCatalog), `get_s3_filesystem()`(s3fs) |
-| `helper.py`    | `stream_csv_gz_to_iceberg()` — 블록 스트리밍 + 청크 append                  |
-| `assets.py`    | `build_csv_to_iceberg_asset()` 팩토리 + `TABLES` 목록 → 에셋 생성           |
+| `helper.py`    | `stream_csv_gz_to_iceberg()` 스트리밍 + `load_csv_gz_to_iceberg()` 적재 오케스트레이션(에셋 본문이 호출) |
+
+### 서브프로젝트 (`defs/<dataset>/`) — 데이터셋별, 자동 로드
+
+| 파일           | 역할                                                                        |
+| -------------- | --------------------------------------------------------------------------- |
+| `constants.py` | 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`                        |
+| `assets.py`    | 테이블별 **명시적 `@dg.asset`** (공통 `load_csv_gz_to_iceberg()` 호출)      |
+
+> 현재 `defs/mimic_iv/`(patients·admissions), `defs/eicu/`(patient·lab) 예시 에셋 포함.
+> 테이블 추가 = `assets.py`에 `@dg.asset` 함수를 하나 더 명시적으로 작성한다.
 
 ### 데이터 흐름
 
@@ -176,24 +186,30 @@ flowchart LR
 - **메타스토어 불필요**: pyiceberg가 Trino와 **동일한 Iceberg JDBC 카탈로그**(Postgres `iceberg_catalog`)를 재사용한다. 적재한 테이블은 Trino/dbt에서 즉시 조회된다.
 - **무거운 파일 대응**: `pyarrow.csv`로 블록 스트리밍하며 `chunk_rows`(기본 100만 행) 단위로 모아 한 번에 `append` → 메모리 일정, 작은 파일/스냅샷 폭증 방지. (Dagster I/O manager로 전량 메모리 적재 시 발생하던 부하를 회피)
 - **멱등성**: `mode="replace"`(기본)는 기존 테이블 제거 후 재적재, `"append"`는 누적.
-- **에셋은 팩토리 함수로 생성**(클래스 지양) — `CLAUDE.md` 컨벤션 준수.
+- **에셋은 각각 명시적으로 정의**(팩토리/클래스 지양) — `CLAUDE.md` 컨벤션 준수. 공통 로직만 `common/`에서 재사용.
 
-### 사용법
+### 사용법 (테이블 추가)
 
-`template/assets.py`의 `TABLES`에 `(asset_name, "<namespace>.<table>", source_glob)`을 추가한다.
+해당 서브프로젝트 `defs/<dataset>/assets.py`에 **명시적 `@dg.asset` 함수**를 추가한다.
 
 ```python
-TABLES = [
-    ("mimiciv_hosp_patients", "bronze_mimiciv.patients",
-     "s3://warehouse/raw/mimiciv/hosp/patients.csv.gz"),
-]
+# defs/mimic_iv/assets.py
+@dg.asset(group_name=GROUP_NAME, kinds={"python", "iceberg"})
+def mimiciv_hosp_labevents(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+    """S3 csv.gz → bronze_mimiciv.labevents 적재."""
+    return load_csv_gz_to_iceberg(
+        context,
+        identifier=f"{NAMESPACE}.labevents",
+        source_glob=f"{SOURCE_BASE}/hosp/labevents.csv.gz",
+    )
 ```
+
+`defs/` 하위라 `load_from_defs_folder`가 **자동 로드**한다(별도 등록 불필요).
 
 ### 활성화에 필요한 설정 (TODO)
 
-1. 의존성: `pyproject.toml`에 `pyiceberg[sql-postgres,pyarrow]` 추가
-2. 등록: `definitions.py`에서 `template.assets.bronze_assets`를 `Definitions(assets=...)`에 추가
-3. (선택) `bronze` 그룹을 선택하는 잡/스케줄 정의
+1. 의존성: `pyproject.toml`에 `pyiceberg[sql-postgres,pyarrow]`·`pyarrow` 추가 (적재 시 필요)
+2. (선택) `bronze_mimiciv`·`bronze_eicu` 그룹을 선택하는 잡/스케줄 정의
 
 > 대용량 풀셋은 추후 *Parquet 변환 → Iceberg `add_files`(재작성 없이 등록)*로 확장 가능.
 

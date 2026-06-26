@@ -1,0 +1,11 @@
+# gitlint 설정 (Conventional Commits)
+# gitlint는 repo 루트(CWD)에서 .gitlint / pyproject.toml을 탐지한다.
+# 프로젝트 pyproject.toml은 하위 디렉토리라 탐지되지 않으므로 루트 .gitlint로 관리한다.
+[general]
+# Conventional Commits 제목 규칙 강제 (표준 type 11종이 기본 적용)
+contrib=contrib-title-conventional-commits
+# 짧은 커밋엔 본문이 없을 수 있어 허용
+ignore=body-is-missing
+
+[title-max-length]
+line-length=72

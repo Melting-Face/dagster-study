@@ -16,6 +16,10 @@ dependencies = [
   # DuckDB 대체: Trino 어댑터 (버전은 dbt-core 1.10 호환성 빌드 시 재확인 필요)
   "dbt-trino>=1.8,<2.0",
   "dagster-dg-cli==1.12.12",
+  # S3(SeaweedFS)·Iceberg 리소스
+  "dagster-aws==0.28.12",
+  # dagster-iceberg(preview)가 pyiceberg[pyarrow]를 동반 설치 → pyarrow는 전이 의존으로 해결
+  "dagster-iceberg==0.3.14",
 ]
 
 [dependency-groups]
@@ -99,19 +103,5 @@ tab_space_size = 4
 [tool.sqlfluff.rules.capitalisation.keywords]
 capitalisation_policy = "lower"
 
-# --- 커밋 메시지 린터: gitlint (Conventional Commits) ---
-[tool.gitlint]
-# 짧은 커밋엔 본문이 없을 수 있어 허용
-ignore = "body-is-missing"
-# Conventional Commits 제목 규칙 강제
-contrib = ["contrib-title-conventional-commits"]
-
-[tool.gitlint.rules.title-max-length]
-line-length = 72
-
-# 허용 type (Conventional Commits 표준 11종)
-[tool.gitlint.rules.contrib-title-conventional-commits]
-types = [
-    "feat", "fix", "docs", "style", "refactor",
-    "perf", "test", "build", "ci", "chore", "revert",
-]
+# 커밋 메시지 린터(gitlint) 설정은 repo 루트의 .gitlint 에 둔다.
+# (gitlint는 repo 루트에서 실행되고 pyproject 자동탐지가 CWD 기준이라 이 하위 경로는 잡지 못함)

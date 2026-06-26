@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | `pyproject.toml` `[tool.ruff]` |
 | SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | `pyproject.toml` `[tool.sqlfluff.*]` |
-| 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `pyproject.toml` `[tool.gitlint]` |
+| 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `.gitlint` (루트) |
 | YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) |
 | Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) |
 | 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) |
@@ -31,36 +31,43 @@
 
 커밋 전 포매터·린터를 통과시킨다. (`mypy`는 어노테이션이 아닌 **타입 정합성**을 검사)
 
-### 실행
+### 실행 (pre-commit)
 
-별도 오케스트레이터 없이 각 린터를 **직접 실행**한다.
-(규칙의 단일 출처는 위 표의 "설정 위치"인 도구 네이티브 파일이다.)
+커밋 시 [`pre-commit`](https://pre-commit.com/)이 린터·포매터·시크릿 스캔을 자동 실행한다(`.pre-commit-config.yaml`).
+규칙의 단일 출처는 위 표의 "설정 위치"인 도구 네이티브 파일이며, pre-commit은 **'언제 무엇을 실행할지'만** 정의한다(스테이징된 파일만 검사).
+
+```bash
+uv tool install pre-commit
+pre-commit install --install-hooks    # pre-commit + commit-msg 훅 설치
+pre-commit run --all-files            # 전체 수동 검사
+```
+
+- **포함 훅**: `ruff`(check+format) · `yamllint` · `gitleaks` · `gitlint`(commit-msg) · 기본 위생 훅(공백·EOF·toml/yaml 검사).
+- **미포함**(마찰·의존성으로 수동/CI): `sqlfluff`(dbt 모델 부재), `mypy`(전체 컨텍스트 필요 → `mypy src`), `hadolint`(바이너리/도커 필요).
+
+직접 실행도 가능하다:
 
 ```bash
 ruff check . && ruff format .        # Python
-sqlfluff lint . && sqlfluff fix .    # SQL
 yamllint .                           # YAML
-hadolint **/Dockerfile               # Dockerfile
 gitleaks detect                      # 시크릿 스캔
-gitlint                              # 직전 커밋 메시지 검사
-mypy src                             # Python 타입 정합성
+mypy src                             # Python 타입 정합성 (CI)
 ```
-
-> 일괄 실행이 필요하면 `pre-commit` 등으로 묶을 수 있다(현재 repo엔 미설정).
 
 ### 설정 위치 원칙
 
-- `pyproject.toml`을 지원하는 도구(`ruff`·`sqlfluff`·`gitlint`)는 **`pyproject.toml`에 모은다.**
-- 지원하지 않는 도구는 **루트의 도구 네이티브 설정 파일**에 둔다.
+- `pyproject.toml`을 지원하고 **그 위치에서 실행되는** 도구(`ruff`·`sqlfluff`)는 `pyproject.toml`에 모은다.
+- 그 외는 **루트의 도구 네이티브 설정 파일**에 둔다.
   - `yamllint` → `.yamllint.yaml` (pyproject 미지원)
   - `hadolint` → `.hadolint.yaml`
   - `gitleaks` → `.gitleaks.toml`
+  - `gitlint` → `.gitlint` (repo 루트에서 실행 → 하위 `pyproject.toml` 자동탐지 불가)
 - 세부 예시는 [Python](python.md) · [dbt](dbt.md) 문서 참고.
 
 ## 커밋 메시지 (Conventional Commits)
 
 [Conventional Commits](https://www.conventionalcommits.org/) 규약을 따른다.
-gitlint `contrib-title-conventional-commits` 룰로 강제한다(`pyproject.toml`).
+gitlint `contrib-title-conventional-commits` 룰로 강제한다(루트 `.gitlint`, pre-commit `commit-msg` 훅).
 
 - **형식**: `type(scope): 설명` — `scope`는 선택, **설명은 한국어**.
 - 제목은 **72자 이내**(`title-max-length`).

@@ -20,6 +20,38 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:120b")
 DISCORD_MAX_LEN = 2000
 
 
+def split_message(text: str, limit: int = DISCORD_MAX_LEN) -> list[str]:
+    """긴 텍스트를 Discord 길이 제한에 맞춰 여러 조각으로 나눈다.
+
+    가능하면 줄 단위로 끊고, 한 줄이 limit을 넘으면 강제로 잘라 나눈다.
+    """
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        # 한 줄 자체가 limit을 초과하면 강제로 분할
+        while len(line) > limit:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:limit])
+            line = line[limit:]
+        # 현재 조각에 줄을 추가하면 limit을 넘는 경우 조각을 확정
+        if len(current) + len(line) + 1 > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+    return chunks or [""]
+
+
+async def send_chunks(interaction: discord.Interaction, text: str) -> None:
+    """defer 이후의 응답을 길이 제한에 맞춰 여러 메시지로 분할 전송한다."""
+    for chunk in split_message(text):
+        await interaction.followup.send(content=chunk)
+
+
 def query_ollama(prompt: str) -> str:
     """Ollama /api/chat 엔드포인트를 동기 호출해 응답 텍스트를 반환한다."""
     headers = {"Content-Type": "application/json"}
@@ -149,10 +181,8 @@ async def ask(interaction: discord.Interaction, prompt: str):
     try:
         # 동기 requests 호출이 이벤트 루프를 막지 않도록 별도 스레드에서 실행
         answer = await asyncio.to_thread(query_ollama, prompt)
-        # Discord 메시지 길이 제한(2000자) 처리
-        if len(answer) > DISCORD_MAX_LEN:
-            answer = answer[: DISCORD_MAX_LEN - 3] + "..."
-        await interaction.followup.send(content=answer)
+        # Discord 길이 제한(2000자) 초과 시 여러 메시지로 분할 전송
+        await send_chunks(interaction, answer)
     except Exception as e:
         logger.error(f"Ollama 요청 실패: {e}")
         await interaction.followup.send("Ollama 요청에 실패했습니다.")
@@ -179,10 +209,8 @@ async def search(interaction: discord.Interaction, prompt: str):
     try:
         # 동기 호출이 이벤트 루프를 막지 않도록 별도 스레드에서 실행
         answer = await asyncio.to_thread(search_ollama, prompt)
-        # Discord 메시지 길이 제한(2000자) 처리
-        if len(answer) > DISCORD_MAX_LEN:
-            answer = answer[: DISCORD_MAX_LEN - 3] + "..."
-        await interaction.followup.send(content=answer)
+        # Discord 길이 제한(2000자) 초과 시 여러 메시지로 분할 전송
+        await send_chunks(interaction, answer)
     except Exception as e:
         logger.error(f"Ollama 웹서치 요청 실패: {e}")
         await interaction.followup.send("Ollama 웹서치 요청에 실패했습니다.")

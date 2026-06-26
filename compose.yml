@@ -10,6 +10,9 @@ x-docker-logging: &docker-logging
       # 유지할 로그 파일 개수 (최대 10개)
       max-file: "20"
 
+# 자원 할당 규칙: 서비스마다 특성이 다르므로 deploy.resources 를 개별 명시한다.
+# limits=상한(하드), reservations=예약(소프트). podman machine(8CPU/22GiB) 기준 산정.
+
 services:
   dagster-dev:
     <<: *docker-logging
@@ -22,9 +25,10 @@ services:
       - "0.0.0.0"
       - "--verbose"
     environment:
-      - DAGSTER_POSTGRES_USER=${DAGSTER_POSTGRES_USER}
-      - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_POSTGRES_PASSWORD}
-      - DAGSTER_POSTGRES_DB=${DAGSTER_POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_PORT=${POSTGRES_PORT}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
@@ -36,6 +40,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # dev 모드: 웹서버+데몬+코드서버 단일 프로세스, 실행 시 CPU 버스트·메모리 다소 높음
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1536M
   postgres:
     <<: *docker-logging
     container_name: postgres
@@ -52,6 +65,15 @@ services:
       interval: 10s
       timeout: 8s
       retries: 5
+    # RDB: 캐시·shared_buffers 위해 안정적 메모리 예약, CPU는 중간
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
   trino:
     <<: *docker-logging
     container_name: trino
@@ -67,6 +89,8 @@ services:
     volumes:
       # 카탈로그 정의만 읽기전용 마운트 (비밀정보는 ${ENV:..}로 치환)
       - ./trino/etc/catalog:/etc/trino/catalog:ro
+      # 힙 비율 조정용 커스텀 jvm.config (나머지 설정은 이미지 기본값 사용)
+      - ./trino/etc/jvm.config:/etc/trino/jvm.config:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,9 +102,14 @@ services:
       timeout: 10s
       retries: 10
       start_period: 40s
+    # JVM 기반 MPP 쿼리엔진: 힙·쿼리 처리로 메모리/CPU 최다 소비 (jvm.config Xmx는 한도 내 유지)
     deploy:
       resources:
         limits:
+          cpus: "3.0"
+          memory: 6G
+        reservations:
+          cpus: "1.0"
           memory: 2G
   # SeaweedFS standalone: master/volume/filer/s3를 단일 컨테이너로 통합
   seaweedfs:
@@ -95,6 +124,15 @@ services:
     command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -dir=/data -filer -s3 -metricsPort=9324"
     volumes:
       - ./seaweedfs/data:/data
+    # 오브젝트 스토리지: IO 위주, CPU 낮고 메모리 모자란 편 아님
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
   discord-bot:
     <<: *docker-logging
     container_name: discord-bot
@@ -107,6 +145,15 @@ services:
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
     restart: unless-stopped
+    # 경량 Python 봇: 추론은 ollama 클라우드에 위임, 네트워크 위주의 작은 풋프린트
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
   prometheus:
     image: prom/prometheus:v2.21.0
     ports:
@@ -116,3 +163,12 @@ services:
     command: "--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml"
     depends_on:
       - seaweedfs
+    # TSDB: 시계열 수·보존기간에 따라 메모리 증가, CPU는 낮음
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M

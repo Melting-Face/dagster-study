@@ -140,8 +140,10 @@ dbt_all_schedule = ScheduleDefinition(
 
 ## 그룹 / 네이밍
 
-- 에셋 그룹명은 `snake_case`. 레이크하우스 레이어와 일치시키면 추적이 쉽다.
-  (예: `dbt_ingest`, 또는 medallion 레이어 `bronze` / `silver` / `gold`)
+- 에셋 그룹명은 `snake_case`. 적재 자산은 **데이터셋 단위로 그룹화**한다(예: `eicu`, `mimiciv`).
+- **메달리온 레이어는 그룹·네임스페이스 접두어가 아니라 `kinds`로 표기**한다
+  (예: `kinds={"python", "iceberg", "bronze"}`). dbt 쪽에서는 동일 레이어를 tag로 관리한다.
+  → 네임스페이스/스키마에는 `bronze_` 같은 레이어 접두어를 넣지 않는다(`NAMESPACE = "eicu"`).
 - 잡·스케줄 이름은 역할이 드러나게 (`dbt_all_job`, `dbt_all_schedule`).
 
 ## 실행

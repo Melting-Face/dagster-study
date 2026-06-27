@@ -35,9 +35,12 @@ capitalisation_policy = "lower"
 
 > 참고: `templater = "dbt"`를 쓰려면 `sqlfluff-templater-dbt` 패키지가 필요하다.
 
-## 모델 레이어링 (Medallion)
+## 디렉토리 / 레이어링 (Medallion)
 
-레이크하우스 계층을 디렉토리·스키마로 분리한다.
+- **`models/` 하위 디렉토리는 서브프로젝트(데이터셋)명으로 묶는다** — Dagster `defs/<dataset>/`와 1:1.
+  메달리온 레이어명(`bronze`/`silver`/`gold`)을 **디렉토리명으로 쓰지 않는다.**
+- **메달리온 레이어는 tag로 표기**한다(스키마 접두어·디렉토리명으로 인코딩하지 않는다).
+  Dagster 쪽에서는 동일 레이어를 `kinds`로 표기한다([dagster.md](dagster.md)).
 
 | 레이어                  | 의미                          | materialization 권장 |
 | ----------------------- | ----------------------------- | -------------------- |
@@ -47,18 +50,22 @@ capitalisation_policy = "lower"
 
 ```text
 models/
-├── bronze/
-├── silver/
-└── gold/
+├── eicu/              # 서브프로젝트(데이터셋)명 = defs/eicu
+│   ├── source.yml     # Dagster 적재분(dbt 미생성) source 선언
+│   ├── stg_eicu__patient.sql      # tag: silver
+│   └── eicu__patient_summary.sql  # tag: gold
+└── mimic_iv/          # = defs/mimic_iv
+    └── source.yml
 ```
 
-> 현재 `dbt_project.yml`은 bronze 레이어가 리셋된 상태(example 모델 제거).
-> 새 모델은 `models/` 하위에 추가하고 필요 시 `+config`를 선언한다.
+> 새 모델은 해당 **데이터셋 디렉토리** 안에 추가하고, 레이어는 `+tags`(또는 모델 내 `config(tags=...)`)로
+> 표기한다.
 
 ## 네이밍
 
 - 모델 파일·이름은 `snake_case`, 영어.
-- 레이어 접두어 권장: `bronze_<source>__<entity>`, `gold_<subject>` 등.
+- 모델명에는 **데이터셋·엔티티**를 드러낸다(예: `stg_eicu__patient`, `eicu__patient_summary`).
+  레이어는 파일명이 아니라 **tag**로 구분한다.
 - 컬럼명은 `snake_case`.
 
 ## 모델 설정 (선언적)
@@ -68,35 +75,63 @@ models/
 - Dagster 그룹도 dbt 쪽 config로 선언한다 (Dagster 서브클래싱 대신).
 
 ```yaml
-# dbt_project.yml
+# dbt_project.yml — 디렉토리는 데이터셋명, 레이어는 +tags로 표기
 models:
   dbt_pipelines:
-    bronze:
-      +materialized: view
-      +schema: bronze
-    gold:
-      +materialized: table
-      +schema: gold
+    eicu: # ← 서브프로젝트(데이터셋) 디렉토리
       +meta:
         dagster:
-          group: gold # ← Dagster 에셋 그룹을 dbt config로 선언
+          group: eicu # Dagster 에셋 그룹을 dbt config로 선언
 ```
 
 ```sql
--- models/gold/gold_daily_sales.sql
-{{ config(materialized='table') }}
+-- models/eicu/eicu__patient_summary.sql
+-- 레이어는 디렉토리가 아니라 tag로 표기한다(gold).
+{{ config(materialized='table', tags=['gold']) }}
 
 select
-    order_date,
-    sum(amount) as total_amount
-from {{ ref('silver_orders') }}
-group by order_date
+    patient_id,
+    count(*) as lab_count
+from {{ ref('stg_eicu__patient') }}
+group by patient_id
 ```
 
 ## ref / source
 
 - 모델 간 참조는 항상 **`{{ ref('...') }}`**, 원천 참조는 **`{{ source('...') }}`** 를 쓴다.
   하드코딩된 테이블명을 금지한다 (lineage 보존).
+
+### Dagster가 적재한(=dbt 미생성) 테이블은 `source()`로 참조한다
+
+S3 → Iceberg 적재 테이블(`defs/<dataset>/`)은 **dbt가 만들지 않으므로** dbt source로 선언하고
+`{{ source(...) }}`로 참조한다. source 정의는 **데이터셋별 서브디렉토리**에 둔다
+(`models/<dataset>/source.yml`). 현재: `models/eicu/source.yml`, `models/mimic_iv/source.yml`.
+
+```yaml
+# models/eicu/source.yml
+version: 2
+sources:
+  - name: eicu
+    database: iceberg # Trino 카탈로그 (= profiles.yml database)
+    schema: eicu # Iceberg 네임스페이스 = Trino 스키마 (defs/eicu NAMESPACE)
+    tables:
+      - name: patient
+        meta:
+          dagster:
+            asset_key: ["patient"] # ← Dagster 자산키와 1:1 매핑(lineage 연결)
+```
+
+```sql
+-- models/eicu/stg_eicu__patient.sql   (레이어는 tag로: config(tags=['silver']))
+select * from {{ source('eicu', 'patient') }}
+```
+
+- **`schema`는 Iceberg 네임스페이스(= `defs/<dataset>/constants.py`의 `NAMESPACE`)와 반드시 일치**해야
+  한다. 둘은 단일 출처로 함께 바뀐다.
+- **`meta.dagster.asset_key`** 로 dbt source를 기존 Dagster 자산키에 매핑한다. 미지정 시 dagster-dbt
+  기본값은 `[source_name, table]`(2-세그먼트)이라 단일 세그먼트 자산키(`patient` 등)와 어긋나 lineage가
+  끊긴다. (근거: `dagster_dbt` `default_asset_key_fn` — `meta.dagster.asset_key` 우선)
+- Dagster **서브클래싱 없이 dbt 선언만으로** 연결한다(프로젝트 컨벤션).
 
 ## 테스트 (필수)
 
@@ -106,13 +141,13 @@ group by order_date
   - [`dbt_expectations`](https://github.com/metaplane/dbt-expectations) `0.10.10`
 
 ```yaml
-# models/gold/_gold__models.yml
+# models/eicu/_eicu__models.yml
 models:
-  - name: gold_daily_sales
+  - name: eicu__patient_summary
     columns:
-      - name: order_date
+      - name: patient_id
         tests: [not_null, unique]
-      - name: total_amount
+      - name: lab_count
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
               min_value: 0

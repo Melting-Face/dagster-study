@@ -60,4 +60,8 @@
 - **일반(부하 없는) 파일**: 자산이 `pa.Table` 반환 → **dagster-iceberg IO 매니저**가 자동 create+적재.
 - **대용량 파일(예: 3.3GB)**: boto3 스트리밍 + **청크 append**(`load_heavy_csv_gz_to_iceberg`, IO 매니저 미사용 — 전량 메모리 적재 금지).
 - **메타스토어를 두지 않는다**: Trino와 동일한 Iceberg JDBC 카탈로그를 재사용한다.
+- **dbt 미생성 테이블(=Dagster 적재분)은 dbt `source()`로 참조**한다. source는 데이터셋별
+  `models/<dataset>/source.yml`에 두고 `meta.dagster.asset_key`로 Dagster 자산키와 매핑해 lineage를
+  연결한다. 메달리온 레이어는 스키마 접두어가 아닌 **kind(Dagster)/tag(dbt)** 로 표기한다.
+  상세 [`docs/conventions/dbt.md`](docs/conventions/dbt.md).
 - 자세한 흐름·사용법은 [`docs/architecture.md`](docs/architecture.md) 참고.

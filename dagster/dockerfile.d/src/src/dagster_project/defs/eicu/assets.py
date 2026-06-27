@@ -15,17 +15,25 @@ from dagster_aws.s3 import S3Resource
 from dagster_project.common.helper import read_csv_gz_table
 from dagster_project.defs.eicu.constants import GROUP_NAME, SOURCE_BASE
 
-# 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=bronze_eicu)로 적재한다.
-_IO_MANAGER_KEY = "io_manager_eicu"
+# 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=eicu)로 적재한다.
+IO_MANAGER_KEY = "io_manager_eicu"
 
 
-@dg.asset(group_name=GROUP_NAME, io_manager_key=_IO_MANAGER_KEY, kinds={"python", "iceberg"})
+@dg.asset(
+    group_name=GROUP_NAME,
+    io_manager_key=IO_MANAGER_KEY,
+    kinds={"python", "iceberg", "bronze"},
+)
 def patient(s3: S3Resource) -> pa.Table:
     """EICU patient 원본을 bronze Iceberg 테이블로 적재한다."""
     return read_csv_gz_table(s3, f"{SOURCE_BASE}/patient.csv.gz")
 
 
-@dg.asset(group_name=GROUP_NAME, io_manager_key=_IO_MANAGER_KEY, kinds={"python", "iceberg"})
+@dg.asset(
+    group_name=GROUP_NAME,
+    io_manager_key=IO_MANAGER_KEY,
+    kinds={"python", "iceberg", "bronze"},
+)
 def lab(s3: S3Resource) -> pa.Table:
     """EICU lab 원본을 bronze Iceberg 테이블로 적재한다."""
     return read_csv_gz_table(s3, f"{SOURCE_BASE}/lab.csv.gz")

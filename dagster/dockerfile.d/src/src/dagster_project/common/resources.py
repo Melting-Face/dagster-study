@@ -1,7 +1,8 @@
 """S3/Iceberg Dagster 리소스 빌더 (데이터셋 무관 공통).
 
 - S3: dagster-aws S3Resource (SeaweedFS endpoint)
-- Iceberg: dagster-iceberg PyArrowIcebergIOManager(일반 적재) / IcebergTableResource(대용량 경로)
+- Iceberg: dagster-iceberg PyArrowIcebergIOManager(일반 적재) /
+  IcebergTableResource(대용량 경로)
 
 주의: dagster-iceberg의 IcebergCatalogConfig는 아직 dg.EnvVar를 지원하지 않으므로
 (properties는 평문 문자열), 비밀값은 정의 로드 시점(컨테이너)의 os.environ에서 읽는다.
@@ -24,7 +25,7 @@ from dagster_project.common.constants import (
 )
 
 
-def _catalog_properties() -> dict[str, str]:
+def catalog_properties() -> dict[str, str]:
     """Trino의 iceberg JDBC 카탈로그와 동일 설정(pyiceberg properties)."""
     user = os.environ["POSTGRES_USER"]
     password = os.environ["POSTGRES_PASSWORD"]
@@ -42,7 +43,7 @@ def _catalog_properties() -> dict[str, str]:
 
 def build_catalog_config() -> IcebergCatalogConfig:
     """공통 Iceberg 카탈로그 설정."""
-    return IcebergCatalogConfig(properties=_catalog_properties())
+    return IcebergCatalogConfig(properties=catalog_properties())
 
 
 def build_s3_resource() -> S3Resource:
@@ -56,7 +57,10 @@ def build_s3_resource() -> S3Resource:
 
 
 def build_io_manager(namespace: str) -> PyArrowIcebergIOManager:
-    """일반(부하 없는) 적재용 IO 매니저. 자산 반환 pa.Table을 namespace.<asset>로 write."""
+    """일반(부하 없는) 적재용 IO 매니저.
+
+    자산이 반환한 pa.Table을 namespace.<asset>로 write 한다.
+    """
     return PyArrowIcebergIOManager(
         name=CATALOG_NAME,
         config=build_catalog_config(),

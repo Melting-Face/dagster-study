@@ -1,12 +1,16 @@
 """S3 csv.gz → Iceberg 적재 헬퍼 (데이터셋 무관 공통).
 
 두 가지 경로를 제공한다.
-- read_csv_gz_table: 일반(부하 없는) 파일을 통째로 읽어 pa.Table 반환 → IO 매니저가 write.
-- load_heavy_csv_gz_to_iceberg: 대용량 csv.gz(예: 3.3GB)를 boto3 스트리밍 + 청크 append로
-  메모리를 일정하게 유지하며 적재(IO 매니저 미사용).
+- read_csv_gz_table: 일반(부하 없는) 파일을 통째로 읽어 pa.Table 반환
+  → IO 매니저가 write.
+- load_heavy_csv_gz_to_iceberg: 대용량 csv.gz(예: 3.3GB)를 boto3 스트리밍 +
+  청크 append로 메모리를 일정하게 유지하며 적재(IO 매니저 미사용).
 """
 
 from __future__ import annotations
+
+import contextlib
+from typing import TYPE_CHECKING
 
 import dagster as dg
 import pyarrow as pa
@@ -16,18 +20,23 @@ from dagster_iceberg.resource import IcebergTableResource
 
 from dagster_project.common.constants import DEFAULT_CHUNK_ROWS
 
+if TYPE_CHECKING:
+    from pyiceberg.catalog import Catalog
+    from pyiceberg.table import Table
 
-def _parse_s3_uri(uri: str) -> tuple[str, str]:
+
+def parse_s3_uri(uri: str) -> tuple[str, str]:
     """s3://bucket/key → (bucket, key)."""
     if not uri.startswith("s3://"):
-        raise ValueError(f"s3:// URI가 아님: {uri}")
+        message = f"s3:// URI가 아님: {uri}"
+        raise ValueError(message)
     bucket, _, key = uri[len("s3://") :].partition("/")
     return bucket, key
 
 
-def _open_csv_gz_stream(s3: S3Resource, source_uri: str) -> pacsv.CSVStreamingReader:
+def open_csv_gz_stream(s3: S3Resource, source_uri: str) -> pacsv.CSVStreamingReader:
     """boto3로 s3 객체를 받아 gzip 해제 스트림을 pyarrow CSV 리더로 연다."""
-    bucket, key = _parse_s3_uri(source_uri)
+    bucket, key = parse_s3_uri(source_uri)
     body = s3.get_client().get_object(Bucket=bucket, Key=key)["Body"]
     # StreamingBody(file-like)를 pyarrow로 감싸 gzip 스트리밍 해제
     stream = pa.CompressedInputStream(pa.PythonFile(body, mode="r"), "gzip")
@@ -40,11 +49,12 @@ def read_csv_gz_table(s3: S3Resource, source_uri: str) -> pa.Table:
     대용량 파일에는 사용하지 말 것(전량 메모리 적재). 그 경우
     load_heavy_csv_gz_to_iceberg를 쓴다.
     """
-    reader = _open_csv_gz_stream(s3, source_uri)
+    reader = open_csv_gz_stream(s3, source_uri)
     return reader.read_all()
 
 
-def _table_exists(catalog, identifier: str) -> bool:
+def table_exists(catalog: Catalog, identifier: str) -> bool:
+    """식별자에 해당하는 테이블이 카탈로그에 존재하는지 확인한다."""
     from pyiceberg.exceptions import NoSuchTableError
 
     try:
@@ -54,14 +64,13 @@ def _table_exists(catalog, identifier: str) -> bool:
         return False
 
 
-def _ensure_table(catalog, identifier: str, schema):
+def ensure_table(catalog: Catalog, identifier: str, schema: pa.Schema) -> Table:
+    """테이블을 로드하고, 없으면 네임스페이스·테이블을 생성해 반환한다."""
     from pyiceberg.exceptions import NamespaceAlreadyExistsError, NoSuchTableError
 
     namespace = identifier.rsplit(".", 1)[0]
-    try:
+    with contextlib.suppress(NamespaceAlreadyExistsError):
         catalog.create_namespace(namespace)
-    except NamespaceAlreadyExistsError:
-        pass
     try:
         return catalog.load_table(identifier)
     except NoSuchTableError:
@@ -99,10 +108,10 @@ def load_heavy_csv_gz_to_iceberg(
     catalog = load_catalog(iceberg_table.name, **properties)
     identifier = f"{iceberg_table.schema_}.{iceberg_table.table}"
 
-    if mode == "replace" and _table_exists(catalog, identifier):
+    if mode == "replace" and table_exists(catalog, identifier):
         catalog.drop_table(identifier)
 
-    reader = _open_csv_gz_stream(s3, source_uri)
+    reader = open_csv_gz_stream(s3, source_uri)
     table = None
     pending: list = []
     pending_rows = 0
@@ -114,7 +123,7 @@ def load_heavy_csv_gz_to_iceberg(
             return
         arrow = pa.Table.from_batches(pending)
         if table is None:
-            table = _ensure_table(catalog, identifier, arrow.schema)
+            table = ensure_table(catalog, identifier, arrow.schema)
         table.append(arrow)
         pending = []
         pending_rows = 0
@@ -127,7 +136,9 @@ def load_heavy_csv_gz_to_iceberg(
             flush()
     flush()
 
-    context.log.info(f"{identifier} ← {source_uri} 적재 완료 ({total_rows} rows, mode={mode})")
+    context.log.info(
+        f"{identifier} ← {source_uri} 적재 완료 ({total_rows} rows, mode={mode})"
+    )
     return dg.MaterializeResult(
         metadata={
             "table": identifier,

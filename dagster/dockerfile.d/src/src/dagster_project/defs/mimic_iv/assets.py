@@ -20,29 +20,40 @@ from dagster_project.common.helper import (
 )
 from dagster_project.defs.mimic_iv.constants import GROUP_NAME, SOURCE_BASE
 
-# 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=bronze_mimiciv)로 적재한다.
-_IO_MANAGER_KEY = "io_manager_mimiciv"
+# 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=mimiciv)로 적재한다.
+IO_MANAGER_KEY = "io_manager_mimiciv"
 
 
-@dg.asset(group_name=GROUP_NAME, io_manager_key=_IO_MANAGER_KEY, kinds={"python", "iceberg"})
+@dg.asset(
+    group_name=GROUP_NAME,
+    io_manager_key=IO_MANAGER_KEY,
+    kinds={"python", "iceberg", "bronze"},
+)
 def patients(s3: S3Resource) -> pa.Table:
     """MIMIC-IV hosp.patients 원본을 bronze Iceberg 테이블로 적재한다."""
     return read_csv_gz_table(s3, f"{SOURCE_BASE}/hosp/patients.csv.gz")
 
 
-@dg.asset(group_name=GROUP_NAME, io_manager_key=_IO_MANAGER_KEY, kinds={"python", "iceberg"})
+@dg.asset(
+    group_name=GROUP_NAME,
+    io_manager_key=IO_MANAGER_KEY,
+    kinds={"python", "iceberg", "bronze"},
+)
 def admissions(s3: S3Resource) -> pa.Table:
     """MIMIC-IV hosp.admissions 원본을 bronze Iceberg 테이블로 적재한다."""
     return read_csv_gz_table(s3, f"{SOURCE_BASE}/hosp/admissions.csv.gz")
 
 
-@dg.asset(group_name=GROUP_NAME, kinds={"python", "iceberg"})
+@dg.asset(group_name=GROUP_NAME, kinds={"python", "iceberg", "bronze"})
 def chartevents(
     context: AssetExecutionContext,
     s3: S3Resource,
     mimiciv_chartevents_table: IcebergTableResource,
 ) -> dg.MaterializeResult:
-    """대용량 icu.chartevents를 청크 단위로 bronze Iceberg에 적재한다(IO 매니저 미사용)."""
+    """대용량 icu.chartevents를 청크 단위로 bronze Iceberg에 적재한다.
+
+    IO 매니저를 사용하지 않고 boto3 스트리밍 + 청크 append로 처리한다.
+    """
     return load_heavy_csv_gz_to_iceberg(
         context,
         s3=s3,

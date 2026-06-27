@@ -28,7 +28,7 @@ dbt_all_schedule = ScheduleDefinition(
 )
 
 # S3/Iceberg 리소스 (데이터셋별 IO 매니저 + 대용량 테이블 바인딩)
-_resources = {
+resource_defs = {
     "s3": build_s3_resource(),
     "io_manager_mimiciv": build_io_manager(MIMICIV_NS),
     "io_manager_eicu": build_io_manager(EICU_NS),
@@ -41,6 +41,6 @@ defs = Definitions.merge(
     Definitions(
         jobs=[dbt_all_job],
         schedules=[dbt_all_schedule],
-        resources=_resources,
+        resources=resource_defs,
     ),
 )

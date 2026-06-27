@@ -149,8 +149,11 @@ dbt_all_schedule = ScheduleDefinition(
 ## 실행
 
 ```bash
-dg dev        # 개발 UI (http://localhost:3000)
+dg dev        # 로컬 ad-hoc 개발 (webserver+daemon+code 일체형, http://localhost:3000)
 ```
+
+> 컨테이너 스택(`compose.yml`)은 `dg dev` 대신 **`dagster-webserver` + `dagster-daemon`** 으로
+> 분리해 기동한다(운영 토폴로지). 상세 [`../architecture.md`](../architecture.md#dagster-프로세스-분리-webserver--daemon).
 
 ## 참고
 

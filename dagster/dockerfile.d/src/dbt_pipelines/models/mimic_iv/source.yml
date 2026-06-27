@@ -1,0 +1,35 @@
+# MIMIC-IV 소스
+#
+# Dagster(defs/mimic_iv)가 S3 csv.gz → Iceberg로 적재한 테이블이다(dbt가 생성하지 않음).
+# 따라서 dbt 모델에서는 ref()가 아니라 source()로 참조한다.
+#
+# - database  : Trino 카탈로그 (= profiles.yml database = iceberg.properties catalog-name)
+# - schema    : Iceberg 네임스페이스 = Trino 스키마 (defs/mimic_iv/constants.py NAMESPACE)
+#               메달리온 레이어는 스키마 접두어가 아니라 tag(dbt)/kind(Dagster)로 표기한다.
+# - meta.dagster.asset_key: Dagster 자산키와 1:1 매핑해 lineage를 연결한다.
+#       MIMIC-IV 적재 자산은 단일 세그먼트 키(patients, admissions, chartevents)로
+#       정의돼 있으므로 기본값([source_name, table]) 대신 명시적으로 키를 지정한다.
+#       (Dagster 서브클래싱 없이 dbt 쪽 선언으로 처리 — 프로젝트 컨벤션)
+version: 2
+
+sources:
+  - name: mimiciv
+    description: "MIMIC-IV 원천(Iceberg). Dagster defs/mimic_iv가 적재."
+    database: iceberg
+    schema: mimiciv
+    tables:
+      - name: patients
+        description: "MIMIC-IV hosp.patients 원본 (S3 hosp/patients.csv.gz)."
+        meta:
+          dagster:
+            asset_key: ["patients"]
+      - name: admissions
+        description: "MIMIC-IV hosp.admissions 원본 (S3 hosp/admissions.csv.gz)."
+        meta:
+          dagster:
+            asset_key: ["admissions"]
+      - name: chartevents
+        description: "MIMIC-IV icu.chartevents 원본 (대용량, 청크 적재)."
+        meta:
+          dagster:
+            asset_key: ["chartevents"]

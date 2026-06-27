@@ -8,12 +8,12 @@
 `from __future__ import annotations`를 사용하지 않는다.
 """
 
-import dagster as dg
 import pyarrow as pa
 from dagster_aws.s3 import S3Resource
 
+import dagster as dg
 from dagster_project.common.helper import read_csv_gz_table
-from dagster_project.defs.eicu.constants import GROUP_NAME, SOURCE_BASE
+from dagster_project.eicu.constants import GROUP_NAME, SOURCE_BASE
 
 # 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=eicu)로 적재한다.
 IO_MANAGER_KEY = "io_manager_eicu"

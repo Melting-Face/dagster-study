@@ -1,0 +1,7 @@
+# 분리된 dagster-webserver / dagster-daemon이 공통으로 로드하는 코드 로케이션.
+#
+# dg dev는 pyproject [tool.dg]로 코드 로케이션을 자동발견하지만, 독립
+# dagster-webserver/dagster-daemon 바이너리는 workspace로 명시 로드한다.
+# 패키지는 이미지에서 `pip install -e`로 설치되므로 모듈 경로로 참조한다.
+load_from:
+  - python_module: dagster_project.definitions

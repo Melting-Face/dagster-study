@@ -13,34 +13,50 @@ x-docker-logging: &docker-logging
 # 자원 할당 규칙: 서비스마다 특성이 다르므로 deploy.resources 를 개별 명시한다.
 # limits=상한(하드), reservations=예약(소프트). podman machine(8CPU/22GiB) 기준 산정.
 
+# dagster webserver·daemon 공통부 (DRY). 둘은 동일 이미지·instance(dagster.yaml)·
+# Postgres 공유 storage로 협조하며, entrypoint/command/포트/자원만 서비스별로 다르다.
+x-dagster-common: &dagster-common
+  build:
+    context: dagster/dockerfile.d/
+  environment:
+    - POSTGRES_USER=${POSTGRES_USER}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+    - ENDPOINT_URL=${ENDPOINT_URL}
+  volumes:
+    - ./shared:/shared
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
-  dagster-dev:
-    <<: *docker-logging
-    container_name: dagster-dev
-    build:
-      context: dagster/dockerfile.d/
-    command:
-      - "dev"
-      - "-h"
-      - "0.0.0.0"
-      - "--verbose"
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-      - ENDPOINT_URL=${ENDPOINT_URL}
+  # UI/GraphQL 전용. workspace.yaml로 코드 로케이션을 명시 로드한다.
+  dagster-webserver:
+    <<: [*docker-logging, *dagster-common]
+    container_name: dagster-webserver
+    entrypoint: ["dagster-webserver"]
+    command: ["-h", "0.0.0.0", "-p", "${DAGSTER_PORT}", "-w", "workspace.yaml"]
     ports:
       - ${DAGSTER_PORT}:${DAGSTER_PORT}
-    volumes:
-      - ./shared:/shared
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # dev 모드: 웹서버+데몬+코드서버 단일 프로세스, 실행 시 CPU 버스트·메모리 다소 높음
+    # UI/GraphQL: 가벼움 (run 실행은 daemon 쪽)
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 768M
+  # 스케줄·센서·런큐 처리 + DefaultRunLauncher로 run을 서브프로세스 실행(무거움).
+  dagster-daemon:
+    <<: [*docker-logging, *dagster-common]
+    container_name: dagster-daemon
+    entrypoint: ["dagster-daemon"]
+    command: ["run", "-w", "workspace.yaml"]
     deploy:
       resources:
         limits:

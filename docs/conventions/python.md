@@ -29,8 +29,8 @@ select = [
     "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
     "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
 ]
-# docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819)·df네이밍(PD901) 제외
-ignore = ["D100", "D104", "ANN401", "COM812", "COM819", "PD901"]
+# docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819) 제외
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819"]
 # TC(flake8-type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류
 
 [tool.ruff.lint.pydocstyle]
@@ -59,8 +59,8 @@ indent-style = "space"
 | `COM`·`EM` | 트레일링 콤마·예외 메시지 |
 | `PD`·`NPY` | pandas·numpy 안티패턴(해당 라이브러리 사용 시) |
 
-> **충돌·제외**: `COM812`/`COM819`(포매터가 트레일링 콤마 처리), `PD901`(df 네이밍)은 ignore.
-> `TC`(type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류한다.
+> **충돌·제외**: `COM812`/`COM819`(포매터가 트레일링 콤마 처리)는 ignore.
+> `TC`(type-checking)는 Dagster 충돌로 보류. `PD901`(df 네이밍)은 ruff 0.13에서 제거됨.
 
 ### 매직 트레일링 콤마로 줄바꿈 유도
 
@@ -112,8 +112,8 @@ def stream_csv_gz_to_iceberg(
 
 ```python
 TABLES = [
-    ("mimiciv_hosp_patients", "bronze_mimiciv.patients", "s3://warehouse/raw/.../patients.csv.gz"),
-    ("mimiciv_hosp_admissions", "bronze_mimiciv.admissions", "s3://warehouse/raw/.../admissions.csv.gz"),
+    ("mimiciv_hosp_patients", "mimiciv.patients", "s3://warehouse/raw/.../patients.csv.gz"),
+    ("mimiciv_hosp_admissions", "mimiciv.admissions", "s3://warehouse/raw/.../admissions.csv.gz"),
 ]
 ```
 
@@ -123,13 +123,17 @@ TABLES = [
 
 - 주석은 **한국어**로 작성한다.
 - 식별자(변수·함수·클래스)는 **영어**, `snake_case`(함수·변수) / `PascalCase`(클래스).
+- 변수·함수명은 **약어 사용을 지양**하고 의미가 드러나는 **전체 단어**를 쓴다.
+  - 예: `message`(O) / `msg`(X), `config`(O) / `cfg`(X), `index`(O) / `idx`(X)
+  - 단, 널리 통용되는 import 별칭·표준 약어는 허용: `dg`(dagster)·`pa`(pyarrow)·`pd`·`np`·`df`·`id`·`uri` 등.
 
-## `_` 접두어 함수는 중첩(inner) 함수 전용
+## `_` 로 시작하는 이름은 중첩 함수에만
 
-- 이름이 `_`로 시작하는 함수는 **다른 함수 안에 정의된 중첩 함수**로만 쓰고,
+- **모듈 레벨의 변수·상수·함수는 `_`로 시작하지 않는다.**
+  (Python의 module-private(`_name`) 관례 대신 `_` 없는 이름을 쓴다.)
+- `_` 접두어는 **다른 함수 안에 정의된 중첩 함수**에만 허용하며,
   그 enclosing 함수 내부에서만 호출한다.
-- **모듈 레벨(top-level)에는 `_`로 시작하는 함수를 두지 않는다.**
-- 여러 함수가 공유하는 보조 로직은 `_` 없는 **일반 함수로 분리**한다(DRY).
+- 여러 함수가 공유하는 보조 로직은 `_` 없는 **일반 함수/상수로 분리**한다(DRY).
 
 ```python
 # ✅ enclosing 함수 안에서만 쓰는 보조 함수 → 중첩 + '_'

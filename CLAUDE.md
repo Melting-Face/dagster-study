@@ -39,7 +39,7 @@
 
 - 에셋은 **팩토리로 동적 생성하지 않고** 각각 `@asset` 함수로 **명시적으로 정의**한다.
   → 에셋 이름으로 바로 검색/점프(탐색성), per-asset 커스터마이징(deps·partition·description·automation)이 자연스럽다.
-- 공통 처리 로직은 일반 함수(`common.helper.load_csv_gz_to_iceberg` 등)로 분리해 재사용하되(DRY), **에셋 정의 자체는 분리·명시**한다.
+- 공통 처리 로직은 일반 함수(`common.helper`)로 분리해 재사용하되(DRY), **에셋 정의 자체는 분리·명시**한다.
 - 에셋은 **데이터셋별 서브프로젝트 단위로 분리 관리**한다(`defs/<dataset>/assets.py`).
 
 ## 프로젝트 구조 컨벤션
@@ -48,15 +48,16 @@
 
 - **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관, `defs` 밖 라이브러리).
   - `constants.py` — 공통 상수/기본값
-  - `utils.py` — 외부 접속(카탈로그·파일시스템) 유틸
-  - `helper.py` — 핵심 처리 로직 + 적재 오케스트레이션(`load_csv_gz_to_iceberg`)
+  - `resources.py` — S3/Iceberg 리소스 빌더(`build_s3_resource`·`build_io_manager`·`build_table_resource`)
+  - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
 - **에셋은 데이터셋별 서브프로젝트** `defs/<dataset>/`에서 정의(자동 로드).
   - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
   - `assets.py` — 테이블별 **명시적 `@asset`**
 
-### S3 → Iceberg 적재
+### S3 → Iceberg 적재 (리소스 기반, 2경로)
 
-- `csv.gz` → Iceberg 적재는 공통 `common.helper.load_csv_gz_to_iceberg()`를 호출하는 **명시적 `@asset` 함수**로 정의한다(팩토리/클래스 지양).
-- **메타스토어를 두지 않는다**: pyiceberg가 Trino와 동일한 Iceberg JDBC 카탈로그를 재사용한다.
-- 무거운 파일은 스트리밍 + 청크 append로 처리한다(IO manager로 전량 메모리 적재 금지).
+- S3/Iceberg 연결은 **Dagster 리소스로 관리**한다: `dagster-aws` `S3Resource` + `dagster-iceberg`(IO 매니저·`IcebergTableResource`). 연결을 자산이 아닌 리소스에 둔다.
+- **일반(부하 없는) 파일**: 자산이 `pa.Table` 반환 → **dagster-iceberg IO 매니저**가 자동 create+적재.
+- **대용량 파일(예: 3.3GB)**: boto3 스트리밍 + **청크 append**(`load_heavy_csv_gz_to_iceberg`, IO 매니저 미사용 — 전량 메모리 적재 금지).
+- **메타스토어를 두지 않는다**: Trino와 동일한 Iceberg JDBC 카탈로그를 재사용한다.
 - 자세한 흐름·사용법은 [`docs/architecture.md`](docs/architecture.md) 참고.

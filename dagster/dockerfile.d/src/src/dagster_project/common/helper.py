@@ -1,21 +1,50 @@
-"""csv.gz → Iceberg 스트리밍 적재 헬퍼 (데이터셋 무관 공통).
+"""S3 csv.gz → Iceberg 적재 헬퍼 (데이터셋 무관 공통).
 
-무거운 파일은 pyarrow 블록 스트리밍 + 청크 단위 append로 메모리를 일정하게 유지한다.
-서브프로젝트의 명시적 @asset 본문은 load_csv_gz_to_iceberg()를 호출해 중복을 제거한다(DRY).
+두 가지 경로를 제공한다.
+- read_csv_gz_table: 일반(부하 없는) 파일을 통째로 읽어 pa.Table 반환 → IO 매니저가 write.
+- load_heavy_csv_gz_to_iceberg: 대용량 csv.gz(예: 3.3GB)를 boto3 스트리밍 + 청크 append로
+  메모리를 일정하게 유지하며 적재(IO 매니저 미사용).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import dagster as dg
+import pyarrow as pa
+import pyarrow.csv as pacsv
+from dagster_aws.s3 import S3Resource
+from dagster_iceberg.resource import IcebergTableResource
 
 from dagster_project.common.constants import DEFAULT_CHUNK_ROWS
-from dagster_project.common.utils import get_s3_filesystem, load_iceberg_catalog
+
+
+def _parse_s3_uri(uri: str) -> tuple[str, str]:
+    """s3://bucket/key → (bucket, key)."""
+    if not uri.startswith("s3://"):
+        raise ValueError(f"s3:// URI가 아님: {uri}")
+    bucket, _, key = uri[len("s3://") :].partition("/")
+    return bucket, key
+
+
+def _open_csv_gz_stream(s3: S3Resource, source_uri: str) -> pacsv.CSVStreamingReader:
+    """boto3로 s3 객체를 받아 gzip 해제 스트림을 pyarrow CSV 리더로 연다."""
+    bucket, key = _parse_s3_uri(source_uri)
+    body = s3.get_client().get_object(Bucket=bucket, Key=key)["Body"]
+    # StreamingBody(file-like)를 pyarrow로 감싸 gzip 스트리밍 해제
+    stream = pa.CompressedInputStream(pa.PythonFile(body, mode="r"), "gzip")
+    return pacsv.open_csv(stream)
+
+
+def read_csv_gz_table(s3: S3Resource, source_uri: str) -> pa.Table:
+    """일반 파일을 통째로 읽어 Arrow 테이블로 반환한다(IO 매니저가 적재).
+
+    대용량 파일에는 사용하지 말 것(전량 메모리 적재). 그 경우
+    load_heavy_csv_gz_to_iceberg를 쓴다.
+    """
+    reader = _open_csv_gz_stream(s3, source_uri)
+    return reader.read_all()
 
 
 def _table_exists(catalog, identifier: str) -> bool:
-    # pyiceberg 버전별 table_exists 유무에 의존하지 않도록 load_table로 판별
     from pyiceberg.exceptions import NoSuchTableError
 
     try:
@@ -39,27 +68,41 @@ def _ensure_table(catalog, identifier: str, schema):
         return catalog.create_table(identifier, schema=schema)
 
 
-def stream_csv_gz_to_iceberg(
-    catalog,
-    identifier: str,
-    source_paths: Iterable[str],
-    fs,
+def load_heavy_csv_gz_to_iceberg(
+    context: dg.AssetExecutionContext,
     *,
-    chunk_rows: int = DEFAULT_CHUNK_ROWS,
+    s3: S3Resource,
+    iceberg_table: IcebergTableResource,
+    source_uri: str,
     mode: str = "replace",
-) -> int:
-    """csv.gz 파일들을 스트리밍으로 읽어 Iceberg 테이블에 청크 단위로 적재한다.
+    chunk_rows: int = DEFAULT_CHUNK_ROWS,
+) -> dg.MaterializeResult:
+    """대용량 csv.gz를 청크 단위로 Iceberg 테이블에 적재한다.
 
-    - chunk_rows 단위로 모아 한 번에 append → 작은 파일/스냅샷 폭증 방지
-    - mode="replace": 기존 테이블 제거 후 재적재(멱등), "append": 누적
-    반환값: 적재한 총 행 수
+    IcebergTableResource.load()는 기존 테이블만 로드하므로, 생성/append를 위해
+    리소스의 config(properties)로 pyiceberg 카탈로그를 재구성한다.
+
+    Args:
+        context: 에셋 실행 컨텍스트.
+        s3: dagster-aws S3Resource.
+        iceberg_table: 대상 테이블 바인딩 리소스(name·config·table·namespace).
+        source_uri: 원본 csv.gz의 s3 URI.
+        mode: "replace"(재적재) 또는 "append"(누적).
+        chunk_rows: 한 번에 append 할 행 수.
+
+    Returns:
+        적재 메타데이터(테이블·원본·행 수)를 담은 MaterializeResult.
     """
-    import pyarrow as pa
-    import pyarrow.csv as pacsv
+    from pyiceberg.catalog import load_catalog
+
+    properties = iceberg_table.config.model_dump()["properties"]
+    catalog = load_catalog(iceberg_table.name, **properties)
+    identifier = f"{iceberg_table.schema_}.{iceberg_table.table}"
 
     if mode == "replace" and _table_exists(catalog, identifier):
         catalog.drop_table(identifier)
 
+    reader = _open_csv_gz_stream(s3, source_uri)
     table = None
     pending: list = []
     pending_rows = 0
@@ -76,48 +119,20 @@ def stream_csv_gz_to_iceberg(
         pending = []
         pending_rows = 0
 
-    for path in source_paths:
-        with fs.open(path, "rb") as raw:
-            # gzip 해제를 스트림으로 처리 → 전량 메모리 적재 회피
-            stream = pa.CompressedInputStream(raw, "gzip")
-            reader = pacsv.open_csv(stream)
-            for batch in reader:
-                pending.append(batch)
-                pending_rows += batch.num_rows
-                total_rows += batch.num_rows
-                if pending_rows >= chunk_rows:
-                    flush()
+    for batch in reader:
+        pending.append(batch)
+        pending_rows += batch.num_rows
+        total_rows += batch.num_rows
+        if pending_rows >= chunk_rows:
+            flush()
     flush()
-    return total_rows
 
-
-def load_csv_gz_to_iceberg(
-    context: dg.AssetExecutionContext,
-    *,
-    identifier: str,
-    source_glob: str,
-    mode: str = "replace",
-    chunk_rows: int = DEFAULT_CHUNK_ROWS,
-) -> dg.MaterializeResult:
-    """S3 csv.gz → Iceberg 적재 공통 오케스트레이션 (에셋 본문이 호출).
-
-    identifier: Iceberg 식별자 "<namespace>.<table>" (예: bronze_mimiciv.patients)
-    source_glob: 소스 경로/글롭 (예: s3://warehouse/raw/mimiciv/hosp/patients.csv.gz)
-    """
-    catalog = load_iceberg_catalog()
-    fs = get_s3_filesystem()
-    paths = sorted(fs.glob(source_glob))
-    if not paths:
-        raise dg.Failure(description=f"소스 파일 없음: {source_glob}")
-    context.log.info(f"{len(paths)}개 파일 → {identifier} 적재 (mode={mode})")
-    rows = stream_csv_gz_to_iceberg(
-        catalog, identifier, paths, fs, chunk_rows=chunk_rows, mode=mode
-    )
+    context.log.info(f"{identifier} ← {source_uri} 적재 완료 ({total_rows} rows, mode={mode})")
     return dg.MaterializeResult(
         metadata={
             "table": identifier,
-            "source_glob": source_glob,
-            "files": len(paths),
-            "rows": rows,
+            "source_uri": source_uri,
+            "rows": total_rows,
+            "mode": mode,
         }
     )

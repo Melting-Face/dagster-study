@@ -104,6 +104,31 @@ chore: ruff·gitlint 등 린터 설정 추가
 docs: 코딩 규칙 문서 추가
 ```
 
+## 릴리스 / 태그
+
+- **버전**: [SemVer](https://semver.org/) — `vMAJOR.MINOR.PATCH`.
+- **정책: 태그·릴리스는 `main`에 반영될 때만 적용한다.**
+  - 피처 브랜치에는 태그·릴리스를 만들지 않는다.
+  - `main`에 머지된 뒤, `main` 커밋에 `v*` 태그를 push 해서 만든다.
+- **자동화**: [`.github/workflows/release.yml`](../../.github/workflows/release.yml) —
+  `v*` 태그 push 시 그 커밋이 `main`에 포함된 경우에만 GitHub Release를 생성한다(아니면 건너뜀).
+- **릴리스 노트**: Conventional Commits 기반 자동 생성(`gh release --generate-notes`).
+
+### 릴리스 절차
+
+```bash
+# 1) main 머지 후 최신화
+git switch main && git pull
+
+# 2) annotated 버전 태그 생성·push
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+
+# 3) 워크플로우가 main 포함을 확인하고 Release를 자동 생성
+```
+
+> 워크플로우는 **`main`(기본 브랜치)에 있어야** 태그 이벤트로 동작한다.
+
 ## 비밀정보 (Secrets)
 
 - 키·토큰·비밀번호를 코드·설정 파일에 **하드코딩하지 않는다.**

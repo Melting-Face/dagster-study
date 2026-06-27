@@ -1,12 +1,12 @@
-import os
-import json
 import asyncio
+import json
 import logging
+import os
 
-import requests
 import discord
+import requests
 from discord import app_commands
-from ollama import chat, web_search, web_fetch
+from ollama import chat, web_fetch, web_search
 
 APP_HOME = os.getenv("APP_HOME")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -47,7 +47,7 @@ def split_message(text: str, limit: int = DISCORD_MAX_LEN) -> list[str]:
 
 
 async def send_chunks(interaction: discord.Interaction, text: str) -> None:
-    """defer 이후의 응답을 길이 제한에 맞춰 여러 메시지로 분할 전송한다."""
+    """Defer 이후의 응답을 길이 제한에 맞춰 여러 메시지로 분할 전송한다."""
     for chunk in split_message(text):
         await interaction.followup.send(content=chunk)
 
@@ -125,7 +125,8 @@ logger = logging.getLogger("discord")
 
 
 @tree.command(name="인사", description="인사합니다")
-async def hello(interaction: discord.Interaction):
+async def hello(interaction: discord.Interaction) -> None:
+    """인사 커맨드: n8n 웹훅으로 호출 정보를 전달한다."""
     log_data = {
         "interaction_id": interaction.id,
         "command": interaction.command.name if interaction.command else None,
@@ -150,6 +151,7 @@ async def hello(interaction: discord.Interaction):
                 "guild_id": interaction.guild_id,
                 "channel_id": interaction.channel_id,
             },
+            timeout=10,  # 웹훅 알림용 짧은 타임아웃
         )
         await interaction.followup.send(
             content="웹서버 요청 성공",
@@ -157,12 +159,13 @@ async def hello(interaction: discord.Interaction):
         )
     except Exception as e:
         logger.error(f"웹서버 요청 실패: {e}")
-        await interaction.followup.send(f"웹서버 요청 실패")
+        await interaction.followup.send("웹서버 요청 실패")
 
 
 @tree.command(name="질문", description="Ollama LLM에게 질문합니다")
 @app_commands.describe(prompt="LLM에게 보낼 질문 내용")
-async def ask(interaction: discord.Interaction, prompt: str):
+async def ask(interaction: discord.Interaction, prompt: str) -> None:
+    """질문 커맨드: Ollama LLM에 prompt를 보내 답변을 전송한다."""
     log_data = {
         "interaction_id": interaction.id,
         "command": interaction.command.name if interaction.command else None,
@@ -190,7 +193,8 @@ async def ask(interaction: discord.Interaction, prompt: str):
 
 @tree.command(name="검색", description="웹서치를 활용해 Ollama LLM에게 질문합니다")
 @app_commands.describe(prompt="웹서치로 답변할 질문 내용")
-async def search(interaction: discord.Interaction, prompt: str):
+async def search(interaction: discord.Interaction, prompt: str) -> None:
+    """검색 커맨드: 웹서치를 활용해 Ollama LLM 답변을 전송한다."""
     log_data = {
         "interaction_id": interaction.id,
         "command": interaction.command.name if interaction.command else None,
@@ -217,7 +221,8 @@ async def search(interaction: discord.Interaction, prompt: str):
 
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
+    """봇 준비 완료 시 슬래시 커맨드를 글로벌 동기화한다."""
     await tree.sync()  # 글로벌 동기화
     logger.info("커맨드 동기화 완료!")
 

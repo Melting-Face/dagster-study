@@ -11,7 +11,8 @@
 #
 # 미포함(마찰·의존성으로 당분간 수동/CI 운용):
 #   - sqlfluff : dbt 모델 부재 + dbt templater 의존성 → 모델 생기면 추가
-#   - mypy     : 전체 패키지 컨텍스트 필요 → CI에서 `mypy src`
+#   - mypy     : 의존성 환경 필요 → repo 루트에서
+#                `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`
 #   - hadolint : 로컬 바이너리/도커 필요 → `brew install hadolint` 후 추가 가능
 default_install_hook_types: [pre-commit, commit-msg]
 

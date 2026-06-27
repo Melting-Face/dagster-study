@@ -14,13 +14,14 @@ sqlfluff lint models/
 sqlfluff fix models/
 ```
 
-### 설정은 `pyproject.toml`에서 관리한다
+### 설정은 repo 루트 `pyproject.toml`에서 관리한다
 
-sqlfluff 명세는 별도 `.sqlfluff` 파일 대신 **`pyproject.toml`의 `[tool.sqlfluff.*]`** 섹션에 둔다.
-(sqlfluff는 `tool.sqlfluff`로 시작하는 nested 섹션을 공식 지원한다.)
+sqlfluff 명세는 별도 `.sqlfluff` 파일 대신 **repo 루트 `pyproject.toml`의 `[tool.sqlfluff.*]`** 섹션에 둔다.
+(sqlfluff는 `tool.sqlfluff`로 시작하는 nested 섹션을 공식 지원하며, 대상 파일에서 상위로
+올라가며 pyproject를 병합 탐색하므로 루트 설정이 적용된다.)
 
 ```toml
-# pyproject.toml
+# pyproject.toml (repo 루트)
 [tool.sqlfluff.core]
 templater = "dbt"
 dialect = "trino"

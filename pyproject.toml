@@ -1,0 +1,74 @@
+# repo 루트 pyproject.toml
+#
+# 역할: 린트·포맷·타입체크 도구(ruff·sqlfluff·mypy) 설정의 단일 출처.
+# 패키징(`[project]`·`[build-system]`)과 Dagster `dg` 설정은
+# `dagster/dockerfile.d/src/pyproject.toml`에 둔다(빌드 컨텍스트라 분리).
+#
+# 도구별 설정 탐색 방식:
+#   - ruff     : 대상 파일에서 상위로 올라가며 `[tool.ruff]`가 있는 pyproject를 탐색 → 루트가 잡힘.
+#   - sqlfluff : 상위 디렉터리의 pyproject를 nested 병합 → 루트 `[tool.sqlfluff.*]` 적용.
+#   - mypy     : 상위 탐색을 하지 않고 CWD의 설정만 읽음 → **repo 루트에서 실행**해야 함.
+#                예) `mypy dagster/dockerfile.d/src/src`
+
+# --- Python 린터/포매터: ruff ---
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+# E,F,I,UP,B,D,ANN,FA,RUF + S(bandit) DTZ(datetimez) SIM C4 C90(mccabe)
+# PIE COM(commas) EM(errmsg) PD(pandas-vet) NPY(numpy)
+# Q(flake8-quotes: 따옴표 스타일) ARG(flake8-unused-arguments: 미사용 인자)
+select = [
+    "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
+    "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
+    "Q", "ARG",
+]
+# docstring 미요구(D100/D104), 동적 Any 허용(ANN401),
+# 포매터와 충돌하는 COM812/COM819 제외
+# (df 변수명 검사 PD901은 ruff 0.13에서 제거됨 → 별도 ignore 불필요)
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819"]
+# flake8-type-checking(TC)은 Dagster 런타임 타입 introspection과 충돌해 계속 보류
+
+# docstring 컨벤션: Google 스타일
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# 순환 복잡도 상한 (C90 / mccabe)
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# 테스트 코드는 어노테이션·docstring·assert(S101)·미사용 인자(ARG) 면제
+# (ARG: pytest fixture는 본문 미참조여도 인자로 받으므로 ARG001 오탐 방지)
+# (설정이 루트라 글롭은 임의 깊이의 tests/ 를 잡도록 **/tests/** 사용)
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["ANN", "D", "S101", "ARG"]
+
+[tool.ruff.format]
+indent-style = "space"
+
+# --- 타입 체커: mypy (ruff는 타입을 검사하지 않으므로 별도 도구) ---
+# mypy는 CWD의 설정만 읽으므로 repo 루트에서 실행한다(상단 주석 참고).
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true   # dagster·dbt·pyiceberg 등 외부 스텁 부재 대응
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true    # 함수에 타입 강제 (ruff ANN과 짝)
+no_implicit_optional = true
+# 전체 강화가 필요하면 strict = true
+
+# --- SQL 린터/포매터: sqlfluff (dbt-trino) ---
+[tool.sqlfluff.core]
+templater = "dbt"
+dialect = "trino"
+max_line_length = 88
+
+[tool.sqlfluff.indentation]
+tab_space_size = 4
+
+[tool.sqlfluff.rules.capitalisation.keywords]
+capitalisation_policy = "lower"
+
+# 커밋 메시지 린터(gitlint) 설정은 repo 루트의 .gitlint 에 둔다.

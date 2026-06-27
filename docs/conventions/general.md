@@ -21,13 +21,13 @@
 
 | 대상 | 도구 | 설정 위치 |
 | --- | --- | --- |
-| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | `pyproject.toml` `[tool.ruff]` |
-| SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | `pyproject.toml` `[tool.sqlfluff.*]` |
+| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | 루트 `pyproject.toml` `[tool.ruff]` |
+| SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | 루트 `pyproject.toml` `[tool.sqlfluff.*]` |
 | 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `.gitlint` (루트) |
 | YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) |
 | Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) |
 | 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) |
-| Python 타입체크 | [`mypy`](https://mypy-lang.org/) | `pyproject.toml` `[tool.mypy]` |
+| Python 타입체크 | [`mypy`](https://mypy-lang.org/) | 루트 `pyproject.toml` `[tool.mypy]` |
 
 커밋 전 포매터·린터를 통과시킨다. (`mypy`는 어노테이션이 아닌 **타입 정합성**을 검사)
 
@@ -43,7 +43,7 @@ pre-commit run --all-files            # 전체 수동 검사
 ```
 
 - **포함 훅**: `ruff`(check+format) · `yamllint` · `gitleaks` · `gitlint`(commit-msg) · 기본 위생 훅(공백·EOF·toml/yaml 검사).
-- **미포함**(마찰·의존성으로 수동/CI): `sqlfluff`(dbt 모델 부재), `mypy`(전체 컨텍스트 필요 → `mypy src`), `hadolint`(바이너리/도커 필요).
+- **미포함**(마찰·의존성으로 수동/CI): `sqlfluff`(dbt 모델 부재), `mypy`(의존성 환경 필요 → repo 루트에서 `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`), `hadolint`(바이너리/도커 필요).
 
 직접 실행도 가능하다:
 
@@ -51,13 +51,19 @@ pre-commit run --all-files            # 전체 수동 검사
 ruff check . && ruff format .        # Python
 yamllint .                           # YAML
 gitleaks detect                      # 시크릿 스캔
-mypy src                             # Python 타입 정합성 (CI)
+# Python 타입 정합성: repo 루트에서, src 프로젝트 의존성 환경으로 실행
+uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src
 ```
 
 ### 설정 위치 원칙
 
-- `pyproject.toml`을 지원하고 **그 위치에서 실행되는** 도구(`ruff`·`sqlfluff`)는 `pyproject.toml`에 모은다.
-- 그 외는 **루트의 도구 네이티브 설정 파일**에 둔다.
+- `pyproject.toml`을 지원하는 도구(`ruff`·`sqlfluff`·`mypy`)의 설정은 **repo 루트 `pyproject.toml`**에 모은다.
+  pre-commit·CI가 모두 repo 루트에서 실행되므로 설정도 루트에 둬 단일 출처를 맞춘다.
+  - `ruff`·`sqlfluff`는 대상 파일에서 상위로 올라가며 설정을 탐색해 루트 설정을 자동으로 잡는다.
+  - `mypy`는 상위 탐색을 하지 않고 **CWD의 설정만** 읽으므로 반드시 repo 루트에서 실행한다.
+- 패키징(`[project]`·`[build-system]`)과 Dagster `dg` 설정은 빌드 컨텍스트인
+  `dagster/dockerfile.d/src/pyproject.toml`에 남긴다.
+- pyproject 미지원 도구는 **루트의 도구 네이티브 설정 파일**에 둔다.
   - `yamllint` → `.yamllint.yaml` (pyproject 미지원)
   - `hadolint` → `.hadolint.yaml`
   - `gitleaks` → `.gitleaks.toml`

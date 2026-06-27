@@ -13,12 +13,13 @@ ruff format .
 ruff check --fix .
 ```
 
-### 설정은 `pyproject.toml`에서 관리한다
+### 설정은 repo 루트 `pyproject.toml`에서 관리한다
 
-ruff 룰·옵션 명세는 별도 `.ruff.toml`을 만들지 않고 **`pyproject.toml`의 `[tool.ruff]`** 에 둔다.
+ruff 룰·옵션 명세는 별도 `.ruff.toml`을 만들지 않고 **repo 루트 `pyproject.toml`의 `[tool.ruff]`** 에 둔다.
+(ruff는 대상 파일에서 상위로 올라가며 `[tool.ruff]`가 있는 pyproject를 탐색하므로 루트 설정이 자동 적용된다.)
 
 ```toml
-# pyproject.toml
+# pyproject.toml (repo 루트)
 [tool.ruff]
 line-length = 88
 indent-width = 4
@@ -28,6 +29,7 @@ target-version = "py310"
 select = [
     "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
     "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
+    "Q", "ARG",   # Q: 따옴표 스타일, ARG: 미사용 인자
 ]
 # docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819) 제외
 ignore = ["D100", "D104", "ANN401", "COM812", "COM819"]
@@ -40,7 +42,9 @@ convention = "google"
 max-complexity = 10   # C90 순환 복잡도 상한
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "D", "S101"]   # 테스트는 어노테이션·docstring·assert 면제
+# 설정이 루트라 글롭은 임의 깊이의 tests/ 를 잡도록 **/tests/** 사용
+# ARG: pytest fixture는 본문 미참조여도 인자로 받으므로 면제
+"**/tests/**" = ["ANN", "D", "S101", "ARG"]   # 테스트는 어노테이션·docstring·assert·미사용인자 면제
 
 [tool.ruff.format]
 indent-style = "space"
@@ -281,7 +285,9 @@ def load_config(path: Path, retries: int = 3) -> dict[str, str] | None:
 - `RUF013` — 암묵적 Optional(`x: int = None`) 금지.
 - `UP` — `Optional`/`List` 등 구문법을 모던 문법으로 자동 수정.
 - `TC`(type-checking import 분리)는 **Dagster 런타임 타입 introspection과 충돌**해 보류한다.
-- 테스트(`tests/**`)는 `ANN`·`D`·`S101`(assert) 면제(`per-file-ignores`).
+- 테스트(`**/tests/**`)는 `ANN`·`D`·`S101`(assert)·`ARG`(미사용 인자) 면제(`per-file-ignores`).
+- `Q`(따옴표 스타일)는 포매터가 강제하는 double-quote와 동일 기본값이라 충돌 없이 명시적으로 둔다.
+- `ARG`(미사용 인자)는 Dagster 자산 함수의 `context` 등 실제 미사용 인자를 잡는다 — 필요 시 `_` 접두사로 의도 표시.
 
 ## 타입 체커 (mypy)
 
@@ -301,8 +307,16 @@ no_implicit_optional = true
 > `requires-python = ">=3.10,<3.15"` 같은 **범위 지정자는 쓸 수 없다.**
 > 가장 낮은 지원 버전(`3.10`)으로 두어 구버전 호환성까지 검사한다.
 
+`mypy`는 `ruff`·`sqlfluff`와 달리 상위 디렉터리를 탐색하지 않고 **CWD의 설정만** 읽는다.
+설정이 repo 루트 `pyproject.toml`에 있으므로 **repo 루트에서 실행**한다.
+또한 mypy는 `dagster` 등 **실제 의존성이 설치된 환경**에서 돌려야 속성을 정확히 해석한다
+(격리 환경에서 돌리면 `Module "dagster" has no attribute ...` 오탐이 난다).
+deps는 src 프로젝트에서 끌어오되 CWD는 루트로 둔다:
+
 ```bash
-mypy src      # 타입 체크 실행
+# repo 루트에서: 루트 [tool.mypy] 설정 + src 프로젝트 의존성으로 타입 체크
+uv run --project dagster/dockerfile.d/src --with mypy \
+    mypy dagster/dockerfile.d/src/src
 ```
 
 ## 예외 처리 (LBYL 우선)

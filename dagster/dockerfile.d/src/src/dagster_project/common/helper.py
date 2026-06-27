@@ -12,12 +12,12 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING
 
-import dagster as dg
 import pyarrow as pa
 import pyarrow.csv as pacsv
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.resource import IcebergTableResource
 
+import dagster as dg
 from dagster_project.common.constants import DEFAULT_CHUNK_ROWS
 
 if TYPE_CHECKING:

@@ -30,4 +30,16 @@ clean-targets: # directories to be removed by `dbt clean`
 models:
   dbt_pipelines:
     # bronze layer 리셋됨: 기존 example 모델 제거.
-    # 새 모델은 models/ 하위에 추가하고 필요 시 여기에 +config 정의
+    # 새 모델은 models/<dataset>/ 하위에 추가한다(데이터셋별 subproject).
+    # Dagster group은 translator 서브클래싱 대신 dbt config로 선언한다(프로젝트 컨벤션).
+    # 기본 DagsterDbtTranslator가 meta.dagster.group을 읽어 모델 자산의 그룹을 매긴다.
+    +meta:
+      dagster:
+        group: dbt_ingest
+    # 데이터셋별 출력 스키마 = Iceberg 네임스페이스(bronze와 동일 네임스페이스).
+    # generate_schema_name 오버라이드로 target schema(dev/prod) 접두어 없이 그대로 적재된다.
+    # 메달리온 레이어는 스키마 접두어가 아니라 tag/kind로 표기한다.
+    eicu:
+      +schema: eicu
+    mimic_iv:
+      +schema: mimiciv

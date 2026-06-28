@@ -51,13 +51,12 @@
   - `resources.py` — S3/Iceberg 리소스 빌더(`build_s3_resource`·`build_io_manager`·`build_table_resource`)
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
   - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
-- **에셋은 데이터셋별 서브프로젝트** `dagster_project/<dataset>/`에서 정의한다.
+- **에셋은 데이터셋별 서브프로젝트** `dagster_project/<dataset>/`에 **정의만** 둔다.
   - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
   - `assets.py` — 테이블별 **명시적 `@asset`**(bronze 적재)
   - `dbt_assets.py` — 데이터셋 dbt 모델 소유(`@dbt_assets(select="path:models/<dataset>")`)
-  - `definitions.py` — 서브프로젝트 `Definitions`(자산 + 전용 리소스)
-- **로딩**: 자동발견(`load_from_defs_folder`) 대신 각 서브프로젝트 `definitions.py`가 `Definitions`를 노출하고,
-  최상위 `definitions.py`가 `Definitions.merge`로 합친다(코드 로케이션 모듈 스코프 `Definitions`는 1개).
+- **wiring은 최상위 `definitions.py` 한 곳**에 모은다: 자산 등록·리소스 바인딩·잡/스케줄을
+  **단일 `Definitions`**로 선언한다(중간 definitions 레이어·자동발견·merge 없음, 모듈 스코프 `Definitions` 1개).
 
 ### S3 → Iceberg 적재 (리소스 기반, 2경로)
 

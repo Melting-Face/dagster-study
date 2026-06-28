@@ -5,13 +5,17 @@
 모듈 스코프 Definitions는 `defs` 1개(autodiscovery 제약).
 """
 
+from dagster_aws.s3 import S3Resource
+
 import dagster as dg
-from dagster_project.common.dbt import build_dbt_resource
-from dagster_project.common.resources import (
-    build_io_manager,
-    build_s3_resource,
-    build_table_resource,
+from dagster_project.common.constants import (
+    AWS_ACCESS_KEY_ID,
+    AWS_REGION,
+    AWS_SECRET_ACCESS_KEY,
+    S3_ENDPOINT,
 )
+from dagster_project.common.dbt import build_dbt_resource
+from dagster_project.common.resources import build_io_manager, build_table_resource
 from dagster_project.eicu import assets as eicu_assets
 from dagster_project.eicu import dbt_assets as eicu_dbt
 from dagster_project.eicu.constants import NAMESPACE as EICU_NS
@@ -39,8 +43,13 @@ defs = dg.Definitions(
         mimic_dbt.mimic_iv_dbt_models,
     ],
     resources={
-        # 공유
-        "s3": build_s3_resource(),
+        # 공유: S3 접속(SeaweedFS). 단순 리턴이라 인라인, 파라미터는 constants에서 추적.
+        "s3": S3Resource(
+            endpoint_url=S3_ENDPOINT,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=AWS_REGION,
+        ),
         "dbt": build_dbt_resource(),
         # 데이터셋 전용 IO 매니저
         "io_manager_eicu": build_io_manager(EICU_NS),

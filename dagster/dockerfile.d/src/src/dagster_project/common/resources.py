@@ -1,8 +1,9 @@
-"""S3/Iceberg Dagster 리소스 빌더 (데이터셋 무관 공통).
+"""Iceberg Dagster 리소스 빌더 (데이터셋 무관 공통).
 
-- S3: dagster-aws S3Resource (SeaweedFS endpoint)
 - Iceberg: dagster-iceberg PyArrowIcebergIOManager(일반 적재) /
   IcebergTableResource(대용량 경로)
+- S3: dagster-aws S3Resource는 단순 리턴이라 빌더 없이 `definitions.py`에서 인라인하고,
+  접속 파라미터(endpoint·키·region)는 `constants.py`에 둔다(추적 용이).
 
 주의: dagster-iceberg의 IcebergCatalogConfig는 아직 dg.EnvVar를 지원하지 않으므로
 (properties는 평문 문자열), 비밀값은 정의 로드 시점(컨테이너)의 os.environ에서 읽는다.
@@ -12,12 +13,14 @@ from __future__ import annotations
 
 import os
 
-from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.arrow import PyArrowIcebergIOManager
 from dagster_iceberg.resource import IcebergTableResource
 
 from dagster_project.common.constants import (
+    AWS_ACCESS_KEY_ID,
+    AWS_REGION,
+    AWS_SECRET_ACCESS_KEY,
     CATALOG_NAME,
     ICEBERG_CATALOG_DB,
     S3_ENDPOINT,
@@ -34,9 +37,9 @@ def catalog_properties() -> dict[str, str]:
         "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
         "warehouse": WAREHOUSE,
         "s3.endpoint": S3_ENDPOINT,
-        "s3.access-key-id": os.environ["AWS_ACCESS_KEY_ID"],
-        "s3.secret-access-key": os.environ["AWS_SECRET_ACCESS_KEY"],
-        "s3.region": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+        "s3.access-key-id": AWS_ACCESS_KEY_ID,
+        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+        "s3.region": AWS_REGION,
         "s3.path-style-access": "true",
     }
 
@@ -44,16 +47,6 @@ def catalog_properties() -> dict[str, str]:
 def build_catalog_config() -> IcebergCatalogConfig:
     """공통 Iceberg 카탈로그 설정."""
     return IcebergCatalogConfig(properties=catalog_properties())
-
-
-def build_s3_resource() -> S3Resource:
-    """SeaweedFS(S3 호환) 접속용 dagster-aws S3Resource."""
-    return S3Resource(
-        endpoint_url=S3_ENDPOINT,
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-        region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-    )
 
 
 def build_io_manager(namespace: str) -> PyArrowIcebergIOManager:

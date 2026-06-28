@@ -184,7 +184,7 @@ S3/Iceberg 연결은 **Dagster 리소스**(`dagster-aws`·`dagster-iceberg`)로 
 | 파일            | 역할                                                                                          |
 | --------------- | --------------------------------------------------------------------------------------------- |
 | `constants.py`  | 카탈로그명·warehouse·S3 엔드포인트·기본값(chunk/namespace/group)                              |
-| `resources.py`  | 리소스 빌더: `build_s3_resource`(S3Resource), `build_io_manager`(PyArrowIcebergIOManager), `build_table_resource`(IcebergTableResource), `build_catalog_config` |
+| `resources.py`  | Iceberg 리소스 빌더: `build_io_manager`(PyArrowIcebergIOManager), `build_table_resource`(IcebergTableResource), `build_catalog_config`. (S3Resource는 `constants.py` 파라미터 + `definitions.py` 인라인) |
 | `helper.py`     | `read_csv_gz_table()`(일반: 통째 읽어 pa.Table) · `load_heavy_csv_gz_to_iceberg()`(대용량: 청크 append) |
 | `dbt.py`        | 공유 `DbtProject`·`build_dbt_resource` (단일 dbt 프로젝트를 데이터셋 subproject가 공유) |
 

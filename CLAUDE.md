@@ -16,13 +16,14 @@
 
 ## 코딩 철학
 
-핵심 가치 4가지 (상세 [`docs/philosophy.md`](docs/philosophy.md)):
+핵심 가치 (상세 [`docs/philosophy.md`](docs/philosophy.md)):
 
 1. **단순함** — 함수+데코레이터, 최소 인프라(YAGNI) *(PEP 20)*
 2. **명시적** — 선언적 설정, 규칙은 문서로 *(PEP 20)*
 3. **가독성** — 관심사 분리, 일관 네이밍, 포매터 고정 *(PEP 20)*
 4. **비밀정보는 참조로** — 환경변수/시크릿 비노출 *(12-Factor Config)*
 5. **재사용은 3회부터 추출** — 3회 이상 반복 시 함수화/상수화 *(Rule of Three / DRY)*
+6. **추적 용이성** — wiring 집중·named constant·명시 정의로 grep/점프 용이, 단순 리턴은 인라인 *(Locality of Behaviour)*
 
 ## Dagster 코딩 컨벤션
 
@@ -48,7 +49,7 @@
 
 - **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관 공통 라이브러리).
   - `constants.py` — 공통 상수/기본값
-  - `resources.py` — S3/Iceberg 리소스 빌더(`build_s3_resource`·`build_io_manager`·`build_table_resource`)
+  - `resources.py` — Iceberg 리소스 빌더(`build_io_manager`·`build_table_resource`·`build_catalog_config`); S3 접속 파라미터는 `constants.py`, `S3Resource`는 `definitions.py`에서 인라인
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
   - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
 - **에셋은 데이터셋별 서브프로젝트** `dagster_project/<dataset>/`에 **정의만** 둔다.

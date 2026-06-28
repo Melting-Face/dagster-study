@@ -10,6 +10,12 @@ WAREHOUSE = os.environ.get("ICEBERG_WAREHOUSE", "s3://warehouse")
 # SeaweedFS(S3 호환) 엔드포인트 (scheme 포함)
 S3_ENDPOINT = os.environ.get("ICEBERG_S3_ENDPOINT", "http://seaweedfs:8333")
 
+# S3 접속 자격증명/리전 (env 참조 — S3Resource·pyiceberg 카탈로그 공용)
+# 값은 코드에 하드코딩하지 않고 env에서 읽는다(12-Factor Config).
+AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+
 # 적재 기본값
 DEFAULT_CHUNK_ROWS = 1_000_000
 DEFAULT_NAMESPACE = "bronze"

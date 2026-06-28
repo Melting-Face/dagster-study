@@ -38,7 +38,7 @@ capitalisation_policy = "lower"
 
 ## 디렉토리 / 레이어링 (Medallion)
 
-- **`models/` 하위 디렉토리는 서브프로젝트(데이터셋)명으로 묶는다** — Dagster `defs/<dataset>/`와 1:1.
+- **`models/` 하위 디렉토리는 서브프로젝트(데이터셋)명으로 묶는다** — Dagster 데이터셋 서브프로젝트(`<dataset>/`)와 1:1.
   메달리온 레이어명(`bronze`/`silver`/`gold`)을 **디렉토리명으로 쓰지 않는다.**
 - **메달리온 레이어는 tag로 표기**한다(스키마 접두어·디렉토리명으로 인코딩하지 않는다).
   Dagster 쪽에서는 동일 레이어를 `kinds`로 표기한다([dagster.md](dagster.md)).
@@ -51,11 +51,11 @@ capitalisation_policy = "lower"
 
 ```text
 models/
-├── eicu/              # 서브프로젝트(데이터셋)명 = defs/eicu
+├── eicu/              # 서브프로젝트(데이터셋)명 = dagster_project/eicu
 │   ├── source.yml     # Dagster 적재분(dbt 미생성) source 선언
 │   ├── stg_eicu__patient.sql      # tag: silver
 │   └── eicu__patient_summary.sql  # tag: gold
-└── mimic_iv/          # = defs/mimic_iv
+└── mimic_iv/          # = dagster_project/mimic_iv
     └── source.yml
 ```
 
@@ -80,10 +80,17 @@ models/
 models:
   dbt_pipelines:
     eicu: # ← 서브프로젝트(데이터셋) 디렉토리
+      +schema: eicu # 출력 스키마 = Iceberg 네임스페이스 (generate_schema_name로 접두어 없음)
       +meta:
         dagster:
           group: eicu # Dagster 에셋 그룹을 dbt config로 선언
 ```
+
+> **출력 스키마**: 데이터셋 디렉토리에 `+schema: <namespace>`를 주면 커스텀 매크로
+> `generate_schema_name`이 target schema(dev/prod) **접두어 없이** 그대로 적용한다
+> (메달리온은 스키마가 아닌 tag/kind로 표기 — `macros/generate_schema_name.sql`).
+> **소유**: 각 데이터셋 모델은 Dagster `<dataset>/dbt_assets.py`의
+> `@dbt_assets(select="path:models/<dataset>")`가 머티리얼라이즈한다([dagster.md](dagster.md)).
 
 ```sql
 -- models/eicu/eicu__patient_summary.sql
@@ -104,7 +111,7 @@ group by patient_id
 
 ### Dagster가 적재한(=dbt 미생성) 테이블은 `source()`로 참조한다
 
-S3 → Iceberg 적재 테이블(`defs/<dataset>/`)은 **dbt가 만들지 않으므로** dbt source로 선언하고
+S3 → Iceberg 적재 테이블(`<dataset>/`)은 **dbt가 만들지 않으므로** dbt source로 선언하고
 `{{ source(...) }}`로 참조한다. source 정의는 **데이터셋별 서브디렉토리**에 둔다
 (`models/<dataset>/source.yml`). 현재: `models/eicu/source.yml`, `models/mimic_iv/source.yml`.
 
@@ -114,7 +121,7 @@ version: 2
 sources:
   - name: eicu
     database: iceberg # Trino 카탈로그 (= profiles.yml database)
-    schema: eicu # Iceberg 네임스페이스 = Trino 스키마 (defs/eicu NAMESPACE)
+    schema: eicu # Iceberg 네임스페이스 = Trino 스키마 (eicu NAMESPACE)
     tables:
       - name: patient
         meta:
@@ -127,7 +134,7 @@ sources:
 select * from {{ source('eicu', 'patient') }}
 ```
 
-- **`schema`는 Iceberg 네임스페이스(= `defs/<dataset>/constants.py`의 `NAMESPACE`)와 반드시 일치**해야
+- **`schema`는 Iceberg 네임스페이스(= `<dataset>/constants.py`의 `NAMESPACE`)와 반드시 일치**해야
   한다. 둘은 단일 출처로 함께 바뀐다.
 - **`meta.dagster.asset_key`** 로 dbt source를 기존 Dagster 자산키에 매핑한다. 미지정 시 dagster-dbt
   기본값은 `[source_name, table]`(2-세그먼트)이라 단일 세그먼트 자산키(`patient` 등)와 어긋나 lineage가

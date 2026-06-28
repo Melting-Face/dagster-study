@@ -175,7 +175,7 @@ sequenceDiagram
 
 이미 S3에 적재된 `csv.gz` 원본을 **메타스토어 없이** Iceberg(JDBC 카탈로그) 테이블로 올린다.
 **공통 로직은 `dagster_project/common/`** 에 두고, **에셋은 데이터셋별 서브프로젝트**
-(`defs/mimic_iv/`, `defs/eicu/`)에서 **각각 명시적으로 정의**한다(팩토리 미사용).
+(`mimic_iv/`, `eicu/`)에서 **각각 명시적으로 정의**한다(팩토리 미사용).
 
 S3/Iceberg 연결은 **Dagster 리소스**(`dagster-aws`·`dagster-iceberg`)로 관리한다.
 
@@ -186,15 +186,19 @@ S3/Iceberg 연결은 **Dagster 리소스**(`dagster-aws`·`dagster-iceberg`)로 
 | `constants.py`  | 카탈로그명·warehouse·S3 엔드포인트·기본값(chunk/namespace/group)                              |
 | `resources.py`  | 리소스 빌더: `build_s3_resource`(S3Resource), `build_io_manager`(PyArrowIcebergIOManager), `build_table_resource`(IcebergTableResource), `build_catalog_config` |
 | `helper.py`     | `read_csv_gz_table()`(일반: 통째 읽어 pa.Table) · `load_heavy_csv_gz_to_iceberg()`(대용량: 청크 append) |
+| `dbt.py`        | 공유 `DbtProject`·`build_dbt_resource` (단일 dbt 프로젝트를 데이터셋 subproject가 공유) |
 
-### 서브프로젝트 (`defs/<dataset>/`) — 데이터셋별, 자동 로드
+### 서브프로젝트 (`<dataset>/`) — 데이터셋별, 명시적 Definitions
 
-| 파일           | 역할                                                                        |
-| -------------- | --------------------------------------------------------------------------- |
-| `constants.py` | 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`                        |
-| `assets.py`    | 테이블별 **명시적 `@dg.asset`** (일반=IO 매니저 / 대용량=청크 append)        |
+| 파일             | 역할                                                                          |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `constants.py`   | 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`                          |
+| `assets.py`      | 테이블별 **명시적 `@dg.asset`**(bronze; 일반=IO 매니저 / 대용량=청크 append)   |
+| `dbt_assets.py`  | 데이터셋 dbt 모델 소유 `@dbt_assets(select="path:models/<dataset>")`           |
+| `definitions.py` | 서브프로젝트 `Definitions`(자산 + 전용 리소스) — 최상위에서 merge              |
 
-> 현재 `defs/mimic_iv/`(patients·admissions=일반, chartevents=대용량), `defs/eicu/`(patient·lab=일반).
+> 현재 `mimic_iv/`(patients·admissions=일반, chartevents=대용량), `eicu/`(patient·lab=일반).
+> 각 서브프로젝트는 bronze 적재(@asset)와 자기 dbt 모델(@dbt_assets)을 함께 소유한다.
 
 ### 두 가지 적재 경로
 
@@ -236,7 +240,7 @@ def labevents(s3: S3Resource) -> pa.Table:
 ```
 
 대용량은 `chartevents`처럼 `load_heavy_csv_gz_to_iceberg`를 호출하고, 대상 테이블용
-`IcebergTableResource`를 `definitions.py`의 리소스에 추가한다. `defs/` 하위라 자동 로드된다.
+`IcebergTableResource`를 그 데이터셋 `definitions.py`의 리소스에 추가한다(최상위에서 merge).
 
 ### 검증 상태
 

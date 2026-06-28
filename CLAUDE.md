@@ -40,19 +40,24 @@
 - 에셋은 **팩토리로 동적 생성하지 않고** 각각 `@asset` 함수로 **명시적으로 정의**한다.
   → 에셋 이름으로 바로 검색/점프(탐색성), per-asset 커스터마이징(deps·partition·description·automation)이 자연스럽다.
 - 공통 처리 로직은 일반 함수(`common.helper`)로 분리해 재사용하되(DRY), **에셋 정의 자체는 분리·명시**한다.
-- 에셋은 **데이터셋별 서브프로젝트 단위로 분리 관리**한다(`defs/<dataset>/assets.py`).
+- 에셋은 **데이터셋별 서브프로젝트 단위로 분리 관리**한다(`<dataset>/assets.py`).
 
 ## 프로젝트 구조 컨벤션
 
-### 공통/서브프로젝트 분리 (`common/` + `defs/<dataset>/`)
+### 공통/서브프로젝트 분리 (`common/` + `<dataset>/`)
 
-- **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관, `defs` 밖 라이브러리).
+- **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관 공통 라이브러리).
   - `constants.py` — 공통 상수/기본값
   - `resources.py` — S3/Iceberg 리소스 빌더(`build_s3_resource`·`build_io_manager`·`build_table_resource`)
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
-- **에셋은 데이터셋별 서브프로젝트** `defs/<dataset>/`에서 정의(자동 로드).
+  - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
+- **에셋은 데이터셋별 서브프로젝트** `dagster_project/<dataset>/`에서 정의한다.
   - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
-  - `assets.py` — 테이블별 **명시적 `@asset`**
+  - `assets.py` — 테이블별 **명시적 `@asset`**(bronze 적재)
+  - `dbt_assets.py` — 데이터셋 dbt 모델 소유(`@dbt_assets(select="path:models/<dataset>")`)
+  - `definitions.py` — 서브프로젝트 `Definitions`(자산 + 전용 리소스)
+- **로딩**: 자동발견(`load_from_defs_folder`) 대신 각 서브프로젝트 `definitions.py`가 `Definitions`를 노출하고,
+  최상위 `definitions.py`가 `Definitions.merge`로 합친다(코드 로케이션 모듈 스코프 `Definitions`는 1개).
 
 ### S3 → Iceberg 적재 (리소스 기반, 2경로)
 

@@ -8,6 +8,8 @@ postgres/
 shared/
 
 **/__pycache__/
+.ruff_cache/
+.mypy_cache/
 **/*.log
 **/*.duckdb
 **/secrets.toml

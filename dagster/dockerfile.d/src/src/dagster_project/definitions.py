@@ -6,16 +6,19 @@
 """
 
 from dagster_aws.s3 import S3Resource
+from dagster_iceberg.io_manager.arrow import PyArrowIcebergIOManager
+from dagster_iceberg.resource import IcebergTableResource
 
 import dagster as dg
 from dagster_project.common.constants import (
     AWS_ACCESS_KEY_ID,
     AWS_REGION,
     AWS_SECRET_ACCESS_KEY,
+    CATALOG_NAME,
     S3_ENDPOINT,
 )
 from dagster_project.common.dbt import build_dbt_resource
-from dagster_project.common.resources import build_io_manager, build_table_resource
+from dagster_project.common.resources import build_catalog_config
 from dagster_project.eicu import assets as eicu_assets
 from dagster_project.eicu import dbt_assets as eicu_dbt
 from dagster_project.eicu.constants import NAMESPACE as EICU_NS
@@ -51,11 +54,20 @@ defs = dg.Definitions(
             region_name=AWS_REGION,
         ),
         "dbt": build_dbt_resource(),
-        # 데이터셋 전용 IO 매니저
-        "io_manager_eicu": build_io_manager(EICU_NS),
-        "io_manager_mimiciv": build_io_manager(MIMICIV_NS),
+        # 데이터셋 전용 IO 매니저 (일반 적재: pa.Table → namespace.<asset> write)
+        "io_manager_eicu": PyArrowIcebergIOManager(
+            name=CATALOG_NAME, config=build_catalog_config(), namespace=EICU_NS
+        ),
+        "io_manager_mimiciv": PyArrowIcebergIOManager(
+            name=CATALOG_NAME, config=build_catalog_config(), namespace=MIMICIV_NS
+        ),
         # 대용량 경로(chartevents) 청크 append용 테이블 바인딩
-        "mimiciv_chartevents_table": build_table_resource(MIMICIV_NS, "chartevents"),
+        "mimiciv_chartevents_table": IcebergTableResource(
+            name=CATALOG_NAME,
+            config=build_catalog_config(),
+            namespace=MIMICIV_NS,
+            table="chartevents",
+        ),
     },
     jobs=[dbt_all_job],
     schedules=[dbt_all_schedule],

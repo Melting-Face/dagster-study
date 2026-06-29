@@ -49,7 +49,7 @@
 
 - **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관 공통 라이브러리).
   - `constants.py` — 공통 상수/기본값
-  - `resources.py` — Iceberg 리소스 빌더(`build_io_manager`·`build_table_resource`·`build_catalog_config`); S3 접속 파라미터는 `constants.py`, `S3Resource`는 `definitions.py`에서 인라인
+  - `resources.py` — 공유 Iceberg 카탈로그 설정(`catalog_properties`·`build_catalog_config`). IO 매니저·테이블 리소스·`S3Resource`는 단순 생성이라 `definitions.py`에서 인라인, S3 파라미터는 `constants.py`
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
   - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
 - **에셋은 데이터셋별 서브프로젝트** `dagster_project/<dataset>/`에 **정의만** 둔다.

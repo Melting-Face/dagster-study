@@ -18,7 +18,7 @@ from dagster_project.common.helper import (
     load_heavy_csv_gz_to_iceberg,
     read_csv_gz_table,
 )
-from dagster_project.mimic_iv.constants import GROUP_NAME, SOURCE_BASE
+from dagster_project.defs.mimic_iv.constants import GROUP_NAME, SOURCE_BASE
 
 # 일반 경로 에셋은 이 데이터셋 전용 IO 매니저(namespace=mimiciv)로 적재한다.
 IO_MANAGER_KEY = "io_manager_mimiciv"

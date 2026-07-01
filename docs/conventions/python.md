@@ -334,7 +334,7 @@ data = path.read_text(encoding="utf-8")
 ## 파일 경로
 
 - 문자열 경로 조작 대신 [`pathlib.Path`](https://docs.python.org/3/library/pathlib.html)를 사용한다.
-  (현 코드도 `definitions.py`에서 `Path(__file__).parent` 사용)
+  (현 코드도 `common/dbt.py`에서 `Path(__file__).parents[...]` 사용)
 
 ## 의존성 관리
 

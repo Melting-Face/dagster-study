@@ -51,11 +51,11 @@ capitalisation_policy = "lower"
 
 ```text
 models/
-├── eicu/              # 서브프로젝트(데이터셋)명 = dagster_project/eicu
+├── eicu/              # 서브프로젝트(데이터셋)명 = dagster_project/defs/eicu
 │   ├── source.yml     # Dagster 적재분(dbt 미생성) source 선언
 │   ├── stg_eicu__patient.sql      # tag: silver
 │   └── eicu__patient_summary.sql  # tag: gold
-└── mimic_iv/          # = dagster_project/mimic_iv
+└── mimic_iv/          # = dagster_project/defs/mimic_iv
     └── source.yml
 ```
 
@@ -89,7 +89,7 @@ models:
 > **출력 스키마**: 데이터셋 디렉토리에 `+schema: <namespace>`를 주면 커스텀 매크로
 > `generate_schema_name`이 target schema(dev/prod) **접두어 없이** 그대로 적용한다
 > (메달리온은 스키마가 아닌 tag/kind로 표기 — `macros/generate_schema_name.sql`).
-> **소유**: 각 데이터셋 모델은 Dagster `<dataset>/dbt_assets.py`의
+> **소유**: 각 데이터셋 모델은 Dagster `defs/<dataset>/dbt_assets.py`의
 > `@dbt_assets(select="path:models/<dataset>")`가 머티리얼라이즈한다([dagster.md](dagster.md)).
 
 ```sql
@@ -134,7 +134,7 @@ sources:
 select * from {{ source('eicu', 'patient') }}
 ```
 
-- **`schema`는 Iceberg 네임스페이스(= `<dataset>/constants.py`의 `NAMESPACE`)와 반드시 일치**해야
+- **`schema`는 Iceberg 네임스페이스(= `defs/<dataset>/constants.py`의 `NAMESPACE`)와 반드시 일치**해야
   한다. 둘은 단일 출처로 함께 바뀐다.
 - **`meta.dagster.asset_key`** 로 dbt source를 기존 Dagster 자산키에 매핑한다. 미지정 시 dagster-dbt
   기본값은 `[source_name, table]`(2-세그먼트)이라 단일 세그먼트 자산키(`patient` 등)와 어긋나 lineage가

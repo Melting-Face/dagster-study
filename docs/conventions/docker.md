@@ -1,0 +1,134 @@
+# Docker · Compose · Dockerfile 규칙
+
+> **목적**: 컨테이너 빌드·구성 규칙(재현성·자원 관리).
+> **언제 읽나**: `compose.yml`·`Dockerfile` 수정, 이미지 버전·healthcheck·리소스 한도 작업 시.
+> **연관**: 자원 **수치** 산정은 [resource-sizing.md](../resource-sizing.md), 환경변수 주입은 [../operations.md](../operations.md).
+
+`data-pipeline` 레포에서 이식. 이 레포 `compose.yml`은 대부분 이미 준수하며, 아래는 그 규칙을 명문화한 것이다.
+
+> ⚠️ **용어 주의**: 여기서 말하는 "리소스 제한"은 **컨테이너 자원**(`deploy.resources`)이다.
+> Dagster **Resource**(코드: `S3Resource`·IO 매니저 등)와 혼동하지 않는다 —
+> 후자는 [conventions/dagster.md](dagster.md).
+
+## 1. Compose
+
+### 1-1. 로깅은 json-file 드라이버 + YAML 앵커로 통일
+
+```yaml
+x-docker-logging: &docker-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"    # 파일당 10MB
+      max-file: "20"     # 최대 20개 → 컨테이너당 최대 200MB
+```
+
+모든 서비스에 `<<: *docker-logging`으로 적용한다. (보존 정책은 [../operations.md](../operations.md) §2)
+
+### 1-2. 환경변수·공통부는 YAML 앵커로 중복 제거 (DRY)
+
+동일 이미지·설정을 공유하는 서비스는 앵커로 공통부를 모은다.
+
+```yaml
+# webserver·daemon 공통부(빌드·env·볼륨·depends_on)를 한곳에
+x-dagster-common: &dagster-common
+  build: { context: dagster/dockerfile.d/ }
+  environment:
+    - POSTGRES_USER=${POSTGRES_USER}
+    # ...
+  depends_on:
+    postgres: { condition: service_healthy }
+
+services:
+  dagster-webserver:
+    <<: [*docker-logging, *dagster-common]   # 앵커 병합
+```
+
+- 새 환경변수를 이 두 서비스에 넣을 땐 **앵커에 한 번만** 추가한다([../operations.md](../operations.md) §1-1).
+
+### 1-3. 이미지 버전은 반드시 명시 (`latest` 금지)
+
+`latest`는 빌드 시점에 따라 이미지가 달라져 **재현 불가능한 환경**을 만든다.
+공식 이미지는 구체 버전 태그를 쓰고, 커스텀 빌드는 `ARG`로 버전을 분리한다.
+
+```yaml
+# Bad
+image: trinodb/trino:latest
+
+# Good — 현재 레포
+image: postgres:15
+image: trinodb/trino:468
+```
+
+```dockerfile
+# 커스텀 빌드 — ARG로 분리하면 빌드 시 오버라이드 가능
+ARG TRINO_VERSION=477
+FROM trinodb/trino:${TRINO_VERSION}
+```
+
+- Trino처럼 주 단위 릴리즈를 하는 이미지는 **LTS 버전**을 우선한다(비-LTS는 다음 릴리즈 후 패치 중단).
+  현재 Trino LTS는 `477` 계열. 이 레포는 `trino:468`을 쓰므로, 업그레이드 시 LTS로 올리는 것을 권장한다.
+- **예외**: `chrislusf/seaweedfs`는 태그 정책이 없어 버전 고정 불가 → 그대로 둔다.
+
+### 1-4. Healthcheck + `depends_on` 조건 명시
+
+기동 순서를 헬스체크로 강제해 초기화 경쟁(race)을 막는다.
+
+```yaml
+services:
+  postgres:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+  trino:
+    depends_on:
+      postgres: { condition: service_healthy }   # DB가 준비된 뒤 기동
+      seaweedfs: { condition: service_started }
+```
+
+### 1-5. 모든 서비스에 `deploy.resources` 명시
+
+호스트 리소스 초과로 인한 **OOM·CPU 경합**을 방지하기 위해 모든 서비스에 CPU·메모리 한도를 명시한다.
+Compose v2는 Swarm 없이 단독 실행에서도 `deploy.resources`를 적용한다.
+
+```yaml
+services:
+  my-service:
+    deploy:
+      resources:
+        limits:        # 상한(하드)
+          cpus: "1.0"
+          memory: 1g
+        reservations:  # 예약(소프트, 보장 최소)
+          cpus: "0.5"
+          memory: 512m
+```
+
+- **배분 원칙·서비스별 수치·daemon 메모리 계산식**은 [resource-sizing.md](../resource-sizing.md)에서 단일 관리한다.
+- 원칙 요약: `limits.memory` 합 ≤ 호스트 RAM − OS 여유(1~2g). Trino(JVM MPP)가 메모리 최다 소비.
+- `max_concurrent_runs`(`dagster.yaml`)와 daemon `memory`는 **강하게 결합** — 한쪽만 바꾸면
+  OOM 또는 낭비. 반드시 함께 조정한다([resource-sizing.md](../resource-sizing.md)).
+
+## 2. Dockerfile
+
+- 컨테이너는 **비루트 사용자**로 실행한다. `USER 1000` 전환 **전에** 소유권을 넘긴다:
+  `chown -R 1000:1000 $DAGSTER_HOME`.
+- pip 설치는 `--no-cache-dir --compile --prefer-binary`로 이미지 크기·빌드 시간을 줄인다.
+- `hadolint`(`.hadolint.yaml`)로 Dockerfile을 린트한다([general.md](general.md)).
+
+```dockerfile
+RUN pip install --no-cache-dir --compile --prefer-binary -e ".[dev]" \
+    && chown -R 1000:1000 /opt/dagster/dagster_home
+
+USER 1000
+```
+
+## 참고
+
+- Docker Compose — `deploy.resources`: https://docs.docker.com/reference/compose-file/deploy/#resources
+- Docker Compose — extension fields(YAML 앵커): https://docs.docker.com/reference/compose-file/fragments/
+- Docker — logging drivers(json-file): https://docs.docker.com/config/containers/logging/json-file/
+- Trino — release types(LTS): https://trino.io/docs/current/release.html
+- hadolint: https://github.com/hadolint/hadolint

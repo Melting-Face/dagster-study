@@ -48,6 +48,37 @@ services:
 > 큰 조인/집계가 heap을 넘으면 `EXCEEDED_LOCAL_MEMORY_LIMIT`가 난다.
 > 메모리를 늘리거나 쿼리를 분할/스필 설정을 검토한다.
 
+### 메모리 설정 3중 결합 (함께 검증)
+
+세 파일의 값이 **한 방향 제약**으로 묶여 있어, 하나만 바꾸면 기동 실패나 OOM이 난다.
+아래 부등식을 위→아래로 만족시킨다.
+
+```
+compose.yml  memory limit
+  └── jvm.config  -Xmx            (≤ limit − JVM 비힙 오버헤드)
+        └── config.properties
+              ├── memory.heap-headroom-per-node   (Trino 미추적 할당 버퍼)
+              └── query.max-memory-per-node       (≤ Xmx − headroom)
+```
+
+| 파일 | 항목 | 현재값(6G 컨테이너 예) | 제약 |
+| --- | --- | --- | --- |
+| `compose.yml` | `deploy.resources.limits.memory` | 6G | ≥ Xmx + 비힙 오버헤드 |
+| `trino/etc/jvm.config` | `-Xmx` | 예: 4~5G | < 컨테이너 limit |
+| `config.properties` | `memory.heap-headroom-per-node` | 기본 Xmx×0.3 | JVM 비쿼리 오버헤드 |
+| `config.properties` | `query.max-memory-per-node` | ≤ Xmx − headroom | 초과 시 쿼리 OOM |
+
+**JVM 비힙 오버헤드**(컨테이너 limit이 `-Xmx`보다 커야 하는 이유):
+
+```
+컨테이너 limit  >  -Xmx  +  ReservedCodeCache(~256M)  +  Metaspace(~400M) + 기타
+     6g         >   5G   +          256M               +      ~400M        ≈ 5.7G  (✓ 여유)
+```
+
+> `-Xmx`를 컨테이너 limit에 바짝 붙이면(예: 6G 컨테이너에 `-Xmx6G`) 비힙 영역이 밀려 컨테이너
+> OOM Kill이 난다. **`-Xmx`는 컨테이너 memory의 70~80%**를 넘기지 않는다.
+> 변경 시 `compose.yml`·`jvm.config`·`config.properties` 세 파일을 **함께** 검증한다.
+
 ## Dagster (동시성)
 
 - **run 수** — `dagster.yaml`의 `concurrency.runs.max_concurrent_runs`
@@ -66,8 +97,42 @@ concurrency:
     default_limit: 3
 ```
 
-> 적재 템플릿(`template/`)은 run당 메모리를 `chunk_rows`로 제어한다.
+> 적재 헬퍼(`load_heavy_csv_gz_to_iceberg`)는 run당 메모리를 `chunk_rows`로 제어한다.
 > **run당 메모리 × `max_concurrent_runs` ≤ 호스트 RAM**이 되도록 둘을 함께 낮춘다.
+
+### daemon 메모리 계산 (multiprocess OOM 방지)
+
+`DefaultRunLauncher` + multiprocess executor는 run마다 daemon 컨테이너 안에서 **자식 프로세스를
+fork**한다. fork 순간 부모 메모리가 복사(Copy-on-Write)되므로 **피크 = 부모 + 자식 합산**이
+컨테이너 `memory` 한도를 넘으면 OOM Kill(SIGKILL)이 난다. 따라서 daemon `memory`는 다음으로 잡는다.
+
+```
+daemon 필요 메모리
+  = 데몬 기본(~300MB)
+  + max_concurrent_runs × run당 피크 메모리 × 1.5(여유율)
+
+예) bronze 적재(청크 스트리밍, 피크 ~500MB), concurrent=2:
+    300MB + 2 × 500MB × 1.5 = 1.8g → limit 2g
+예) 수백만 행 DataFrame 변환(피크 ~4GB), concurrent=2:
+    300MB + 2 × 4GB × 1.5 = 12.3g → limit 16g
+```
+
+**결정 절차**: ① 가장 메모리를 많이 쓰는 에셋을 특정 → ② `docker stats dagster-daemon` 또는 UI run
+로그로 피크 추정 → ③ 위 공식 적용 → ④ `dagster.yaml`·`compose.yml`·`cpus`를 **함께** 수정 → ⑤ 실측 검증.
+
+**의존성 연동 규칙** — `max_concurrent_runs`(`dagster.yaml`)와 daemon `memory`(`compose.yml`)는 강결합.
+한쪽만 바꾸면 OOM 또는 낭비된 한도가 발생한다.
+
+| 변경 | 연동 필수 | 방향 |
+| --- | --- | --- |
+| `max_concurrent_runs` 증가 | daemon `memory` 재계산·상향, `cpus` 상향 | `dagster.yaml` → `compose.yml` |
+| `max_concurrent_runs` 감소 | daemon `memory`·`cpus` 하향 가능(절약) | `dagster.yaml` → `compose.yml` |
+| 데이터 집약 에셋 추가 | 피크 메모리 재추정 → daemon `memory` 재계산 | `assets.py` → `compose.yml` |
+| daemon `memory` 변경 | 호스트 가용 RAM·전체 서비스 합계 검증 | `compose.yml` 내부 |
+
+> 새 데이터 집약 에셋(수백만 행 변환·윈도잉 등)을 추가하면 위 계산을 재실행하고 리소스 설정을 갱신한다.
+> 단일 daemon이 모든 자식 프로세스의 메모리를 공유하므로, 규모가 커지면 `dagster-celery`(Worker 분리)·
+> `dagster-k8s`(run당 Pod)로의 전환을 검토한다.
 
 ## Postgres
 

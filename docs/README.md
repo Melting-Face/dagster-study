@@ -19,12 +19,15 @@
 | ----------------------------------- | ------------------------------------------------------ |
 | [공통 규칙](conventions/general.md) | 언어, 들여쓰기, 커밋 메시지, 디렉토리 규칙             |
 | [Python](conventions/python.md)     | ruff, 타입 힌트, 예외 처리, 의존성 관리                |
-| [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 컴포넌트, 잡·스케줄, 그룹           |
+| [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg |
+| [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
+| [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, Dockerfile |
 
 ### 운영 (operations)
 
-- [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino·Dagster·Postgres·SeaweedFS)
+- [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책
+- [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino 3파일 결합·daemon OOM 계산·Postgres·SeaweedFS)
 
 ## 핵심 원칙 요약
 

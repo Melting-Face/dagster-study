@@ -52,9 +52,8 @@ dbt_all_schedule = dg.ScheduleDefinition(
 )
 ```
 
-> 현재 [`defs/automation.py`](../../dagster/dockerfile.d/src/src/dagster_project/defs/automation.py)의
-> `dbt_all_schedule`은 `execution_timezone` 미지정 상태다. 매시 잡이라 영향이 작지만,
-> 일·시 단위 스케줄을 추가하기 전에 지정하는 것을 권장한다.
+> [`defs/automation.py`](../../dagster/dockerfile.d/src/src/dagster_project/defs/automation.py)의
+> `dbt_all_schedule`에 `execution_timezone="Asia/Seoul"`를 적용했다. 신규 스케줄도 동일하게 명시한다.
 
 ### 3. 컨테이너에 `TZ=Asia/Seoul` 주입
 
@@ -73,10 +72,14 @@ x-dagster-common: &dagster-common
 
 ## 적용 체크리스트 (현재 레포)
 
-- [ ] `compose.yml` `x-dagster-common` 앵커에 `TZ=Asia/Seoul` 추가
-- [ ] `dbt_all_schedule`에 `execution_timezone="Asia/Seoul"` 추가
-- [ ] 신규 `@asset`/헬퍼에서 `datetime`은 `tz=timezone.utc`로 생성
-- [ ] 신규 `ScheduleDefinition`은 `execution_timezone` 필수
+- [x] `compose.yml` `x-dagster-common` 앵커에 `TZ=Asia/Seoul` 추가 (webserver·daemon 전파)
+- [x] `dbt_all_schedule`에 `execution_timezone="Asia/Seoul"` 추가
+- [ ] 신규 `@asset`/헬퍼에서 `datetime`은 `tz=timezone.utc`로 생성 (상시 규칙)
+- [ ] 신규 `ScheduleDefinition`은 `execution_timezone` 필수 (상시 규칙)
+
+> **Trino/Postgres에는 `TZ`를 넣지 않았다.** Trino JVM 기본 타임존을 바꾸면 `current_timestamp`
+> 등 쿼리 시각 함수가 KST가 되어 "저장은 UTC" 원칙과 충돌할 수 있다. 로그 가독성보다
+> 저장 일관성을 우선해 Dagster 서비스에만 적용했다.
 
 ## 참고
 

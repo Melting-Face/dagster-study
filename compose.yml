@@ -19,6 +19,8 @@ x-dagster-common: &dagster-common
   build:
     context: dagster/dockerfile.d/
   environment:
+    # 로그·프로세스 로컬 시간을 KST로 (스케줄 해석은 execution_timezone이 담당, 저장은 UTC 유지)
+    - TZ=Asia/Seoul
     - POSTGRES_USER=${POSTGRES_USER}
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     - POSTGRES_DB=${POSTGRES_DB}

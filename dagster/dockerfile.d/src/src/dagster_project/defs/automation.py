@@ -15,4 +15,6 @@ dbt_all_schedule = dg.ScheduleDefinition(
     name="dbt_all_schedule",
     job=dbt_all_job,
     cron_schedule="0 * * * *",
+    # cron을 KST로 해석(미지정 시 daemon 시스템 TZ 의존). docs/conventions/timezone.md
+    execution_timezone="Asia/Seoul",
 )

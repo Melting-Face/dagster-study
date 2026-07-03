@@ -9,6 +9,10 @@
 
 - [전체 아키텍처 / 데이터 흐름](architecture.md) — Dagster · dbt · Trino · Iceberg · SeaweedFS 스택과 레이크하우스 구조, **bronze 적재 템플릿(S3→Iceberg)**
 
+### 데이터셋
+
+- [데이터셋 스키마·피처 레퍼런스](dataset_schema.md) — MIMIC-IV(icu·hosp 11테이블)·eICU(3테이블) 원천 스키마와 **SOFA→Sepsis-3 실버 파이프라인(22 모델)** 매핑
+
 ### 철학
 
 - [코딩 철학](philosophy.md) — 단순함·명시적·가독성·비밀정보 참조·재사용 추출 (PEP 20 / 12-Factor / Rule of Three)
@@ -45,3 +49,8 @@
 - 코드 식별자·명령어·경로는 영어/원문 그대로 표기한다.
 - 규칙을 바꿀 때는 **`CLAUDE.md`·이 `docs/`·`README.md`를 함께 갱신**하여 단일 출처(single source of truth)를 유지한다.
 - 외부 레퍼런스는 각 문서 하단 `참고` 섹션에 링크와 함께 남긴다.
+
+상세 규칙과 인덱스:
+
+- [문서 동기화(doc-sync)](doc-sync.md) — 단일 출처 원칙, 변경 유형별 동기화 체인
+- [참고 문서(references)](references.md) — 규칙·설계가 근거로 삼는 외부 표준 인덱스

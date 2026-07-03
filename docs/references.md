@@ -1,0 +1,43 @@
+# 참고 문서 (외부 표준·출처)
+
+이 프로젝트의 규칙·설계가 근거로 삼는 외부 표준과 문서를 모은다. 각 문서의 `참고` 섹션은
+여기의 항목을 링크한다(단일 출처 — [`doc-sync.md`](doc-sync.md)).
+
+## 코딩 철학·규칙
+
+| 표준 | 용도 | 참조 문서 |
+| --- | --- | --- |
+| [PEP 20 — The Zen of Python](https://peps.python.org/pep-0020/) | 단순함·명시적·가독성 | [philosophy.md](philosophy.md) |
+| [12-Factor App](https://12factor.net/config) | 설정/비밀정보는 환경변수 참조 | [philosophy.md](philosophy.md) · [operations.md](operations.md) |
+| [Rule of Three / DRY](https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming)) | 3회 반복부터 추출 | [philosophy.md](philosophy.md) |
+| [PEP 8](https://peps.python.org/pep-0008/) · [PEP 257](https://peps.python.org/pep-0257/) | 스타일·docstring | [conventions/python.md](conventions/python.md) |
+| [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) | docstring(Google 스타일) | [conventions/python.md](conventions/python.md) |
+| [Conventional Commits](https://www.conventionalcommits.org/) | 커밋 메시지 규약 | [conventions/general.md](conventions/general.md) |
+
+## 도구
+
+| 도구 | 용도 | 참조 문서 |
+| --- | --- | --- |
+| [ruff](https://docs.astral.sh/ruff/) | Python lint·format | [conventions/python.md](conventions/python.md) |
+| [sqlfluff](https://docs.sqlfluff.com/) | SQL lint·format (trino dialect) | [conventions/dbt.md](conventions/dbt.md) |
+| [uv](https://docs.astral.sh/uv/) | 의존성·가상환경 | [conventions/python.md](conventions/python.md) |
+
+## 플랫폼·프레임워크
+
+| 문서 | 용도 | 참조 문서 |
+| --- | --- | --- |
+| [Dagster](https://docs.dagster.io/) | 오케스트레이션·에셋·리소스 | [conventions/dagster.md](conventions/dagster.md) · [architecture.md](architecture.md) |
+| [dagster-dbt](https://docs.dagster.io/integrations/dbt) | dbt 통합(`@dbt_assets`) | [conventions/dbt.md](conventions/dbt.md) |
+| [dbt-trino](https://github.com/starburstdata/dbt-trino) | dbt Trino 어댑터 | [conventions/dbt.md](conventions/dbt.md) |
+| [Apache Iceberg](https://iceberg.apache.org/) | 테이블 포맷(JDBC 카탈로그) | [architecture.md](architecture.md) |
+| [Trino](https://trino.io/docs/current/) | 쿼리 엔진 | [architecture.md](architecture.md) · [resource-sizing.md](resource-sizing.md) |
+| [SeaweedFS](https://github.com/seaweedfs/seaweedfs) | S3 호환 오브젝트 스토리지 | [architecture.md](architecture.md) |
+
+## 데이터셋·도메인
+
+| 출처 | 용도 | 참조 문서 |
+| --- | --- | --- |
+| [MIMIC-IV](https://physionet.org/content/mimiciv/) | 원천 데이터셋(icu·hosp 모듈) | [dataset_schema.md](dataset_schema.md) |
+| [eICU-CRD](https://physionet.org/content/eicu-crd/) | 원천 데이터셋 | [dataset_schema.md](dataset_schema.md) |
+| [mimic-code concepts](https://github.com/MIT-LCP/mimic-code) | 실버 모델(SOFA·Sepsis-3) 원 로직 | [dataset_schema.md](dataset_schema.md) |
+| [Sepsis-3 (JAMA 2016)](https://jamanetwork.com/journals/jama/fullarticle/2492881) | Sepsis-3 정의(SOFA≥2 + 감염 의심) | [dataset_schema.md](dataset_schema.md) |

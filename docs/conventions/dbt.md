@@ -90,7 +90,29 @@ models:
 > `generate_schema_name`이 target schema(dev/prod) **접두어 없이** 그대로 적용한다
 > (메달리온은 스키마가 아닌 tag/kind로 표기 — `macros/generate_schema_name.sql`).
 > **소유**: 각 데이터셋 모델은 Dagster `defs/<dataset>/dbt_assets.py`의
-> `@dbt_assets(select="path:models/<dataset>")`가 머티리얼라이즈한다([dagster.md](dagster.md)).
+> `@dbt_assets(select="fqn:<dataset>")`가 머티리얼라이즈한다([dagster.md](dagster.md)).
+
+### `@dbt_assets` 셀렉터는 `fqn:` 을 쓴다 (`path:` 금지)
+
+데이터셋 소유 셀렉터는 **`select="fqn:<dataset>"`** 로 쓴다(`manifest`만으로 해석).
+
+```python
+# defs/mimic_iv/dbt_assets.py
+@dbt_assets(
+    manifest=dbt_project.manifest_path,
+    project=dbt_project,
+    select="fqn:mimic_iv",   # models/mimic_iv/ 하위 모델 전체를 데이터셋 단위로 소유
+)
+def mimic_iv_dbt_models(context, dbt): ...
+```
+
+- **`path:models/<dataset>` 를 쓰지 말 것.** `path:` 셀렉터는 정의 빌드 시점의
+  **cwd 기준 파일시스템 글롭**이라, Dagster가 프로젝트 밖 경로에서 정의를 로드하면
+  `The selection criterion 'path:...' does not match any enabled nodes` 경고와 함께
+  **모델이 하나도 수집되지 않는다**(모델이 0개일 땐 드러나지 않는 잠복 버그).
+- `fqn:<dataset>` 은 manifest의 fqn(`dbt_pipelines.<dataset>.…`)만으로 매칭하므로
+  cwd·파일시스템에 의존하지 않아 안전하다. `project=dbt_project` 는 런타임 `dbt build`
+  의 작업 디렉토리를 프로젝트로 고정하기 위해 함께 넘긴다.
 
 ```sql
 -- models/eicu/eicu__patient_summary.sql

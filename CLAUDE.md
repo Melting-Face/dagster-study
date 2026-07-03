@@ -72,6 +72,9 @@
   `models/<dataset>/source.yml`에 두고 `meta.dagster.asset_key`로 Dagster 자산키와 매핑해 lineage를
   연결한다. 메달리온 레이어는 스키마 접두어가 아닌 **kind(Dagster)/tag(dbt)** 로 표기한다.
   상세 [`docs/conventions/dbt.md`](docs/conventions/dbt.md).
+- **`@dbt_assets` 셀렉터는 `select="fqn:<dataset>"`** 를 쓴다(`project=dbt_project` 동반).
+  `path:models/<dataset>`는 cwd 글롭이라 정의 로드 시 모델이 수집되지 않는다(잠복 버그).
+- **데이터셋 원천 스키마·피처(SOFA→Sepsis-3)** 는 [`docs/dataset_schema.md`](docs/dataset_schema.md) 참고.
 - 자세한 흐름·사용법은 [`docs/architecture.md`](docs/architecture.md) 참고.
 
 ### 머티리얼라이즈 메타데이터를 남긴다

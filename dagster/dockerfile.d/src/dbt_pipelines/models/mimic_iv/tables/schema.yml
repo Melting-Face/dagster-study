@@ -1,0 +1,626 @@
+version: 2
+
+models:
+  - name: icustay_times
+    description: >
+      ICU stay별 첫·마지막 심박수(itemid 220045) 기록 시각을 fuzzy intime/outtime으로 산출한다.
+      icustay_hourly(시간 격자)의 입력이 된다.
+      출처: mimic-code concepts/demographics/icustay_times.sql
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: intime_hr
+        description: 첫 심박수 측정 시각 (fuzzy ICU 입실 시각)
+      - name: outtime_hr
+        description: 마지막 심박수 측정 시각 (fuzzy ICU 퇴실 시각)
+
+  - name: icustay_hourly
+    description: >
+      ICU 재실 구간을 정시(clock-hour) 격자로 펼쳐 한 시간마다 한 행을 생성한다.
+      첫 심박수 측정 24시간 전부터 퇴실까지 매 정시를 한 행으로 만들며,
+      stay_id와 (endtime - 1 hour, endtime] 구간으로 다른 테이블과 조인하는 시간 격자다.
+      출처: mimic-code concepts/demographics/icustay_hourly.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: hr
+        description: >
+          입실 기준 시간 오프셋(정수). 0=입실 시각(정시 올림), 음수=입실 전(검사값 확보용 -24까지),
+          양수=입실 후 경과 시간
+      - name: endtime
+        description: 해당 hr이 가리키는 정시 시각 (조인 구간의 종료 경계)
+
+  - name: vitalsign
+    description: >
+      ICU 차트이벤트를 charttime 단위로 피벗한 활력징후 와이드 테이블.
+      itemid별 측정값을 컬럼으로 펼치고 동일 시각 중복은 평균으로 집계하며,
+      침습+비침습 혈압은 통합 컬럼으로, 비침습은 별도(*_ni)로 분리한다.
+      시간 단위 SOFA·라벨 집계의 입력이 된다.
+      출처: mimic-code concepts/measurement/vitalsign.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: charttime
+        description: 관찰(측정) 시각 — 피벗 grain
+      - name: heart_rate
+        description: 심박수 (bpm, 0<v<300)
+      - name: sbp
+        description: 수축기 혈압 (침습+비침습 통합, 0<v<400)
+      - name: dbp
+        description: 이완기 혈압 (침습+비침습 통합, 0<v<300)
+      - name: mbp
+        description: 평균 동맥압 (침습+비침습 통합, 0<v<300)
+      - name: sbp_ni
+        description: 비침습 수축기 혈압 (itemid 220179)
+      - name: dbp_ni
+        description: 비침습 이완기 혈압 (itemid 220180)
+      - name: mbp_ni
+        description: 비침습 평균 동맥압 (itemid 220181)
+      - name: resp_rate
+        description: 호흡수 (breaths/min, 0<v<70)
+      - name: temperature
+        description: 체온 (섭씨, 화씨는 변환 후 소수 2자리 반올림)
+      - name: temperature_site
+        description: 체온 측정 부위 (itemid 224642, 텍스트)
+      - name: spo2
+        description: 말초 산소포화도 (%, 0<v<=100)
+      - name: glucose
+        description: 혈당 (fingerstick·serum·whole blood 통합, v>0)
+
+  - name: ventilator_setting
+    description: >
+      기계환기 세팅값을 같은 subject_id·charttime 단위로 피벗한다.
+      chartevents의 환기 관련 itemid를 추출하며, fio2는 0.2~1 비율을 %로 환산하고
+      peep는 0~100 범위 밖 값을 null 처리한다.
+      출처: mimic-code concepts/measurement/ventilator_setting.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자 (charttime 그룹 내 최대값)
+      - name: charttime
+        description: 관찰 시각 — 피벗 grain
+      - name: respiratory_rate_set
+        description: 설정 호흡수 (itemid 224688)
+      - name: respiratory_rate_total
+        description: 총 호흡수 (itemid 224690)
+      - name: respiratory_rate_spontaneous
+        description: 자발 호흡수 (itemid 224689)
+      - name: minute_volume
+        description: 분당 환기량 (itemid 224687)
+      - name: tidal_volume_set
+        description: 설정 일회호흡량 (itemid 224684)
+      - name: tidal_volume_observed
+        description: 측정 일회호흡량 (itemid 224685)
+      - name: tidal_volume_spontaneous
+        description: 자발 일회호흡량 (itemid 224686)
+      - name: plateau_pressure
+        description: 고평부압 (itemid 224696)
+      - name: peep
+        description: 호기말 양압 (itemid 220339·224700, 0~100 범위 밖 null)
+      - name: fio2
+        description: 흡입 산소 분율(%) (itemid 223835, 0.2~1 비율은 % 환산)
+      - name: flow_rate
+        description: 유량 (L, itemid 224691)
+      - name: ventilator_mode
+        description: 환기 모드 (itemid 223849)
+      - name: ventilator_mode_hamilton
+        description: 환기 모드 (Hamilton 인공호흡기, itemid 229314)
+      - name: ventilator_type
+        description: 환기 유형 (itemid 223848)
+
+  - name: oxygen_delivery
+    description: >
+      산소 공급 정보를 같은 subject_id·charttime 단위로 피벗한다.
+      chartevents에서 o2 flow(223834·227582 병합)·additional o2 flow(227287)와
+      산소 공급 장치(226732, 한 시각 최대 4개)를 추출하며, o2 flow 계열은
+      storetime 최신값 1건만 남긴다.
+      출처: mimic-code concepts/measurement/oxygen_delivery.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자 (charttime 그룹 내 최대값)
+      - name: charttime
+        description: 관찰 시각 — 피벗 grain
+      - name: o2_flow
+        description: 산소 유량 (itemid 223834·227582 병합)
+      - name: o2_flow_additional
+        description: 추가 산소 유량 (itemid 227287)
+      - name: o2_delivery_device_1
+        description: 산소 공급 장치 1 (itemid 226732)
+      - name: o2_delivery_device_2
+        description: 산소 공급 장치 2 (itemid 226732)
+      - name: o2_delivery_device_3
+        description: 산소 공급 장치 3 (itemid 226732)
+      - name: o2_delivery_device_4
+        description: 산소 공급 장치 4 (itemid 226732)
+
+  - name: ventilation
+    description: >
+      산소 공급 장치·환기 모드를 6개 임상 범주로 분류하고 환기 구간(duration)을 산출한다.
+      ventilator_setting·oxygen_delivery(개념 Silver)를 ref로 입력받아 charttime을
+      합집합으로 모아 상태를 판정하며(우선순위 trach > mech vent > NIV > high flow > o2),
+      14시간 이상 공백이나 상태 변화 시 새 이벤트로 끊어 stay_id·이벤트 단위로 집계한다.
+      출처: mimic-code concepts/treatment/ventilation.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: starttime
+        description: 환기 이벤트 시작 시각 (이벤트 내 최소 charttime)
+      - name: endtime
+        description: >
+          환기 이벤트 종료 시각 (다음 세팅 시각, 14시간 이상 공백 시 마지막 기록 시각)
+      - name: ventilation_status
+        description: >
+          환기 범주 (Tracheostomy·InvasiveVent·NonInvasiveVent·HFNC·SupplementalOxygen·None)
+
+  - name: gcs
+    description: >
+      Glasgow Coma Scale(GCS)을 charttime 단위로 산출한다.
+      chartevents에서 운동(223901)·언어(223900)·개안(220739) 반응을 추출해
+      직전 6시간 내 측정값으로 결측을 보간하고 총점을 계산하며,
+      기관삽관('No Response-ETT')은 언어 0점·gcs_unable=1로 처리한다.
+      출처: mimic-code concepts/measurement/gcs.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: charttime
+        description: 관찰 시각 — grain
+      - name: gcs
+        description: GCS 총점 (운동+언어+개안, 결측은 직전값·정상치로 보간)
+      - name: gcs_motor
+        description: 운동 반응 점수 (itemid 223901)
+      - name: gcs_verbal
+        description: 언어 반응 점수 (itemid 223900, 기관삽관 시 0)
+      - name: gcs_eyes
+        description: 개안 반응 점수 (itemid 220739)
+      - name: gcs_unable
+        description: 기관삽관으로 언어 반응 측정 불가 여부 (1=불가)
+
+  - name: bg
+    description: >
+      혈액가스(blood gas) 검사를 specimen 단위로 피벗하고 산소화 지표를 계산한다.
+      labevents에 chartevents의 SpO2·FiO2를 결합해 폐포-동맥 산소분압차(aado2_calc)와
+      P/F 비(pao2fio2ratio)를 산출한다. SOFA 호흡 점수의 입력이다.
+      출처: mimic-code concepts/measurement/bg.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: charttime
+        description: 검사 시각 — grain
+      - name: specimen
+        description: 검체 종류 (ART. 등)
+      - name: so2
+        description: 산소포화도
+      - name: po2
+        description: 산소분압
+      - name: pco2
+        description: 이산화탄소분압
+      - name: fio2_chartevents
+        description: chartevents 유래 흡입산소분율(%)
+      - name: fio2
+        description: 흡입산소분율(%)
+      - name: aado2
+        description: 폐포-동맥 산소분압차(기록값)
+      - name: aado2_calc
+        description: 폐포-동맥 산소분압차(계산값)
+      - name: pao2fio2ratio
+        description: P/F 비 (100*po2/fio2)
+      - name: ph
+        description: 동맥혈 pH
+      - name: baseexcess
+        description: 염기과잉
+      - name: bicarbonate
+        description: 중탄산염
+      - name: totalco2
+        description: 총 이산화탄소
+      - name: hematocrit
+        description: 헤마토크릿
+      - name: hemoglobin
+        description: 헤모글로빈
+      - name: carboxyhemoglobin
+        description: 카복시헤모글로빈
+      - name: methemoglobin
+        description: 메트헤모글로빈
+      - name: chloride
+        description: 염소
+      - name: calcium
+        description: 칼슘
+      - name: temperature
+        description: 검체 온도
+      - name: potassium
+        description: 칼륨
+      - name: sodium
+        description: 나트륨
+      - name: lactate
+        description: 젖산
+      - name: glucose
+        description: 혈당
+
+  - name: chemistry
+    description: >
+      혈액 화학(blood chemistry) 검사를 specimen_id 단위로 피벗한다.
+      labevents에서 creatinine·bun·전해질·간기능 등을 추출하며, bg·현장검사는 제외한다.
+      SOFA 신장 점수 등의 입력이다.
+      출처: mimic-code concepts/measurement/chemistry.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: charttime
+        description: 검사 시각 — grain
+      - name: specimen_id
+        description: 검체 식별자
+      - name: albumin
+        description: 알부민
+      - name: globulin
+        description: 글로불린
+      - name: total_protein
+        description: 총단백
+      - name: aniongap
+        description: 음이온 차(anion gap)
+      - name: bicarbonate
+        description: 중탄산염
+      - name: bun
+        description: 혈중요소질소
+      - name: calcium
+        description: 칼슘
+      - name: chloride
+        description: 염소
+      - name: creatinine
+        description: 크레아티닌 (SOFA 신장 점수)
+      - name: glucose
+        description: 혈당
+      - name: sodium
+        description: 나트륨
+      - name: potassium
+        description: 칼륨
+
+  - name: enzyme
+    description: >
+      간·심장 효소(enzyme) 검사를 specimen_id 단위로 피벗한다.
+      labevents에서 bilirubin·ast·alt·ck 등을 추출하며, bilirubin_total은 SOFA 간
+      점수의 입력이다.
+      출처: mimic-code concepts/measurement/enzyme.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: charttime
+        description: 검사 시각 — grain
+      - name: specimen_id
+        description: 검체 식별자
+      - name: alt
+        description: 알라닌아미노전이효소(ALT)
+      - name: alp
+        description: 알칼리포스파타제(ALP)
+      - name: ast
+        description: 아스파르트산아미노전이효소(AST)
+      - name: amylase
+        description: 아밀라제
+      - name: bilirubin_total
+        description: 총 빌리루빈 (SOFA 간 점수)
+      - name: bilirubin_direct
+        description: 직접 빌리루빈
+      - name: bilirubin_indirect
+        description: 간접 빌리루빈
+      - name: ck_cpk
+        description: 크레아틴키나제(CK/CPK)
+      - name: ck_mb
+        description: CK-MB
+      - name: ggt
+        description: 감마글루타밀전이효소(GGT)
+      - name: ld_ldh
+        description: 젖산탈수소효소(LD/LDH)
+
+  - name: complete_blood_count
+    description: >
+      전혈구계산(CBC)을 specimen_id 단위로 피벗한다.
+      labevents에서 platelet·wbc·hemoglobin 등을 추출하며, platelet은 SOFA 응고 점수의
+      입력이다.
+      출처: mimic-code concepts/measurement/complete_blood_count.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: charttime
+        description: 검사 시각 — grain
+      - name: specimen_id
+        description: 검체 식별자
+      - name: hematocrit
+        description: 헤마토크릿
+      - name: hemoglobin
+        description: 헤모글로빈
+      - name: mch
+        description: 평균적혈구혈색소량(MCH)
+      - name: mchc
+        description: 평균적혈구혈색소농도(MCHC)
+      - name: mcv
+        description: 평균적혈구용적(MCV)
+      - name: platelet
+        description: 혈소판 (SOFA 응고 점수)
+      - name: rbc
+        description: 적혈구 수
+      - name: rdw
+        description: 적혈구 분포폭(RDW)
+      - name: rdwsd
+        description: 적혈구 분포폭 표준편차(RDW-SD)
+      - name: wbc
+        description: 백혈구 수
+
+  - name: urine_output
+    description: >
+      소변 배출량을 stay_id·charttime 단위로 합산한다.
+      outputevents에서 배출 itemid를 합산하며, GU 관주액(irrigant) 주입은 음수로 상쇄한다.
+      urine_output_rate·SOFA 신장 점수의 입력이다.
+      출처: mimic-code concepts/measurement/urine_output.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: charttime
+        description: 배출 시각 — grain
+      - name: urineoutput
+        description: 시각별 소변 배출량 합계(mL)
+
+  - name: weight_durations
+    description: >
+      성인 ICU 환자의 체중을 시작/종료 시각 구간으로 변환한다.
+      chartevents의 입실체중(226512)·일일체중(224639)을 구간화하고, 입실 초반 gap을
+      첫 체중으로 backfill한다. urine_output_rate(체중 정규화)의 입력이다.
+      출처: mimic-code concepts/demographics/weight_durations.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: starttime
+        description: 체중 적용 구간 시작 시각
+      - name: endtime
+        description: 체중 적용 구간 종료 시각 (다음 측정, 없으면 outtime + 2시간)
+      - name: weight
+        description: 체중(kg)
+      - name: weight_type
+        description: 체중 유형 (admit=입실, daily=일일)
+
+  - name: epinephrine
+    description: >
+      에피네프린(epinephrine) 투여 용량·기간을 inputevents itemid 221289에서 추출한다.
+      SOFA 심혈관 점수(vasopressor)의 입력이다.
+      출처: mimic-code concepts/medication/epinephrine.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: linkorderid
+        description: 동일 오더 인스턴스 식별자
+      - name: vaso_rate
+        description: 투여 속도
+      - name: vaso_amount
+        description: 투여량
+      - name: starttime
+        description: 투여 시작 시각
+      - name: endtime
+        description: 투여 종료 시각
+
+  - name: norepinephrine
+    description: >
+      노르에피네프린(norepinephrine) 투여 용량·기간을 inputevents itemid 221906에서
+      추출한다. 일부 mg/kg/min 오기록 행은 mcg/kg/min으로 환산한다. SOFA 심혈관 점수의
+      입력이다.
+      출처: mimic-code concepts/medication/norepinephrine.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: linkorderid
+        description: 동일 오더 인스턴스 식별자
+      - name: vaso_rate
+        description: 투여 속도 (mcg/kg/min 환산)
+      - name: vaso_amount
+        description: 투여량
+      - name: starttime
+        description: 투여 시작 시각
+      - name: endtime
+        description: 투여 종료 시각
+
+  - name: dopamine
+    description: >
+      도파민(dopamine) 투여 용량·기간을 inputevents itemid 221662에서 추출한다.
+      SOFA 심혈관 점수의 입력이다.
+      출처: mimic-code concepts/medication/dopamine.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: linkorderid
+        description: 동일 오더 인스턴스 식별자
+      - name: vaso_rate
+        description: 투여 속도
+      - name: vaso_amount
+        description: 투여량
+      - name: starttime
+        description: 투여 시작 시각
+      - name: endtime
+        description: 투여 종료 시각
+
+  - name: dobutamine
+    description: >
+      도부타민(dobutamine) 투여 용량·기간을 inputevents itemid 221653에서 추출한다.
+      SOFA 심혈관 점수의 입력이다.
+      출처: mimic-code concepts/medication/dobutamine.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: linkorderid
+        description: 동일 오더 인스턴스 식별자
+      - name: vaso_rate
+        description: 투여 속도
+      - name: vaso_amount
+        description: 투여량
+      - name: starttime
+        description: 투여 시작 시각
+      - name: endtime
+        description: 투여 종료 시각
+
+  - name: antibiotic
+    description: >
+      처방(prescriptions)에서 항생제만 추출하고 starttime이 속한 ICU 재실(stay_id)을
+      붙인다. suspicion_of_infection(감염 의심)의 입력이다.
+      출처: mimic-code concepts/medication/antibiotic.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자 (starttime 기준 매칭)
+      - name: antibiotic
+        description: 항생제명 (prescriptions.drug)
+      - name: route
+        description: 투여 경로
+      - name: starttime
+        description: 처방 시작 시각
+      - name: stoptime
+        description: 처방 종료 시각
+
+  - name: urine_output_rate
+    description: >
+      시간당 소변량(mL/kg/hr)을 체중 정규화로 산출한다.
+      urine_output·weight_durations와 icustays·chartevents를 결합해 6/12/24시간 누적
+      소변량을 체중·시간으로 정규화한다. SOFA 신장 점수의 입력이다.
+      출처: mimic-code concepts/measurement/urine_output_rate.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: charttime
+        description: 관찰 시각 — grain
+      - name: weight
+        description: 체중(kg, weight_durations 매칭)
+      - name: uo
+        description: 해당 시각 소변량
+      - name: urineoutput_6hr
+        description: 직전 6시간 누적 소변량(mL)
+      - name: urineoutput_12hr
+        description: 직전 12시간 누적 소변량(mL)
+      - name: urineoutput_24hr
+        description: 직전 24시간 누적 소변량(mL)
+      - name: uo_mlkghr_6hr
+        description: 직전 6시간 시간당 소변량(mL/kg/hr)
+      - name: uo_mlkghr_12hr
+        description: 직전 12시간 시간당 소변량(mL/kg/hr)
+      - name: uo_mlkghr_24hr
+        description: 직전 24시간 시간당 소변량(mL/kg/hr)
+      - name: uo_tm_6hr
+        description: 6시간 윈도우 실제 관측 시간(hr)
+      - name: uo_tm_12hr
+        description: 12시간 윈도우 실제 관측 시간(hr)
+      - name: uo_tm_24hr
+        description: 24시간 윈도우 실제 관측 시간(hr)
+
+  - name: sofa
+    description: >
+      ICU 재실 매시간 격자에서 6개 장기(호흡·응고·간·심혈관·신경·신장) SOFA 점수를
+      산출하고 24시간 롤링 윈도우 최대값으로 합산해 sofa_24hours(0~24)를 만든다.
+      bg·vitalsign·gcs·ventilation·검사·바소프레서·urine_output_rate를 ref로 소비한다.
+      Sepsis-3 판정의 입력이다.
+      출처: mimic-code concepts/score/sofa.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: hr
+        description: 입실 기준 시간 오프셋(icustay_hourly 격자)
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: starttime
+        description: 해당 시간 구간 시작 시각
+      - name: endtime
+        description: 해당 시간 구간 종료 시각
+      - name: respiration_24hours
+        description: 24시간 호흡 SOFA 점수(0~4)
+      - name: coagulation_24hours
+        description: 24시간 응고 SOFA 점수(0~4)
+      - name: liver_24hours
+        description: 24시간 간 SOFA 점수(0~4)
+      - name: cardiovascular_24hours
+        description: 24시간 심혈관 SOFA 점수(0~4)
+      - name: cns_24hours
+        description: 24시간 신경(CNS) SOFA 점수(0~4)
+      - name: renal_24hours
+        description: 24시간 신장 SOFA 점수(0~4)
+      - name: sofa_24hours
+        description: 24시간 SOFA 총점(0~24, 6개 장기 합)
+
+  - name: suspicion_of_infection
+    description: >
+      항생제 처방과 미생물 배양 검사를 시간 근접성(배양 후 72시간 / 항생제 전 24시간)으로
+      매칭해 감염 의심 여부·시각·검체·양성 여부를 판정한다. antibiotic을 ref로,
+      microbiologyevents를 source로 소비한다. Sepsis-3 판정의 입력이다.
+      출처: mimic-code concepts/sepsis/suspicion_of_infection.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: hadm_id
+        description: 병원 입원 고유 식별자
+      - name: ab_id
+        description: 항생제 처방 행 식별자
+      - name: antibiotic
+        description: 항생제명
+      - name: antibiotic_time
+        description: 항생제 투여 시각
+      - name: suspected_infection
+        description: 감염 의심 여부(1=의심)
+      - name: suspected_infection_time
+        description: 감염 의심 판정 시각
+      - name: culture_time
+        description: 배양 검사 시각
+      - name: specimen
+        description: 배양 검체 종류
+      - name: positive_culture
+        description: 배양 양성 여부(1=양성)
+
+  - name: sepsis3
+    description: >
+      ICU 내 Sepsis-3 발현(onset) 시각. SOFA>=2 이면서 감염 의심이 있는 가장 이른 시점을
+      stay_id별 1건으로 산출한다(감염 의심 시각 기준 -48h~+24h 윈도우의 SOFA와 결합).
+      sofa·suspicion_of_infection을 ref로 소비하며, sepsis_mortality 라벨의 기반이다.
+      출처: mimic-code concepts/sepsis/sepsis3.sql (BigQuery → Trino 포팅)
+    columns:
+      - name: subject_id
+        description: 환자 고유 식별자
+      - name: stay_id
+        description: ICU 체류 고유 식별자
+      - name: antibiotic_time
+        description: 항생제 투여 시각
+      - name: culture_time
+        description: 배양 검사 시각
+      - name: suspected_infection_time
+        description: 감염 의심 판정 시각
+      - name: sofa_time
+        description: 결합된 SOFA 행의 종료 시각
+      - name: sofa_score
+        description: 해당 시점 SOFA 총점
+      - name: respiration
+        description: 호흡 SOFA 점수
+      - name: coagulation
+        description: 응고 SOFA 점수
+      - name: liver
+        description: 간 SOFA 점수
+      - name: cardiovascular
+        description: 심혈관 SOFA 점수
+      - name: cns
+        description: 신경(CNS) SOFA 점수
+      - name: renal
+        description: 신장 SOFA 점수
+      - name: sepsis3
+        description: Sepsis-3 충족 여부(SOFA>=2 AND 감염 의심)

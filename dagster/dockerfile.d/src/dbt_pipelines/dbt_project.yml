@@ -43,3 +43,7 @@ models:
       +schema: eicu
     mimic_iv:
       +schema: mimiciv
+      # 실버 모델은 물리 테이블로 구체화한다(dbt 기본값 view 재정의).
+      # 레이어는 각 모델의 config(tags=['silver'])로 표기한다.
+      tables:
+        +materialized: table

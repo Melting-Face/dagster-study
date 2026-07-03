@@ -7,8 +7,8 @@
 # - schema    : Iceberg 네임스페이스 = Trino 스키마 (defs/eicu/constants.py NAMESPACE)
 #               메달리온 레이어는 스키마 접두어가 아니라 tag(dbt)/kind(Dagster)로 표기한다.
 # - meta.dagster.asset_key: Dagster 자산키와 1:1 매핑해 lineage를 연결한다.
-#       eICU 적재 자산은 단일 세그먼트 키(patient, lab)로 정의돼 있으므로
-#       기본값([source_name, table]) 대신 명시적으로 키를 지정한다.
+#       eICU 적재 자산은 단일 세그먼트 키(patient, diagnosis, nurse_charting)로
+#       정의돼 있으므로 기본값([source_name, table]) 대신 명시적으로 키를 지정한다.
 #       (Dagster 서브클래싱 없이 dbt 쪽 선언으로 처리 — 프로젝트 컨벤션)
 version: 2
 
@@ -23,8 +23,13 @@ sources:
         meta:
           dagster:
             asset_key: ["patient"]
-      - name: lab
-        description: "eICU lab 원본 (S3 lab.csv.gz)."
+      - name: diagnosis
+        description: "eICU diagnosis 원본 (S3 diagnosis.csv.gz)."
         meta:
           dagster:
-            asset_key: ["lab"]
+            asset_key: ["diagnosis"]
+      - name: nurse_charting
+        description: "eICU nurseCharting 원본 (대용량, 청크 적재)."
+        meta:
+          dagster:
+            asset_key: ["nurse_charting"]

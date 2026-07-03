@@ -16,7 +16,15 @@ import dagster as dg
 from dagster_project.common.dbt import dbt_project
 
 
-@dbt_assets(manifest=dbt_project.manifest_path, select="path:models/eicu")
+# 셀렉터는 fqn 기반을 쓴다(manifest만으로 해석).
+# path: 셀렉터는 정의 빌드 시 cwd 기준 파일시스템 글롭이라
+# "does not match any enabled nodes"로 매칭에 실패한다.
+# fqn:<dataset>은 models/<dataset>/ 하위 모델 전체를 데이터셋 단위로 소유한다.
+@dbt_assets(
+    manifest=dbt_project.manifest_path,
+    project=dbt_project,
+    select="fqn:eicu",
+)
 def eicu_dbt_models(
     context: dg.AssetExecutionContext, dbt: DbtCliResource
 ) -> Iterator[Any]:

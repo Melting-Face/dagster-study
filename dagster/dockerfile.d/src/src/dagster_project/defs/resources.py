@@ -43,12 +43,24 @@ def resources() -> dg.Definitions:
             "io_manager_mimiciv": PyArrowIcebergIOManager(
                 name=CATALOG_NAME, config=build_catalog_config(), namespace=MIMICIV_NS
             ),
-            # 대용량 경로(chartevents) 청크 append용 테이블 바인딩
+            # 대용량 경로 청크 append용 테이블 바인딩(IO 매니저 미사용).
             "mimiciv_chartevents_table": IcebergTableResource(
                 name=CATALOG_NAME,
                 config=build_catalog_config(),
                 namespace=MIMICIV_NS,
                 table="chartevents",
+            ),
+            "mimiciv_labevents_table": IcebergTableResource(
+                name=CATALOG_NAME,
+                config=build_catalog_config(),
+                namespace=MIMICIV_NS,
+                table="labevents",
+            ),
+            "eicu_nurse_charting_table": IcebergTableResource(
+                name=CATALOG_NAME,
+                config=build_catalog_config(),
+                namespace=EICU_NS,
+                table="nurse_charting",
             ),
         },
     )

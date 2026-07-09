@@ -68,7 +68,7 @@
   - **데이터셋별 서브프로젝트** `defs/<dataset>/`에 **정의만** 둔다.
     - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
     - `assets.py` — 테이블별 **명시적 `@asset`**(bronze 적재; 모듈 스코프라 자동 수집)
-    - `dbt_assets.py` — 데이터셋 dbt 모델 소유(`@dbt_assets(select="path:models/<dataset>")`)
+    - `dbt_assets.py` — 데이터셋 dbt 모델 소유(`@dbt_assets(select="fqn:<dataset>", project=dbt_project)`)
   - `defs/resources.py` — 공유 리소스(S3·dbt·IO 매니저·테이블 바인딩)를 `@dg.definitions`로 제공
   - `defs/automation.py` — 잡·스케줄(모듈 스코프 객체라 자동 수집)
 - **wiring은 최상위 `definitions.py` 한 곳**에서 `defs = load_defs(dagster_project.defs)`로

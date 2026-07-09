@@ -49,18 +49,26 @@ capitalisation_policy = "lower"
 | `silver` (intermediate) | 조인·비즈니스 로직            | `view` 또는 `table`  |
 | `gold` (marts)          | 분석/소비용 집계              | `table`              |
 
+현재 구조(코드 기준):
+
 ```text
 models/
 ├── eicu/              # 서브프로젝트(데이터셋)명 = dagster_project/defs/eicu
-│   ├── source.yml     # Dagster 적재분(dbt 미생성) source 선언
-│   ├── stg_eicu__patient.sql      # tag: silver
-│   └── eicu__patient_summary.sql  # tag: gold
+│   └── source.yml     # Dagster 적재분(dbt 미생성) source 선언 (실버 모델 미이식)
 └── mimic_iv/          # = dagster_project/defs/mimic_iv
-    └── source.yml
+    ├── source.yml     # 적재 11테이블 source 선언
+    └── tables/        # 실버 모델 22개 — config(tags=['silver'])
+        ├── sofa.sql               # SOFA 6장기 점수
+        ├── sepsis3.sql            # Sepsis-3 onset
+        ├── suspicion_of_infection.sql
+        └── ...                    # vitalsign · gcs · icustay_hourly 등 (mimic-code 포팅)
 ```
 
-> 새 모델은 해당 **데이터셋 디렉토리** 안에 추가하고, 레이어는 `+tags`(또는 모델 내 `config(tags=...)`)로
-> 표기한다.
+> - 새 모델은 해당 **데이터셋 디렉토리** 안에 추가하고, 레이어는 `+tags`(또는 모델 내
+>   `config(tags=...)`)로 표기한다. `tables/`처럼 materialization 그룹용 하위 디렉토리는 가능하나,
+>   메달리온 레이어명(`bronze`/`silver`/`gold`)을 디렉토리명으로 쓰지 않는다.
+> - `mimic_iv/tables/`는 `dbt_project.yml`에서 `+materialized: table`(dbt 기본 view 재정의)로
+>   물리 테이블로 구체화한다. 모델·피처 상세는 [`dataset_schema.md`](../dataset_schema.md).
 
 ## 네이밍
 

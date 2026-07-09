@@ -194,9 +194,10 @@ S3/Iceberg 연결은 **Dagster 리소스**(`dagster-aws`·`dagster-iceberg`)로 
 | ---------------- | ----------------------------------------------------------------------------- |
 | `constants.py`   | 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`                          |
 | `assets.py`      | 테이블별 **명시적 `@dg.asset`**(bronze; 일반=IO 매니저 / 대용량=청크 append)   |
-| `dbt_assets.py`  | 데이터셋 dbt 모델 소유 `@dbt_assets(select="path:models/<dataset>")`           |
+| `dbt_assets.py`  | 데이터셋 dbt 모델 소유 `@dbt_assets(select="fqn:<dataset>", project=dbt_project)` |
 
-> 현재 `defs/mimic_iv/`(patients·admissions=일반, chartevents=대용량), `defs/eicu/`(patient·lab=일반).
+> 현재 `defs/mimic_iv/`(icu·hosp 11테이블 — 일반=IO 매니저, chartevents·labevents=대용량),
+> `defs/eicu/`(3테이블 — patient·diagnosis=일반, nurse_charting=대용량).
 > 공유 리소스는 `defs/resources.py`(`@dg.definitions`), 잡·스케줄은 `defs/automation.py`에 두고,
 > 최상위 `definitions.py`의 `load_defs(dagster_project.defs)`가 모두 **단일 `Definitions`** 로 합친다.
 
@@ -233,14 +234,14 @@ flowchart LR
 
 ```python
 # 일반 파일 — IO 매니저가 적재 (assets.py)
-@dg.asset(group_name=GROUP_NAME, io_manager_key="io_manager_mimiciv", kinds={"python", "iceberg"})
-def labevents(s3: S3Resource) -> pa.Table:
-    """MIMIC-IV hosp.labevents 적재."""
-    return read_csv_gz_table(s3, f"{SOURCE_BASE}/hosp/labevents.csv.gz")
+@dg.asset(group_name=GROUP_NAME, io_manager_key="io_manager_mimiciv", kinds={"python", "iceberg", "bronze"})
+def admissions(s3: S3Resource) -> pa.Table:
+    """MIMIC-IV hosp.admissions 적재."""
+    return read_csv_gz_table(s3, f"{SOURCE_BASE}/hosp/admissions.csv.gz")
 ```
 
-대용량은 `chartevents`처럼 `load_heavy_csv_gz_to_iceberg`를 호출하고, 대상 테이블용
-`IcebergTableResource`를 `defs/resources.py`의 `resources`에 추가한다.
+대용량(현재 `chartevents`·`labevents`·`nurse_charting`)은 `load_heavy_csv_gz_to_iceberg`를
+호출하고, 대상 테이블용 `IcebergTableResource`를 `defs/resources.py`의 `resources`에 추가한다.
 
 ### 검증 상태
 

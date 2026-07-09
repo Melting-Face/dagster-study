@@ -162,6 +162,54 @@ def build_csv(rows: list[dict]) -> str: ...   # 둘 다 _format_row 사용
 > 공유 보조 함수는 `format_row`처럼 **`_` 없는 일반 함수**로 분리한다.
 > (에셋 정의 시 "공통 로직만 일반 함수로 분리" 원칙과 같은 선상)
 
+## 스크립트 스타일 (`scripts/`) — 절차형
+
+`scripts/`의 **실행형 유틸리티**(1회성·운영 스크립트)는 **절차형**으로 쓴다.
+라이브러리·에셋 코드(`common/`·`defs/`)와는 규칙이 다르다.
+
+- **호이스팅은 적용**: import·상수·(단일) 함수 정의는 **상단**에, 실행 진입은 **하단**
+  (`if __name__ == "__main__": main()`)에 둔다. 위에서 선언 → 아래에서 실행 순서가 드러난다.
+- **캡슐화는 최소화**: 상태를 담는 **클래스를 만들지 않는다**. 콜백이 필요하면 지역 변수로 최소화.
+- **함수화는 최소화**: 로직을 보조 함수로 잘게 쪼개지 않고 **하나의 `main()`** 안에서 위→아래로
+  실행한다(단계는 `# 1) … # 2) …` 번호 주석으로 표시).
+- **근거(왜) = 가독성 / Locality of Behaviour**: 스크립트는 **재사용 단위가 아니라 한 번 읽고
+  실행하는 절차**라, **실행 순서 = 읽는 순서**일 때 가장 명확하다. 조각난 헬퍼로 점프를 늘리면
+  오히려 추적성이 떨어진다. (철학 [philosophy.md](../philosophy.md) 3·6 — 가독성·추적 용이성)
+- **경계(Rule of Three는 유효)**: 동일 로직이 **3회 이상** 반복되면 그때 함수로 추출한다.
+  라이브러리·에셋 코드에는 이 절차형 규칙을 적용하지 않는다 — 거기선 **관심사 분리·명시적 함수**를
+  유지한다([dagster.md](dagster.md) "각 에셋 명시적 분리").
+- **린트 면제**: 단일 `main()`은 순환 복잡도 상한과 부딪히므로 `scripts/**`는 **C901 면제**
+  (루트 `pyproject.toml`의 `per-file-ignores`). 다른 룰(D·ANN 등)은 그대로 적용된다.
+- **의존성**: 외부 패키지를 쓰면 **PEP 723 인라인 메타데이터**로 선언하고 `uv run`으로 실행한다
+  (아래 [의존성 관리](#의존성-관리)). 루트 `pyproject.toml`은 도구 설정 전용이라 런타임 의존성을 두지 않는다.
+
+```python
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["boto3"]        # PEP 723: uv run이 자동 provisioning
+# ///
+"""..."""
+
+import argparse
+import sys
+
+CONST = ...                       # 선언은 상단(호이스팅)
+
+
+def main() -> int:
+    """... (절차형: 클래스·보조 함수 없이 위→아래로 실행)."""
+    # 1) 인자  → 2) 로드  → 3) 검증  → 4) 실행 ...
+    return 0
+
+
+if __name__ == "__main__":        # 진입은 하단
+    raise SystemExit(main())
+```
+
+> 실제 예: [`scripts/upload_raw_to_seaweedfs.py`](../../scripts/upload_raw_to_seaweedfs.py)
+> (SeaweedFS 원천 업로드 — 단일 `main()`, PEP 723 의존성).
+
 ## Docstring (Google 스타일)
 
 ruff `pydocstyle`(`convention = "google"`)로 강제한다.
@@ -350,6 +398,10 @@ dagster-postgres == 0.28.12
 ```
 
 - 개발용 의존성은 `[dependency-groups].dev`에 둔다 (`pytest` 등).
+- **위 두 규칙은 `dagster/dockerfile.d/src/pyproject.toml`(패키징 프로젝트) 기준**이다.
+  repo 루트 `pyproject.toml`은 **도구 설정 전용**이라 런타임 의존성을 두지 않는다.
+- **`scripts/`의 단독 스크립트**는 프로젝트 의존성 대신 **PEP 723 인라인 메타데이터**로 선언하고
+  `uv run <script>.py`로 실행한다(uv가 격리 환경에 자동 설치). 위 [스크립트 스타일](#스크립트-스타일-scripts--절차형) 참고.
 
 ## 테스트
 

@@ -22,7 +22,7 @@
 | 문서                                | 내용                                                   |
 | ----------------------------------- | ------------------------------------------------------ |
 | [공통 규칙](conventions/general.md) | 언어, 들여쓰기, 커밋 메시지, 디렉토리 규칙             |
-| [Python](conventions/python.md)     | ruff, 타입 힌트, 예외 처리, 의존성 관리                |
+| [Python](conventions/python.md)     | ruff, 타입 힌트, 예외 처리, 의존성 관리, 스크립트 절차형(함수/클래스 최소화) |
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg |
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |

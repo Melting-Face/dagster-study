@@ -1,4 +1,5 @@
 .venv/
+data/          # 로컬 원천 덤프(csv.gz) — scripts/upload_raw_to_seaweedfs.py 입력
 logs/
 minio/
 rustfs/

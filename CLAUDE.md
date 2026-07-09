@@ -25,6 +25,18 @@
 5. **재사용은 3회부터 추출** — 3회 이상 반복 시 함수화/상수화 *(Rule of Three / DRY)*
 6. **추적 용이성** — wiring 집중·named constant·명시 정의로 grep/점프 용이, 단순 리턴은 인라인 *(Locality of Behaviour)*
 
+## Python 코딩 컨벤션
+
+상세 [`docs/conventions/python.md`](docs/conventions/python.md).
+
+### `scripts/` 스크립트는 절차형으로 쓴다
+
+- 실행형 유틸리티(`scripts/`)는 **호이스팅은 적용**(선언은 상단·진입은 하단), **캡슐화·함수화는 최소화**한다
+  → 클래스 없이, 보조 함수로 쪼개지 않고 **하나의 `main()`** 에서 위→아래로 실행한다.
+- 이유: **가독성 / Locality of Behaviour** — 스크립트는 재사용 단위가 아니라 **실행 순서 = 읽는 순서**가 명확할 때 최선.
+  단, **Rule of Three(3회 이상 반복)** 는 유효하며, 라이브러리·에셋 코드(`common/`·`defs/`)에는 적용하지 않는다(관심사 분리·명시적 함수 유지).
+- 외부 의존성은 **PEP 723 인라인 메타데이터**로 선언하고 `uv run <script>.py`로 실행한다. `scripts/**`는 ruff **C901 면제**.
+
 ## Dagster 코딩 컨벤션
 
 ### 에셋 생성은 클래스화를 지양한다

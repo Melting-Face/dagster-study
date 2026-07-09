@@ -44,6 +44,9 @@ max-complexity = 10
 # (설정이 루트라 글롭은 임의 깊이의 tests/ 를 잡도록 **/tests/** 사용)
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["ANN", "D", "S101", "ARG"]
+# scripts/: 절차형(단일 main·함수화 최소화) 스타일이라 순환 복잡도(C901)를 면제한다.
+# 근거·컨벤션은 docs/conventions/python.md '스크립트 스타일'.
+"scripts/**" = ["C901"]
 
 [tool.ruff.format]
 indent-style = "space"

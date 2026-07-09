@@ -138,8 +138,9 @@ services:
       - 9333:9333 # master UI
       - 8333:8333 # S3 API
       - 8888:8888 # filer UI
+      - 23646:23646
       # volume(8080)·grpc·metrics(9324)는 컨테이너 네트워크 내부 통신만 사용 → host 미게시 (Trino 8080 충돌 회피)
-    command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -dir=/data -filer -s3 -metricsPort=9324"
+    command: "mini -ip.bind=0.0.0.0 -dir=/data -metricsPort=9324"
     volumes:
       - ./seaweedfs/data:/data
     # 오브젝트 스토리지: IO 위주, CPU 낮고 메모리 모자란 편 아님

@@ -61,7 +61,6 @@
 
 - **공통 재사용 로직**은 `dagster_project/common/`에 둔다(데이터셋 무관 공통 라이브러리, `defs/` 밖).
   - `constants.py` — 공통 상수/기본값(S3 파라미터 포함)
-  - `resources.py` — 공유 Iceberg 카탈로그 설정(`catalog_properties`·`build_catalog_config`)
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
   - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
 - **정의는 모두 `dagster_project/defs/` 하위**에 두고 `load_defs`가 재귀 자동발견한다.
@@ -69,7 +68,7 @@
     - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
     - `assets.py` — 테이블별 **명시적 `@asset`**(bronze 적재; 모듈 스코프라 자동 수집)
     - `dbt_assets.py` — 데이터셋 dbt 모델 소유(`@dbt_assets(select="fqn:<dataset>", project=dbt_project)`)
-  - `defs/resources.py` — 공유 리소스(S3·dbt·IO 매니저·테이블 바인딩)를 `@dg.definitions`로 제공
+  - `defs/resources.py` — 공유 리소스(S3·dbt·IO 매니저·테이블 바인딩)를 `@dg.definitions`로 제공. Iceberg 카탈로그 설정(`IcebergCatalogConfig`)은 별도 빌더 없이 **각 리소스에 인라인**해 한 파일에서 전체를 파악한다(적은 파일로 파악).
   - `defs/automation.py` — 잡·스케줄(모듈 스코프 객체라 자동 수집)
 - **wiring은 최상위 `definitions.py` 한 곳**에서 `defs = load_defs(dagster_project.defs)`로
   자동발견 결과를 **단일 `Definitions`**로 합친다(중간 definitions 레이어 없음, 모듈 스코프 `Definitions` 1개).

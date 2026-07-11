@@ -1,0 +1,18 @@
+# yamllint 설정
+# yamllint는 pyproject.toml을 지원하지 않으므로 별도 파일로 관리한다.
+# 트렁크가 로컬에서 이 설정을 자동 탐지해 사용한다.
+extends: default
+
+rules:
+    line-length:
+        max: 120
+        level: warning
+    document-start: disable
+    truthy:
+        check-keys: false
+    comments:
+        min-spaces-from-content: 1
+    # 기존 YAML(compose.yml 등)이 2칸이라 강제 4칸 대신 '일관성'만 검사
+    indentation:
+        spaces: consistent
+        indent-sequences: true

@@ -13,20 +13,26 @@ dependencies = [
   "dagster-graphql==1.12.12",
   "dagster-postgres==0.28.12",
   "dagster-dbt==0.28.12",
-  "dagster-dlt==0.28.12",
-  "dbt-duckdb==1.10.0",
-  "dagster-deltalake==0.28.12",
-  "dagster-deltalake-polars==0.28.12",
-  "dagster-duckdb==0.28.12",
-  "dagster-duckdb-polars==0.28.12",
-  "dagster-polars[patito]==0.27.8",
+  # DuckDB 대체: Trino 어댑터 (버전은 dbt-core 1.10 호환성 빌드 시 재확인 필요)
+  "dbt-trino>=1.8,<2.0",
   "dagster-dg-cli==1.12.12",
-  "dagster-apprise==0.0.2",
-  "dagster-mlflow==0.28.12",
+  # S3(SeaweedFS)·Iceberg 리소스
+  "dagster-aws==0.28.12",
+  # dagster-iceberg(preview)가 pyiceberg[pyarrow]를 동반 설치 → pyarrow는 전이 의존으로 해결
+  "dagster-iceberg==0.3.14",
 ]
 
 [dependency-groups]
-dev = ["dagster-webserver", "pytest"]
+dev = [
+  "dagster-webserver",
+  "pytest",
+  "ruff",
+  "sqlfluff",
+  "sqlfluff-templater-dbt",
+  "gitlint",
+  "yamllint",
+  "mypy",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -41,3 +47,6 @@ directory_type = "project"
 [tool.dg.project]
 root_module = "dagster_project"
 registry_modules = ["dagster_project.components.*"]
+
+# 린트·포맷·타입체크 도구(ruff·sqlfluff·mypy) 설정은 repo 루트 pyproject.toml로 이전했다.
+# 이 파일은 패키징(`[project]`·`[build-system]`)과 Dagster `dg` 설정만 둔다.

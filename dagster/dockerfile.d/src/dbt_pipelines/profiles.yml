@@ -1,37 +1,27 @@
+# dbt-trino 프로파일: Trino를 통해 Iceberg(JDBC 카탈로그) 레이크하우스에 적재
+# database = Trino 카탈로그명(iceberg.properties의 catalog-name과 일치), schema = Trino 스키마
 dbt_pipelines:
   outputs:
     dev:
-      type: duckdb
-      path: /shared/dev.duckdb
-      extensions:
-        - httpfs
-        - parquet
-        - iceberg
-      secrets:
-        - type: s3
-          region: "{{ env_var('AWS_DEFAULT_REGION') }}"
-          key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
-          secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
-
-          client_kwargs:
-            endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
-      threads: 1
+      type: trino
+      method: none # dev 환경: 인증 없음
+      user: dagster
+      host: trino
+      port: 8080
+      http_scheme: http
+      database: iceberg # Trino 카탈로그 (= iceberg.properties catalog-name)
+      schema: dev # Trino 스키마 (없으면 dbt가 생성)
+      threads: 4
 
     prod:
-      type: duckdb
-      path: /shared/prod.duckdb
-      extensions:
-        - httpfs
-        - parquet
-        - iceberg
-      secrets:
-        - type: s3
-          region: "{{ env_var('AWS_DEFAULT_REGION') }}"
-          key_id: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
-          secret: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
-
-          client_kwargs:
-            endpoint_url: "{{ env_var('ENDPOINT_URL') }}"
-      threads: 4
+      type: trino
+      method: none
+      user: dagster
+      host: trino
+      port: 8080
+      http_scheme: http
+      database: iceberg
+      schema: prod
+      threads: 8
 
   target: dev

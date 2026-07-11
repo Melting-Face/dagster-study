@@ -1,40 +1,14 @@
-from pathlib import Path
+"""코드 로케이션 진입점 — `defs/` 패키지를 자동발견해 단일 Definitions로 합친다.
 
-from dagster import (
-    AssetSelection,
-    Definitions,
-    ScheduleDefinition,
-    define_asset_job,
-    load_from_defs_folder,
-)
+에셋·리소스·잡·스케줄 정의는 모두 `dagster_project/defs/` 하위에 둔다.
+- 데이터셋별 서브프로젝트(`defs/<dataset>/`): bronze `@asset`·`@dbt_assets`
+- 공유 리소스(`defs/resources.py`): `@dg.definitions`로 리소스 Definitions 제공
+- 잡·스케줄(`defs/automation.py`): 모듈 스코프 객체
+`load_defs`가 위를 재귀 수집·merge한다. 공통 라이브러리(`common/`)는 defs 밖에 둔다.
+모듈 스코프 Definitions는 `defs` 1개(autodiscovery 제약).
+"""
 
+import dagster_project.defs
+from dagster import load_defs
 
-dlt_all_job = define_asset_job(
-    "dlt_all_job",
-    selection=AssetSelection.groups("dlt_ingest"),
-)
-
-dbt_all_job = define_asset_job(
-    "dbt_all_job",
-    selection=AssetSelection.groups("dbt_ingest"),
-)
-
-dbt_all_schedule = ScheduleDefinition(
-    name="dbt_all_schedule",
-    job=dbt_all_job,
-    cron_schedule="0 * * * *",
-)
-
-dlt_all_schedule = ScheduleDefinition(
-    name="dlt_all_schedule",
-    job=dlt_all_job,
-    cron_schedule="0 * * * *",
-)
-
-defs = Definitions.merge(
-    load_from_defs_folder(path_within_project=Path(__file__).parent),
-    Definitions(
-        jobs=[dbt_all_job, dlt_all_job],
-        schedules=[dbt_all_schedule, dlt_all_schedule],
-    ),
-)
+defs = load_defs(dagster_project.defs)

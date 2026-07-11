@@ -1,0 +1,54 @@
+# pre-commit 훅: 커밋 시 린터·포매터·시크릿 스캔을 자동 실행 (트렁크 대체)
+#
+# 설치:
+#   uv tool install pre-commit
+#   pre-commit install --install-hooks    # pre-commit + commit-msg 훅 설치
+# 전체 검사:
+#   pre-commit run --all-files
+#
+# 규칙(룰)의 단일 출처는 pyproject.toml / .yamllint.yaml / .gitleaks.toml 이며,
+# 이 파일은 '언제 무엇을 실행할지'만 정의한다. (훅은 스테이징된 파일만 검사)
+#
+# 미포함(마찰·의존성으로 당분간 수동/CI 운용):
+#   - sqlfluff : dbt 모델 부재 + dbt templater 의존성 → 모델 생기면 추가
+#   - mypy     : 의존성 환경 필요 → repo 루트에서
+#                `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`
+#   - hadolint : 로컬 바이너리/도커 필요 → `brew install hadolint` 후 추가 가능
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-toml
+      - id: check-yaml
+
+  # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff])
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # YAML 린트 (규칙은 .yamllint.yaml)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+
+  # 시크릿 스캔 (규칙은 .gitleaks.toml)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # 커밋 메시지 Conventional Commits 검사 (규칙은 루트 .gitlint)
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint

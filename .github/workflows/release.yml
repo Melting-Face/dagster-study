@@ -1,0 +1,37 @@
+name: release
+
+# 정책: release note·tag는 main에 반영될 때만 적용한다.
+# v* 태그가 push되면, 그 커밋이 main에 포함된 경우에만 GitHub Release를 생성한다.
+# 릴리스 노트는 Conventional Commits 기반으로 자동 생성한다(--generate-notes).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 태그가 main에 포함됐는지 확인
+        id: guard
+        run: |
+          git fetch --no-tags origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "on_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on_main=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::태그 $GITHUB_REF_NAME 가 main에 없어 릴리스를 건너뜁니다."
+          fi
+
+      - name: GitHub Release 생성
+        if: steps.guard.outputs.on_main == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag

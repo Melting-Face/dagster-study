@@ -1,11 +1,16 @@
 .venv/
+data/          # 로컬 원천 덤프(csv.gz) — scripts/upload_raw_to_seaweedfs.py 입력
 logs/
 minio/
 rustfs/
+seaweedfs/
 ollma/
 postgres/
 shared/
 
+**/__pycache__/
+.ruff_cache/
+.mypy_cache/
 **/*.log
 **/*.duckdb
 **/secrets.toml
@@ -13,3 +18,9 @@ shared/
 .env
 .user.yml
 .DS_Store
+
+# 트렁크 미사용 (혹시 로컬에서 trunk init 시 추적 방지)
+.trunk/
+
+# k8s values (로컬 전용)
+values.yaml

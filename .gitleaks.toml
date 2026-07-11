@@ -1,0 +1,15 @@
+# gitleaks 설정 (시크릿 스캐너)
+# 트렁크가 로컬에서 이 설정을 자동 탐지해 사용한다.
+title = "dagster-study gitleaks config"
+
+# 기본 규칙셋을 확장 사용
+[extend]
+useDefault = true
+
+[allowlist]
+description = "문서의 환경변수 '이름'(값 없음)·예시 파일은 오탐 제외"
+paths = [
+    '''README\.md$''',
+    '''docs/.*\.md$''',
+    '''\.env\.example$''',
+]

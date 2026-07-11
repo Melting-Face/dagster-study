@@ -1,0 +1,10 @@
+# hadolint 설정 (Dockerfile 린터)
+# 대상: dagster/dockerfile.d/Dockerfile, discord-py/dockerfile.d/Dockerfile
+# 트렁크가 로컬에서 이 설정을 자동 탐지해 사용한다.
+failure-threshold: warning
+
+trustedRegistries:
+    - docker.io
+
+# 필요 시 무시할 규칙을 추가한다 (예: DL3008 apt 버전 미고정)
+ignored: []

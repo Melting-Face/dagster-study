@@ -1,36 +1,72 @@
+---
+name: dagster
+
 x-docker-logging: &docker-logging
   logging:
     driver: "json-file"
     options:
-      max-size: "10m" # 로그 파일의 최대 크기 (10MB)
-      max-file: "20" # 유지할 로그 파일 개수 (최대 10개)
+      # 로그 파일의 최대 크기 (10MB)
+      max-size: "10m"
+      # 유지할 로그 파일 개수 (최대 10개)
+      max-file: "20"
+
+# 자원 할당 규칙: 서비스마다 특성이 다르므로 deploy.resources 를 개별 명시한다.
+# limits=상한(하드), reservations=예약(소프트). podman machine(8CPU/22GiB) 기준 산정.
+
+# dagster webserver·daemon 공통부 (DRY). 둘은 동일 이미지·instance(dagster.yaml)·
+# Postgres 공유 storage로 협조하며, entrypoint/command/포트/자원만 서비스별로 다르다.
+x-dagster-common: &dagster-common
+  build:
+    context: dagster/dockerfile.d/
+  environment:
+    # 로그·프로세스 로컬 시간을 KST로 (스케줄 해석은 execution_timezone이 담당, 저장은 UTC 유지)
+    - TZ=Asia/Seoul
+    - POSTGRES_USER=${POSTGRES_USER}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    - POSTGRES_DB=${POSTGRES_DB}
+    - POSTGRES_PORT=${POSTGRES_PORT}
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+    - ENDPOINT_URL=${ENDPOINT_URL}
+  volumes:
+    - ./shared:/shared
+  depends_on:
+    postgres:
+      condition: service_healthy
 
 services:
-  dagster-dev:
-    <<: *docker-logging
-    container_name: dagster-dev
-    build:
-      context: dagster/dockerfile.d/
-    command:
-      - "dev"
-      - "-h"
-      - "0.0.0.0"
-      - "--verbose"
-    environment:
-      - DAGSTER_POSTGRES_USER=${DAGSTER_POSTGRES_USER}
-      - DAGSTER_POSTGRES_PASSWORD=${DAGSTER_POSTGRES_PASSWORD}
-      - DAGSTER_POSTGRES_DB=${DAGSTER_POSTGRES_DB}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-      - ENDPOINT_URL=${ENDPOINT_URL}
+  # UI/GraphQL 전용. workspace.yaml로 코드 로케이션을 명시 로드한다.
+  dagster-webserver:
+    <<: [*docker-logging, *dagster-common]
+    container_name: dagster-webserver
+    entrypoint: ["dagster-webserver"]
+    command: ["-h", "0.0.0.0", "-p", "${DAGSTER_PORT}", "-w", "workspace.yaml"]
     ports:
       - ${DAGSTER_PORT}:${DAGSTER_PORT}
-    volumes:
-      - ./shared:/shared
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # UI/GraphQL: 가벼움 (run 실행은 daemon 쪽)
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 768M
+  # 스케줄·센서·런큐 처리 + DefaultRunLauncher로 run을 서브프로세스 실행(무거움).
+  dagster-daemon:
+    <<: [*docker-logging, *dagster-common]
+    container_name: dagster-daemon
+    entrypoint: ["dagster-daemon"]
+    command: ["run", "-w", "workspace.yaml"]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1536M
   postgres:
     <<: *docker-logging
     container_name: postgres
@@ -47,60 +83,111 @@ services:
       interval: 10s
       timeout: 8s
       retries: 5
-  master:
-    image: chrislusf/seaweedfs # use a remote image
+    # RDB: 캐시·shared_buffers 위해 안정적 메모리 예약, CPU는 중간
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+  trino:
+    <<: *docker-logging
+    container_name: trino
+    image: trinodb/trino:468
     ports:
-      - 9333:9333
-      - 19333:19333
-      - 9324:9324
-    command: 'master -ip=master -ip.bind=0.0.0.0 -metricsPort=9324'
-  volume:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 8080:8080
-      - 18080:18080
-      - 9325:9325
-    command: 'volume -ip=volume -master="master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
+      - "8080:8080"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      # 카탈로그 정의만 읽기전용 마운트 (비밀정보는 ${ENV:..}로 치환)
+      - ./trino/etc/catalog:/etc/trino/catalog:ro
+      # 힙 비율 조정용 커스텀 jvm.config (나머지 설정은 이미지 기본값 사용)
+      - ./trino/etc/jvm.config:/etc/trino/jvm.config:ro
     depends_on:
-      - master
-  filer:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/v1/info"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    # JVM 기반 MPP 쿼리엔진: 힙·쿼리 처리로 메모리/CPU 최다 소비 (jvm.config Xmx는 한도 내 유지)
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 6G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+  # SeaweedFS standalone: master/volume/filer/s3를 단일 컨테이너로 통합
+  seaweedfs:
+    <<: *docker-logging
+    container_name: seaweedfs
     image: chrislusf/seaweedfs # use a remote image
     ports:
-      - 8888:8888
-      - 18888:18888
-      - 9326:9326
-    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326'
-    tty: true
-    stdin_open: true
-    depends_on:
-      - master
-      - volume
-  s3:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 8181:8181
-      - 8333:8333
-      - 9327:9327
-    command: 's3 -filer="filer:8888" -ip.bind=0.0.0.0 -metricsPort=9327'
-    depends_on:
-      - master
-      - volume
-      - filer
-  webdav:
-    image: chrislusf/seaweedfs # use a remote image
-    ports:
-      - 7333:7333
-    command: 'webdav -filer="filer:8888"'
-    depends_on:
-      - master
-      - volume
-      - filer
+      - 9333:9333 # master UI
+      - 8333:8333 # S3 API
+      - 8888:8888 # filer UI
+      - 23646:23646
+      # volume(8080)·grpc·metrics(9324)는 컨테이너 네트워크 내부 통신만 사용 → host 미게시 (Trino 8080 충돌 회피)
+    command: "mini -ip.bind=0.0.0.0 -dir=/data -metricsPort=9324"
+    volumes:
+      - ./seaweedfs/data:/data
+    # 오브젝트 스토리지: IO 위주, CPU 낮고 메모리 모자란 편 아님
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+  discord-bot:
+    <<: *docker-logging
+    container_name: discord-bot
+    build:
+      context: discord-py/dockerfile.d/
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      # Ollama Cloud(ollama.com) 연동 설정
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+    restart: unless-stopped
+    # 경량 Python 봇: 추론은 ollama 클라우드에 위임, 네트워크 위주의 작은 풋프린트
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
   prometheus:
     image: prom/prometheus:v2.21.0
     ports:
       - 9000:9090
     volumes:
       - ./prometheus:/etc/prometheus
-    command: '--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml'
+    command: "--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml"
     depends_on:
-      - s3
+      - seaweedfs
+    # TSDB: 시계열 수·보존기간에 따라 메모리 증가, CPU는 낮음
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M

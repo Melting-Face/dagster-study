@@ -1,6 +1,0 @@
-type: dagster_dlt.DltLoadCollectionComponent
-
-attributes:
-  loads:
-    - source: .currencylayer_api_pipeline.currencylayer_source
-      pipeline: .currencylayer_api_pipeline.currencylayer_pipeline

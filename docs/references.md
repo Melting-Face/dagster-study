@@ -33,6 +33,16 @@
 | [Trino](https://trino.io/docs/current/) | 쿼리 엔진 | [architecture.md](architecture.md) · [resource-sizing.md](resource-sizing.md) |
 | [SeaweedFS](https://github.com/seaweedfs/seaweedfs) | S3 호환 오브젝트 스토리지 | [architecture.md](architecture.md) |
 
+## 보안·규제 (의료데이터)
+
+| 표준·법령 | 용도 | 참조 문서 |
+| --- | --- | --- |
+| [ISMS-P 인증기준(2023.11)](https://www.privacy.go.kr/front/bbs/bbsView.do?bbsNo=BBSMSTR_000000000049&bbscttNo=20677) | 정보보호·개인정보보호 관리체계 101 인증기준 | [security.md](security.md) |
+| [개인정보 보호법](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=213857) | 가명정보 처리 특례(제28조의2·4·5) | [security.md](security.md) |
+| [보건의료데이터 활용 가이드라인](https://www.pipc.go.kr/np/cop/bbs/selectBoardArticle.do?bbsId=BS217&mCode=D010030000) | 보건의료 가명정보 처리 절차·심의(DRB) | [security.md](security.md) |
+| [HIPAA De-identification (Safe Harbor)](https://www.hhs.gov/hipaa/for-professionals/privacy/special-topics/de-identification/index.html) | 데이터셋 비식별 근거(18식별자) | [security.md](security.md) |
+| [PhysioNet Credentialed License·DUA](https://physionet.org/content/mimiciv/) | 데이터 접근·재식별 금지 협약 | [security.md](security.md) |
+
 ## 데이터셋·도메인
 
 | 출처 | 용도 | 참조 문서 |

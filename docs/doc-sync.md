@@ -19,6 +19,7 @@
 | 아키텍처·데이터 흐름 | `docs/architecture.md` | `CLAUDE.md` · 관련 `conventions/*` 링크 |
 | 프로젝트 구조 | `docs/conventions/dagster.md` | `CLAUDE.md` 구조 섹션 |
 | 운영·리소스 | `docs/operations.md` · `docs/resource-sizing.md` | `CLAUDE.md` · `compose.yml` 주석 |
+| 보안·거버넌스 | `docs/security.md` | `CLAUDE.md` 운영 섹션 · `docs/references.md`(규제 출처) |
 | 환경변수 추가 | `.env.example` | `compose.yml`(앵커) → 코드(`EnvVar`) → `docs/operations.md` 전파 체인 |
 | 데이터셋 스키마·피처 | `docs/dataset_schema.md` | 해당 `models/<dataset>/source.yml` · `schema.yml` |
 

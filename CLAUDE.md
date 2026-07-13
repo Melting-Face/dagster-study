@@ -109,3 +109,6 @@
   전 서비스 `deploy.resources` 명시. 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).
+- **보안·데이터 거버넌스**: 원천 진료 데이터·`.env`·크리덴셜은 **저장소 커밋 금지**(비식별 연구
+  데이터셋 + DUA). ISMS-P 인증기준(101)·의료데이터 보안 규제와 현행 통제 매핑·미비점(TODO)은
+  [`docs/security.md`](docs/security.md).

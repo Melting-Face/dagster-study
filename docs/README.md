@@ -33,6 +33,10 @@
 - [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책
 - [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino 3파일 결합·daemon OOM 계산·Postgres·SeaweedFS)
 
+### 보안 (security)
+
+- [보안·데이터 거버넌스](security.md) — ISMS-P 인증기준(101)·의료데이터 보안 규제(개인정보보호법 가명정보 특례·보건의료데이터 가이드라인·HIPAA Safe Harbor)와 현행 통제 매핑·미비점(TODO). 비식별 연구 데이터셋 + DUA 전제
+
 ## 핵심 원칙 요약
 
 > 가치(왜)는 [코딩 철학](philosophy.md), 아래는 빠른 규칙 참조(어떻게).

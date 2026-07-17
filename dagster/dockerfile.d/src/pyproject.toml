@@ -15,6 +15,9 @@ dependencies = [
   "dagster-dbt==0.28.12",
   # DuckDB 대체: Trino 어댑터 (버전은 dbt-core 1.10 호환성 빌드 시 재확인 필요)
   "dbt-trino>=1.8,<2.0",
+  # Trino 파이썬 클라이언트 — Iceberg 유지보수 프로시저 실행(common/trino.py)에 직접 사용.
+  # dbt-trino 전이 의존이나, 직접 import하므로 명시 선언(explicit dependencies).
+  "trino>=0.330",
   "dagster-dg-cli==1.12.12",
   # S3(SeaweedFS)·Iceberg 리소스
   "dagster-aws==0.28.12",

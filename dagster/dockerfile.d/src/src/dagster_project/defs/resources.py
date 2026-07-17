@@ -25,9 +25,13 @@ from dagster_project.common.constants import (
     CATALOG_NAME,
     ICEBERG_CATALOG_DB,
     S3_ENDPOINT,
+    TRINO_HOST,
+    TRINO_PORT,
+    TRINO_USER,
     WAREHOUSE,
 )
 from dagster_project.common.dbt import build_dbt_resource
+from dagster_project.common.trino import TrinoResource
 from dagster_project.defs.eicu.constants import NAMESPACE as EICU_NS
 from dagster_project.defs.mimic_iv.constants import NAMESPACE as MIMICIV_NS
 
@@ -48,6 +52,10 @@ def resources() -> dg.Definitions:
                 region_name=AWS_REGION,
             ),
             "dbt": build_dbt_resource(),
+            # Trino 접속(Iceberg 유지보수용). 파라미터는 common.constants에서 추적.
+            "trino": TrinoResource(
+                host=TRINO_HOST, port=TRINO_PORT, user=TRINO_USER, catalog=CATALOG_NAME
+            ),
             # 데이터셋 전용 IO 매니저 (일반 적재: pa.Table → namespace.<asset> write)
             "io_manager_eicu": PyArrowIcebergIOManager(
                 name=CATALOG_NAME,

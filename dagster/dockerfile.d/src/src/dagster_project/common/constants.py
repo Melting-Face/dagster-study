@@ -16,6 +16,12 @@ AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
+# Trino 쿼리 엔진 접속 (Iceberg 유지보수 프로시저 실행용)
+# 컨테이너 내부망 값이라 비밀 아님 → 기본값 제공, 필요 시 env로 재정의.
+TRINO_HOST = os.environ.get("TRINO_HOST", "trino")
+TRINO_PORT = int(os.environ.get("TRINO_PORT", "8080"))
+TRINO_USER = os.environ.get("TRINO_USER", "dagster")
+
 # 적재 기본값
 DEFAULT_CHUNK_ROWS = 1_000_000
 DEFAULT_NAMESPACE = "bronze"

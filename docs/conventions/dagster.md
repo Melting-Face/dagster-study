@@ -104,10 +104,12 @@ src/dagster_project/
 ├── common/                 # 공통 재사용 라이브러리 (데이터셋 무관, defs/ 밖)
 │   ├── constants.py        # 공통 상수/기본값 (S3 파라미터 포함)
 │   ├── helper.py           # read_csv_gz_table(일반) · load_heavy_csv_gz_to_iceberg(대용량)
-│   └── dbt.py              # 공유 DbtProject · build_dbt_resource (단일 dbt 프로젝트)
+│   ├── dbt.py              # 공유 DbtProject · build_dbt_resource (단일 dbt 프로젝트)
+│   └── trino.py            # TrinoResource (Iceberg 유지보수 프로시저 실행)
 └── defs/                   # load_defs가 재귀 자동발견하는 정의 루트
-    ├── resources.py        # @dg.definitions: s3 · dbt · io_manager_* · 테이블 바인딩
+    ├── resources.py        # @dg.definitions: s3 · dbt · trino · io_manager_* · 테이블 바인딩
     ├── automation.py       # dbt_all_job · dbt_all_schedule (모듈 스코프 객체)
+    ├── maintenance.py      # iceberg_maintenance_job: 스냅샷 만료→orphan 정리(주간 스케줄)
     ├── mimic_iv/           # 데이터셋 서브프로젝트 (정의만)
     │   ├── constants.py    # NAMESPACE · GROUP_NAME · SOURCE_BASE
     │   ├── assets.py       # 명시적 @asset (bronze 적재)

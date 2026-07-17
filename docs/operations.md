@@ -60,13 +60,13 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 
 | 항목 | 현재 동작 | 상태 | 비고 |
 | --- | --- | --- | --- |
-| Iceberg snapshot 유지기간 | `iceberg_maintenance_job`이 **매주 일요일 03:00 KST**에 대용량 3테이블의 `SNAPSHOT_RETENTION_DAYS`(기본 7일) 경과 스냅샷 만료([`defs/maintenance.py`](../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)) | **부분 구현** | 보존기간(기본 7일)·대상 테이블 범위는 **확정 필요**. orphan 파일 정리(`remove_orphan_files`)는 pyiceberg 0.11.x 미지원 → Trino/Spark 대체 검토([security.md §4-1](security.md)) |
+| Iceberg snapshot·orphan 유지기간 | `iceberg_maintenance_job`이 **매주 일요일 03:00 KST**에 대용량 3테이블의 스냅샷 만료(`SNAPSHOT_RETENTION_DAYS` 기본 7일) → orphan 파일 정리(Trino, 순서 강제)([`defs/maintenance.py`](../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)) | **부분 구현** | 보존기간(기본 7일)·대상 테이블 범위는 **확정 필요**. orphan 정리는 Trino `remove_orphan_files`(pyiceberg 0.11.x 미지원 대체, [security.md §4-1](security.md)) |
 | SeaweedFS(`s3://warehouse`) 용량 | 수명주기 정책 없음 | **논의 필요** | compute-log·중간 산출물 정리 정책 미설정 |
 | Docker 컨테이너 로그 유지 | `max-size: 10m` × `max-file: 20` → 컨테이너당 **최대 200MB** | 설정됨 | [conventions/docker.md](conventions/docker.md) §1-1. 시간 기반 순환은 미설정 |
 
-> Iceberg 스냅샷 만료는 `iceberg_maintenance_job`(주간 스케줄)으로 자동화했다. 남은 결정은
-> **보존기간(기본 7일)·대상 테이블 범위** 확정과 orphan 파일 정리 방식(Trino/Spark)이며,
-> 확정 시 이 표·[security.md §4-1](security.md)·[resource-sizing.md](resource-sizing.md)를 함께 갱신한다.
+> Iceberg 스냅샷 만료·orphan 정리는 `iceberg_maintenance_job`(주간 스케줄, 만료→orphan 순서)으로
+> 자동화했다(orphan은 Trino `remove_orphan_files`). 남은 결정은 **보존기간(기본 7일)·대상 테이블
+> 범위** 확정이며, 확정 시 이 표·[security.md §4-1](security.md)·[resource-sizing.md](resource-sizing.md)를 함께 갱신한다.
 
 ## 참고
 

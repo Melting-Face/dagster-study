@@ -152,9 +152,11 @@ services:
         reservations:
           cpus: "0.25"
           memory: 512M
+  # Discord 봇(옵션): `--profile bot` 으로만 기동.
   discord-bot:
     <<: *docker-logging
     container_name: discord-bot
+    profiles: ["bot"]
     build:
       context: discord-py/dockerfile.d/
     environment:
@@ -173,7 +175,11 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+  # 모니터링(옵션): `--profile monitoring` 으로만 기동. 뼈대(core)는 profile 없음 → 항상 실행.
   prometheus:
+    <<: *docker-logging
+    container_name: prometheus
+    profiles: ["monitoring"]
     image: prom/prometheus:v2.21.0
     ports:
       - 9000:9090

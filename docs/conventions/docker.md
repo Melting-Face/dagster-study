@@ -111,6 +111,33 @@ services:
 - `max_concurrent_runs`(`dagster.yaml`)와 daemon `memory`는 **강하게 결합** — 한쪽만 바꾸면
   OOM 또는 낭비. 반드시 함께 조정한다([resource-sizing.md](../resource-sizing.md)).
 
+### 1-6. 옵션 기능은 `profiles`로 분리 (뼈대 = 항상, 부가기능 = opt-in)
+
+핵심 서비스(뼈대)와 부가기능(모니터링·봇 등)을 **한 파일**에서 관리하되, 부가기능은
+`profiles`로 태그해 기본 `up`에서 제외한다(적은 파일로 파악 — 파일 분할 없이 토글).
+
+```yaml
+services:
+  trino: {}                      # 뼈대: profile 없음 → 항상 실행
+  prometheus:
+    profiles: ["monitoring"]     # 옵션: --profile monitoring 일 때만 기동
+  discord-bot:
+    profiles: ["bot"]
+```
+
+- **뼈대(core)**: `dagster-webserver`·`dagster-daemon`·`postgres`·`trino`·`seaweedfs` — profile 없음.
+- **옵션**: `prometheus`(`monitoring`)·`discord-bot`(`bot`).
+
+```bash
+docker compose up -d                        # 뼈대만
+docker compose --profile monitoring up -d   # 뼈대 + 모니터링
+COMPOSE_PROFILES=monitoring,bot docker compose up -d   # 여러 프로필 고정
+```
+
+> `profiles`를 붙인 서비스를 **의존**(`depends_on`)하는 뼈대 서비스가 없어야 한다(있으면 기본 기동이 깨진다).
+> 옵션↔옵션 의존은 같은 프로필을 공유하거나 함께 활성화한다. 대안인 다중 파일 `-f` override는
+> YAML 앵커가 파일 스코프라 기능 파일에서 공용 앵커를 못 써 이 레포에선 profiles를 택했다.
+
 ## 2. Dockerfile
 
 - 컨테이너는 **비루트 사용자**로 실행한다. `USER 1000` 전환 **전에** 소유권을 넘긴다:

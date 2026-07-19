@@ -86,7 +86,7 @@ compose.yml  memory limit
   (현재 프로젝트는 구방식 `run_coordinator: QueuedRunCoordinator`의 `max_concurrent_runs: 10` 사용)
 - **op/asset 동시성** — `concurrency.pools.default_limit`(풀별 한도) 또는 job multiprocess executor `max_concurrent`
   : 한 run 안에서 병렬 실행되는 op 수. 보통 CPU 코어 수에 맞춘다.
-- **dbt 병렬도** — `profiles.yml`의 `threads`(현재 프로파일 값은 [architecture](architecture.md) 참조): Trino로 보내는 동시 쿼리 수. 호스트별 권장은 아래 프로파일 표.
+- **dbt 병렬도** — `profiles.yml`의 `threads`(현재 프로파일 값은 [architecture](architectures/overview.md) 참조): Trino로 보내는 동시 쿼리 수. 호스트별 권장은 아래 프로파일 표.
 
 ```yaml
 # dagster.yaml — 최신 동시성 블록

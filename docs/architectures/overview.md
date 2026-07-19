@@ -114,7 +114,7 @@ flowchart TB
   **daemon이 떠 있어야** 스케줄·큐가 처리된다.
 - **run 실행 위치**: `DefaultRunLauncher`라 run은 **daemon 컨테이너에서 서브프로세스**로 돈다
   → daemon에 자원을 더 배정한다(compose `deploy.resources`).
-- **코드 로케이션**: 독립 바이너리는 자동발견 대신 [`workspace.yaml`](../dagster/dockerfile.d/src/workspace.yaml)
+- **코드 로케이션**: 독립 바이너리는 자동발견 대신 [`workspace.yaml`](../../dagster/dockerfile.d/src/workspace.yaml)
   (`python_module: dagster_project.definitions`)로 명시 로드한다.
 - **manifest 사전생성**: webserver/daemon은 비-dev라 `DbtProject.prepare_if_dev()`가 no-op이므로,
   이미지 빌드(`Dockerfile`)에서 `dbt deps && dbt parse`로 `target/manifest.json`을 미리 만들어
@@ -246,12 +246,12 @@ def admissions(s3: S3Resource) -> pa.Table:
 
 컨테이너 `dg check defs`로 **정의 로드 검증 통과**(`All definitions loaded successfully`).
 - 빌드: python:3.13-slim에서 `dagster-iceberg==0.3.14`·`pyiceberg-0.11.1`·`pyarrow-24.0.0` 휠 정상 설치.
-- ⚠️ **자산 모듈에서 `from __future__ import annotations` 금지**: Dagster가 `context`를 클래스 identity로 검사하므로 future annotations(문자열화) 시 로드 실패. 상세 [`conventions/dagster.md`](conventions/dagster.md).
+- ⚠️ **자산 모듈에서 `from __future__ import annotations` 금지**: Dagster가 `context`를 클래스 identity로 검사하므로 future annotations(문자열화) 시 로드 실패. 상세 [`conventions/dagster.md`](../conventions/dagster.md).
 - 미검증(런타임): boto3 `StreamingBody`↔pyarrow 대용량 스트리밍, 실제 S3/Iceberg 적재 — postgres·seaweedfs 기동 후 머티리얼라이즈로 확인 필요.
 
 ## 실행 방법
 
-자세한 환경변수·실행 절차는 루트 [`README.md`](../README.md) 참고.
+자세한 환경변수·실행 절차는 루트 [`README.md`](../../README.md) 참고.
 
 ```bash
 # 1. .env 작성 (POSTGRES_*, AWS_*, DISCORD_BOT_TOKEN 등)

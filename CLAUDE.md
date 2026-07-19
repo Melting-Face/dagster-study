@@ -87,7 +87,7 @@
 - **`@dbt_assets` 셀렉터는 `select="fqn:<dataset>"`** 를 쓴다(`project=dbt_project` 동반).
   `path:models/<dataset>`는 cwd 글롭이라 정의 로드 시 모델이 수집되지 않는다(잠복 버그).
 - **데이터셋 원천 스키마·피처(SOFA→Sepsis-3)** 는 [`docs/dataset_schema.md`](docs/dataset_schema.md) 참고.
-- 자세한 흐름·사용법은 [`docs/architecture.md`](docs/architecture.md) 참고.
+- 자세한 흐름·사용법은 [`docs/architectures/overview.md`](docs/architectures/overview.md) 참고.
 
 ### 머티리얼라이즈 메타데이터를 남긴다
 
@@ -109,6 +109,9 @@
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
   전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링·봇)은 `profiles`로 분리**(뼈대는 profile
   없이 항상 실행, `--profile <name>`으로 opt-in). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
+  K8s 이행 규칙(도입 시)은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md).
+- **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s)을 **프로젝트 결정 관점**(채택 이유·
+  대안 비교)으로 [`docs/architectures/`](docs/architectures/README.md)에 정리(채택 ✅ / 미채택 🔎).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).
 - **보안·데이터 거버넌스**: 원천 진료 데이터·`.env`·크리덴셜은 **저장소 커밋 금지**(비식별 연구

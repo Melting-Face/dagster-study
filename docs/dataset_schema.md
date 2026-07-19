@@ -6,7 +6,7 @@
 읽어 적재한다. dbt는 이 적재분을 `source()`로 참조(생성이 아님)해 실버 개념 테이블을 만든다.
 여기 기술한 컬럼·itemid는 모두 `source.yml`·실버 `.sql`·`schema.yml`에서 **직접 확인된 것만** 담았다.
 
-> 저장은 UTC, 표시·스케줄은 KST. 저장/조인 흐름·컨테이너 구성은 [architecture.md](architecture.md),
+> 저장은 UTC, 표시·스케줄은 KST. 저장/조인 흐름·컨테이너 구성은 [architectures/overview.md](architectures/overview.md),
 > source/ref·메달리온 태깅 규칙은 [conventions/dbt.md](conventions/dbt.md) 참고.
 
 ---
@@ -252,5 +252,5 @@ Tier-1(원천 `source()` 직접 소비) → 중간(다른 실버를 `ref()`) →
   https://github.com/MIT-LCP/mimic-code
 - MIMIC-IV 공식 스키마: https://mimic.mit.edu/docs/IV/modules/
 - eICU-CRD 공식 스키마: https://eicu-crd.mit.edu/
-- 저장·조인·컨테이너 흐름: [architecture.md](architecture.md)
+- 저장·조인·컨테이너 흐름: [architectures/overview.md](architectures/overview.md)
 - source/ref·메달리온 태깅·자산키 매핑 규칙: [conventions/dbt.md](conventions/dbt.md)

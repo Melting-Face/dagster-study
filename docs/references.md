@@ -26,12 +26,22 @@
 
 | 문서 | 용도 | 참조 문서 |
 | --- | --- | --- |
-| [Dagster](https://docs.dagster.io/) | 오케스트레이션·에셋·리소스 | [conventions/dagster.md](conventions/dagster.md) · [architecture.md](architecture.md) |
+| [Dagster](https://docs.dagster.io/) | 오케스트레이션·에셋·리소스 | [conventions/dagster.md](conventions/dagster.md) · [architectures/overview.md](architectures/overview.md) |
 | [dagster-dbt](https://docs.dagster.io/integrations/dbt) | dbt 통합(`@dbt_assets`) | [conventions/dbt.md](conventions/dbt.md) |
 | [dbt-trino](https://github.com/starburstdata/dbt-trino) | dbt Trino 어댑터 | [conventions/dbt.md](conventions/dbt.md) |
-| [Apache Iceberg](https://iceberg.apache.org/) | 테이블 포맷(JDBC 카탈로그) | [architecture.md](architecture.md) |
-| [Trino](https://trino.io/docs/current/) | 쿼리 엔진 | [architecture.md](architecture.md) · [resource-sizing.md](resource-sizing.md) |
-| [SeaweedFS](https://github.com/seaweedfs/seaweedfs) | S3 호환 오브젝트 스토리지 | [architecture.md](architecture.md) |
+| [Apache Iceberg](https://iceberg.apache.org/) | 테이블 포맷(JDBC 카탈로그) | [architectures/overview.md](architectures/overview.md) |
+| [Trino](https://trino.io/docs/current/) | 쿼리 엔진 | [architectures/overview.md](architectures/overview.md) · [resource-sizing.md](resource-sizing.md) |
+| [SeaweedFS](https://github.com/seaweedfs/seaweedfs) | S3 호환 오브젝트 스토리지 | [architectures/overview.md](architectures/overview.md) |
+
+## 처리·배포 기술 (architectures)
+
+| 기술 | 상태 | 참조 문서 |
+| --- | --- | --- |
+| [Docker Compose](https://docs.docker.com/reference/compose-file/) | ✅ 채택(배포) | [architectures/docker.md](architectures/docker.md) · [conventions/docker.md](conventions/docker.md) |
+| [Apache Spark](https://spark.apache.org/docs/latest/) | 🔎 미채택 | [architectures/spark.md](architectures/spark.md) |
+| [Apache Flink](https://flink.apache.org/documentation/flink-stable/) | 🔎 미채택 | [architectures/flink.md](architectures/flink.md) |
+| [Kubernetes](https://kubernetes.io/docs/home/) | 🔎 향후 배포 | [architectures/k8s.md](architectures/k8s.md) · [conventions/k8s.md](conventions/k8s.md) |
+| [Helm](https://helm.sh/docs/) | 🔎 K8s 패키징 | [conventions/k8s.md](conventions/k8s.md) |
 
 ## 보안·규제 (의료데이터)
 

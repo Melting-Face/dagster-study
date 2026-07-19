@@ -5,9 +5,13 @@
 
 ## 목차
 
-### 아키텍처
+### 아키텍처 ([architectures/](architectures/README.md))
 
-- [전체 아키텍처 / 데이터 흐름](architecture.md) — Dagster · dbt · Trino · Iceberg · SeaweedFS 스택과 레이크하우스 구조, **bronze 적재 템플릿(S3→Iceberg)**
+기술별 **개요 + 프로젝트 결정 관점**(채택 이유·대안 비교). 채택 ✅ / 미채택·향후 🔎.
+
+- [전체 아키텍처 / 데이터 흐름](architectures/overview.md) — ✅ Dagster · dbt · Trino · Iceberg · SeaweedFS 스택과 레이크하우스 구조, **bronze 적재 템플릿(S3→Iceberg)**
+- [Trino](architectures/trino.md) ✅ · [Docker/Compose](architectures/docker.md) ✅ — 현행 채택 기술
+- [Spark](architectures/spark.md) 🔎 · [Flink](architectures/flink.md) 🔎 · [Kubernetes](architectures/k8s.md) 🔎 — 미채택·향후 검토
 
 ### 데이터셋
 
@@ -26,7 +30,8 @@
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg |
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
-| [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, Dockerfile |
+| [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |
+| [Kubernetes](conventions/k8s.md)    | (도입 시) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm |
 
 ### 운영 (operations)
 

@@ -194,7 +194,7 @@ models:
 ## Trino / Iceberg 주의사항
 
 - `profiles.yml`의 `database`(= `iceberg`)는 Trino 카탈로그명과 일치해야 한다.
-  ([architecture.md](../architecture.md) 참고)
+  ([architectures/overview.md](../architectures/overview.md) 참고)
 - 기본 target은 `dev`(schema `dev`). prod 배포 시 `--target prod`.
 - Iceberg 테이블 속성(파티셔닝 등)이 필요하면 `+table_properties` / `+partitioned_by`를
   config로 선언한다 (dbt-trino 문서 참고).

@@ -16,7 +16,8 @@
 | 변경 | 정본(먼저 수정) | 함께 갱신 |
 | --- | --- | --- |
 | 코딩 규칙 | `docs/conventions/<topic>.md` | `CLAUDE.md` 요약 · `docs/README.md` 목차 |
-| 아키텍처·데이터 흐름 | `docs/architecture.md` | `CLAUDE.md` · 관련 `conventions/*` 링크 |
+| 아키텍처·데이터 흐름 | `docs/architectures/overview.md` | `CLAUDE.md` · 관련 `conventions/*` 링크 |
+| 처리·배포 기술(개별) | `docs/architectures/<tech>.md`(trino·docker·spark·flink·k8s) | `docs/architectures/README.md` 목차 · `docs/references.md`(기술 출처) |
 | 프로젝트 구조 | `docs/conventions/dagster.md` | `CLAUDE.md` 구조 섹션 |
 | 운영·리소스 | `docs/operations.md` · `docs/resource-sizing.md` | `CLAUDE.md` · `compose.yml` 주석 |
 | 보안·거버넌스 | `docs/security.md` | `CLAUDE.md` 운영 섹션 · `docs/references.md`(규제 출처) |

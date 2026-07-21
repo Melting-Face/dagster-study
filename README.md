@@ -23,12 +23,7 @@ DAGSTER_POSTGRES_USER=
 DAGSTER_POSTGRES_PASSWORD=
 DAGSTER_POSTGRES_DB=
 
-GENERIC_TIMEZONE=
 TZ=
-N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=
-N8N_RUNNERS_ENABLED=
-
-DISCORD_BOT_TOKEN=
 
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
@@ -84,15 +79,6 @@ https://github.com/duckdb/dbt-duckdb
 ### dlthub
 
 https://dlthub.com/docs
-
-### discord
-
-https://discord.com/developers/applications
-https://discordpy.readthedocs.io/en/stable
-
-### n8n
-
-https://docs.n8n.io
 
 ### gemini
 

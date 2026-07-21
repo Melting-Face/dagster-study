@@ -45,7 +45,7 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 2. `compose.yml`에서 그 값을 **사용하는 서비스**에 `- KEY=${KEY}`가 있는지 확인하고 없으면 추가한다.
    - 공용 앵커 **`x-dagster-common`**(`&dagster-common`)을 상속하는 서비스(webserver·daemon)는
      **앵커에 한 번만** 추가하면 둘 다 전파된다.
-   - 앵커를 상속하지 않는 서비스(`trino`·`discord-bot` 등)는 해당 서비스의 `environment:`에 직접 추가한다.
+   - 앵커를 상속하지 않는 서비스(`trino`·`seaweedfs` 등)는 해당 서비스의 `environment:`에 직접 추가한다.
 3. **에셋 실행 컨테이너**에 전파되는지 확인한다. 이 레포는 `DefaultRunLauncher`라 run이
    **daemon in-process 서브프로세스**로 돌아 daemon 서비스 env로 커버된다. 향후
    `DockerRunLauncher` 등 별도 컨테이너로 바꾸면 그 컨테이너 env에도 추가해야 한다.

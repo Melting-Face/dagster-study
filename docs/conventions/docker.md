@@ -113,7 +113,7 @@ services:
 
 ### 1-6. 옵션 기능은 `profiles`로 분리 (뼈대 = 항상, 부가기능 = opt-in)
 
-핵심 서비스(뼈대)와 부가기능(모니터링·봇 등)을 **한 파일**에서 관리하되, 부가기능은
+핵심 서비스(뼈대)와 부가기능(모니터링 등)을 **한 파일**에서 관리하되, 부가기능은
 `profiles`로 태그해 기본 `up`에서 제외한다(적은 파일로 파악 — 파일 분할 없이 토글).
 
 ```yaml
@@ -121,17 +121,15 @@ services:
   trino: {}                      # 뼈대: profile 없음 → 항상 실행
   prometheus:
     profiles: ["monitoring"]     # 옵션: --profile monitoring 일 때만 기동
-  discord-bot:
-    profiles: ["bot"]
 ```
 
 - **뼈대(core)**: `dagster-webserver`·`dagster-daemon`·`postgres`·`trino`·`seaweedfs` — profile 없음.
-- **옵션**: `prometheus`(`monitoring`)·`discord-bot`(`bot`).
+- **옵션**: `prometheus`(`monitoring`).
 
 ```bash
 docker compose up -d                        # 뼈대만
 docker compose --profile monitoring up -d   # 뼈대 + 모니터링
-COMPOSE_PROFILES=monitoring,bot docker compose up -d   # 여러 프로필 고정
+COMPOSE_PROFILES=monitoring docker compose up -d   # 프로필 고정
 ```
 
 > `profiles`를 붙인 서비스를 **의존**(`depends_on`)하는 뼈대 서비스가 없어야 한다(있으면 기본 기동이 깨진다).

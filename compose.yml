@@ -152,29 +152,6 @@ services:
         reservations:
           cpus: "0.25"
           memory: 512M
-  # Discord 봇(옵션): `--profile bot` 으로만 기동.
-  discord-bot:
-    <<: *docker-logging
-    container_name: discord-bot
-    profiles: ["bot"]
-    build:
-      context: discord-py/dockerfile.d/
-    environment:
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      # Ollama Cloud(ollama.com) 연동 설정
-      - OLLAMA_HOST=${OLLAMA_HOST}
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
-      - OLLAMA_MODEL=${OLLAMA_MODEL}
-    restart: unless-stopped
-    # 경량 Python 봇: 추론은 ollama 클라우드에 위임, 네트워크 위주의 작은 풋프린트
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
   # 모니터링(옵션): `--profile monitoring` 으로만 기동. 뼈대(core)는 profile 없음 → 항상 실행.
   prometheus:
     <<: *docker-logging

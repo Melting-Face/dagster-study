@@ -104,7 +104,7 @@ gitlint `contrib-title-conventional-commits` 룰로 강제한다(루트 `.gitlin
 | `del` | `refactor`(코드 정리) 또는 `chore` |
 
 ```text
-feat: discord 봇 Ollama Cloud 연동 추가
+feat(dagster): Iceberg 컴팩션 op 추가(Trino optimize)
 refactor: DuckDB→Trino 전환, SeaweedFS standalone 및 dlt·bronze 리셋
 chore: ruff·gitlint 등 린터 설정 추가
 docs: 코딩 규칙 문서 추가

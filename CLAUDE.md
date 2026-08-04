@@ -107,7 +107,7 @@
   `.env`→`compose.yml`(공용 앵커 `x-dagster-common`)→코드 **전파 체인**을 확인한다.
   Iceberg snapshot·로그 보존 정책 포함 [`docs/operations.md`](docs/operations.md).
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
-  전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링·봇)은 `profiles`로 분리**(뼈대는 profile
+  전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링)은 `profiles`로 분리**(뼈대는 profile
   없이 항상 실행, `--profile <name>`으로 opt-in). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
   K8s 이행 규칙(도입 시)은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md).
 - **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s)을 **프로젝트 결정 관점**(채택 이유·

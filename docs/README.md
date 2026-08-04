@@ -30,6 +30,7 @@
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg |
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
+| [테스트](test.md)                   | 테스트 계층(피라미드)·우선순위, dbt 스키마/단위/singular·Dagster pytest·스모크 |
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |
 | [Kubernetes](conventions/k8s.md)    | (도입 시) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm |
 

@@ -95,6 +95,13 @@
   일반 경로(`pa.Table` 반환)는 `context.add_output_metadata(...)`, 대용량 경로는
   `MaterializeResult(metadata=...)`. 상세 [`docs/conventions/dagster.md`](docs/conventions/dagster.md).
 
+## 테스트 컨벤션
+
+- 테스트는 **계층별 우선순위**로 채운다: dbt 스키마 테스트 → 통합·스모크(`dg check`·`dbt build`)
+  → dbt 단위 테스트 → Dagster 에셋 pytest → dbt singular. **비용 대비 회귀 방어가 큰 순서**.
+- dbt 테스트는 모델 옆 `schema.yml`(`data_tests:`/`unit_tests:`), Dagster 테스트는 `src/tests/`(`pytest`).
+  **단위 테스트는 실인프라(SeaweedFS·Trino) 미접속**(격리·재현). 상세·예시는 [`docs/test.md`](docs/test.md).
+
 ## 타임존 정책
 
 - **저장은 UTC**(Iceberg·Postgres), **표시·스케줄은 KST**(`Asia/Seoul`).

@@ -406,6 +406,7 @@ dagster-postgres == 0.28.12
 ## 테스트
 
 - 테스트는 [`pytest`](https://docs.pytest.org/)로 작성하고 `tests/` 하위에 둔다.
+- 테스트 전략 전반(계층·우선순위·Dagster 에셋 테스트 패턴)은 [`../test.md`](../test.md) 참고.
 
 ## 참고
 

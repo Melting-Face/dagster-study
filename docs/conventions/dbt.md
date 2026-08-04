@@ -173,6 +173,9 @@ select * from {{ source('eicu', 'patient') }}
 
 ## 테스트 (필수)
 
+> 파이프라인 전체 테스트 전략(계층·우선순위·무엇에 테스트를 다는지)은 [`../test.md`](../test.md)가 단일 출처.
+> 여기서는 dbt 스키마 테스트의 dbt 측 규약만 다룬다.
+
 - 핵심 모델에는 스키마 테스트를 단다: `unique`, `not_null`, `relationships`, `accepted_values`.
 - 추가 검증은 설치된 패키지 활용:
   - [`dbt_utils`](https://github.com/dbt-labs/dbt-utils) `1.3.3`

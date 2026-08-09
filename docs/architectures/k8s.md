@@ -8,9 +8,14 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 
 - 최신 안정: **v1.36**(2026-06). N-2 지원(최근 3개 마이너에 유지보수 제공).
 
-## 이 프로젝트에서의 위치 — 🔎 향후 배포 옵션
+## 이 프로젝트에서의 위치 — 🚧 채택·이행중(PoC 게이트)
 
-- **현재 미채택**: 단일 호스트 compose로 충분하다(학습·개발). K8s의 다중 노드 복잡도는 YAGNI.
+- **채택 방향**: 확장성/성능 한계 극복 + 학습·포트폴리오를 위해 **컴퓨트·데이터 서비스를 K8s로 이전**한다.
+  단, **Dagster는 호스트 PC**(컨트롤 플레인)에 남기고 클러스터를 **원격 컴퓨트**로 트리거한다(오케스트레이터↔컴퓨트 분리).
+  전면 이행은 **PoC 성공을 전제**로 단계적으로 진행한다. 전체 로드맵은 [../redesign.md](../redesign.md).
+- **로컬 배포판**: **kind on Podman(rootful)** + 로컬 레지스트리. 호스트 Dagster는 kubeconfig로 클러스터 API에 접근한다.
+- **핵심 컴포넌트**: **Spark Operator**(배치)·**Flink Operator**(스트림)로 `SparkApplication`·`FlinkDeployment`(CRD) 실행,
+  Redpanda·SeaweedFS·카탈로그 Postgres를 K8s에 배포한다(**Trino 제거**). Iceberg 테이블은 Spark·Flink가 공유한다.
 - **이행 기준(언제 K8s로)**: 다중 노드 스케일아웃, 무중단 배포, 오토스케일(HPA), 팀 다중 환경, SLA 요구.
 - **compose → Kubernetes 매핑**:
 
@@ -26,14 +31,21 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 
 - 배포·보안 **규칙**은 [conventions/k8s.md](../conventions/k8s.md).
 
-## 운영 메모 (도입 시)
+## 운영 메모 (이행)
 
 - 패키징은 **Helm 차트**(값 분리·환경별 오버라이드). 이미지 태그 고정(`latest` 금지).
-- 상태 저장(Postgres·SeaweedFS)은 `StatefulSet`+PVC. Dagster는 `dagster-k8s`의 run launcher로
-  run을 파드로 실행할 수 있다.
+- 상태 저장(Postgres·SeaweedFS)은 `StatefulSet`+PVC.
+- **Spark 실행**: Kubeflow **Spark Operator**를 Helm으로 설치(`ns=spark-operator`), Dagster 자산이
+  `PipesK8sClient`로 `SparkApplication`(CRD)을 제출·폴링한다. 규칙은 [../conventions/k8s.md](../conventions/k8s.md) §9~11.
+- **Dagster 위치 주의**: 본 프로젝트는 Dagster를 **호스트에 유지**한다. `dagster-k8s`의 `K8sRunLauncher`는
+  Dagster를 **클러스터 내부에 배포**할 때 run을 파드로 실행하는 옵션으로, 본 토폴로지의 Spark 트리거 수단이
+  아니다(후속 비교 과제, [../redesign.md](../redesign.md) Phase 4).
 
 ## 참고
 
 - Kubernetes 문서: https://kubernetes.io/docs/home/
 - 릴리스: https://kubernetes.io/releases/
 - dagster-k8s: https://docs.dagster.io/deployment/oss/deployment-options/kubernetes
+- Kubeflow Spark Operator: https://www.kubeflow.org/docs/components/spark-operator/
+- Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
+- kind(로컬 K8s, Podman provider): https://kind.sigs.k8s.io/

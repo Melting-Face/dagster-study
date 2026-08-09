@@ -7,11 +7,13 @@
 
 ### 아키텍처 ([architectures/](architectures/README.md))
 
-기술별 **개요 + 프로젝트 결정 관점**(채택 이유·대안 비교). 채택 ✅ / 미채택·향후 🔎.
+기술별 **개요 + 프로젝트 결정 관점**(채택 이유·대안 비교). 채택 ✅ / 채택·이행중 🚧 / 미채택·향후 🔎.
 
-- [전체 아키텍처 / 데이터 흐름](architectures/overview.md) — ✅ Dagster · dbt · Trino · Iceberg · SeaweedFS 스택과 레이크하우스 구조, **bronze 적재 템플릿(S3→Iceberg)**
-- [Trino](architectures/trino.md) ✅ · [Docker/Compose](architectures/docker.md) ✅ — 현행 채택 기술
-- [Spark](architectures/spark.md) 🔎 · [Flink](architectures/flink.md) 🔎 · [Kubernetes](architectures/k8s.md) 🔎 — 미채택·향후 검토
+- **[재설계 로드맵](redesign.md) 🚧 — 호스트 Dagster + K8s(kind on Podman)로의 이행. 컴퓨트=Spark(배치)+Flink(스트림), Trino 제거·dbt→dbt-spark. 목표 토폴로지·급소·자원(6/16 시분할)·PoC 우선 PDCA**
+- [전체 아키텍처 / 데이터 흐름](architectures/overview.md) — ✅ 현행 Dagster · dbt · Trino · Iceberg · SeaweedFS 스택, **bronze 적재 템플릿(S3→Iceberg)**
+- [Docker/Compose](architectures/docker.md) ✅ — 현행 채택
+- [Spark](architectures/spark.md) 🚧 · [Flink](architectures/flink.md) 🚧 · [Kubernetes](architectures/k8s.md) 🚧 — 재설계로 이행중
+- [Trino](architectures/trino.md) 🔎 — 현행까지 채택, 재설계로 제거
 
 ### 데이터셋
 
@@ -32,7 +34,7 @@
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
 | [테스트](test.md)                   | 테스트 계층(피라미드)·우선순위, dbt 스키마/단위/singular·Dagster pytest·스모크 |
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |
-| [Kubernetes](conventions/k8s.md)    | (도입 시) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm |
+| [Kubernetes](conventions/k8s.md)    | (이행) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm + **Spark/Flink Operator·호스트 Dagster 트리거(Pipes)·kind on Podman/레지스트리·컴퓨트 시분할** |
 
 ### 운영 (operations)
 

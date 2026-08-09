@@ -6,6 +6,63 @@
 > 조정 지점은 이 문서에서 한곳으로 관리하고, `compose.yml`의 `deploy.resources`와
 > 각 서비스 설정 파일을 함께 맞춘다. (단순함·명시적 — [philosophy.md](philosophy.md))
 
+> **문서 구성**: 아래 "Kubernetes 재설계 시나리오"는 **목표(이행) 배분**([redesign.md](redesign.md)),
+> 그 이후 섹션(Trino·Dagster·Postgres…)은 **현행 compose 배분**이다. Trino는 재설계에서 제거되므로
+> Trino 섹션은 이행 완료 시 레거시 참조가 된다.
+
+## Kubernetes 재설계 시나리오 (kind + Podman · 6 CPU / 16 GB) 🚧
+
+> 대상: [redesign.md](redesign.md)의 목표 토폴로지. **Dagster는 호스트**(이 예산 밖), 컴퓨트·데이터
+> 서비스만 로컬 K8s(kind on Podman)에 둔다. 컴퓨트는 **Spark(배치) / Flink(스트리밍)** 2엔진이며 **시분할** 한다.
+
+### (A) podman machine(VM) 예산 = 6 CPU / 16 GB / disk 120 GB
+
+```bash
+# macOS(Apple Silicon): 자원은 머신 생성 시 확정(사후 변경은 재생성 필요), kind는 rootful 요구
+podman machine init dagster-k8s --rootful --cpus 6 --memory 16384 --disk-size 120
+podman machine start dagster-k8s
+export KIND_EXPERIMENTAL_PROVIDER=podman
+kind create cluster --name lakehouse --config kind-cluster.yaml
+```
+
+- **호스트 headroom(중요)**: 16 GB는 VM에 통째 할당된다. Dagster(webserver+daemon+메타 Postgres)가
+  **호스트**에서 도므로 **호스트 총 RAM ≥ 24 GB(권장 32 GB)**. 미달 시 VM 메모리를 낮춘다.
+- **disk 120 GB**: SeaweedFS(원천 csv.gz + Iceberg parquet) + Redpanda 로그 + 이미지 레이어 대비.
+
+### (B) 컴포넌트 배분 (requests / limits) — 2엔진 시분할
+
+원칙: **Σrequests ≤ 할당가능(≈5.5 CPU / ~14 GiB)**. **BATCH(Spark)와 STREAM(Flink)은 동시 실행 금지**
+(동시 피크 ≈ 6.85 CPU로 초과). 한 번에 한 엔진만 띄운다.
+
+| 구분 | 워크로드 | req CPU | req Mem | lim CPU | lim Mem |
+| --- | --- | --- | --- | --- | --- |
+| **상주(baseline)** | kube-system(kind CP·CNI·coredns·local-path) | 0.5 | 1.5Gi | — | — |
+| | Spark Operator | 100m | 256Mi | 250m | 512Mi |
+| | Flink Operator | 200m | 512Mi | 500m | 1Gi |
+| | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
+| | Catalog Postgres(Iceberg JDBC) | 250m | 384Mi | 500m | 512Mi |
+| | **상주 소계** | **~1.35** | **~3.4Gi** | | |
+| **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
+| | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
+| | **BATCH 피크(상주+Spark)** | **~4.35** | **~8.4Gi** | | ✅ 6/16 내 |
+| **STREAM(일시)** | Redpanda(dev, 1 broker) | 500m | 1.5Gi | 1 | 2Gi |
+| | Flink JobManager | 1 | 1.5Gi | 1 | 2Gi |
+| | Flink TaskManager × 1(2 slot) | 1 | 2Gi | 1 | 2.5Gi |
+| | **STREAM 피크(상주+Flink)** | **~3.85** | **~8.4Gi** | | ✅ 6/16 내 |
+
+### (C) 운영 다이얼 (초과 시 조절 순서)
+
+1. **★★★★★ 엔진 시분할** — BATCH(Spark)·STREAM(Flink)을 **번갈아** 실행. 대기 엔진 파드는 0으로.
+2. **★★★★☆ Spark executor 수/크기** — 기본 `2 × (1core/2Gi)`. 대용량 인제스트 시 조절.
+3. **★★★★☆ Flink TaskManager slot/개수** — 스트리밍 병렬도. 기본 TM 1개(2 slot).
+4. **★★★☆☆ Redpanda dev 모드 메모리** — `--memory`/`--smp`로 축소, 데모 후 스케일 0.
+
+### (D) 참고 수치 근거
+
+- Flink Operator FlinkDeployment 예시: JobManager/TaskManager 각 `memory 2048m / cpu 1`(권장 예시값)
+  [Apache Flink Kubernetes Operator — custom-resource/overview].
+- podman machine 기본 1 CPU / 2048 MiB → 반드시 상향 지정 [podman-machine-init — Podman docs].
+
 ## 조정 지점 요약
 
 | 서비스      | 핵심 조정 항목                                            | 위치                                              |
@@ -168,3 +225,6 @@ Dagster 메타데이터 + Iceberg JDBC 카탈로그를 함께 담는다. 접속�
 - PostgreSQL — Resource Consumption: https://www.postgresql.org/docs/current/runtime-config-resource.html
 - Docker Compose — deploy.resources: https://docs.docker.com/reference/compose-file/deploy/#resources
 - SeaweedFS — wiki: https://github.com/seaweedfs/seaweedfs/wiki
+- Apache Flink Kubernetes Operator — 리소스 설정: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/docs/custom-resource/overview/
+- podman machine init(자원 지정): https://docs.podman.io/en/latest/markdown/podman-machine-init.1.html
+- kind — Podman provider: https://kind.sigs.k8s.io/docs/user/rootless/

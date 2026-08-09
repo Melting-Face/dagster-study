@@ -7,18 +7,25 @@ Trino는 **MPP(대규모 병렬 처리) 분산 SQL 쿼리 엔진**이다. 데이
 coordinator가 SQL을 분해해 worker들에 분산하고, 메모리 기반 파이프라인으로 배치 SQL을
 빠르게 처리한다.
 
-## 이 프로젝트에서의 위치 — ✅ 채택
+## 이 프로젝트에서의 위치 — 🔎 재설계로 제거(현행 compose까지 채택)
 
-- **역할**: dbt(`dbt-trino`)가 접속하는 쿼리 엔진. Iceberg 테이블을 읽고 써서 silver 모델을 만든다.
-- **채택 이유**:
+> **상태 변경**: 현행 compose 스택에서는 ✅ 채택이었으나, [재설계](../redesign.md)에서 **제거**한다.
+> dbt는 **`dbt-spark`** 로 이관하고, ad-hoc 조회는 **Spark SQL**로 대체한다.
+
+- **(현행) 역할**: dbt(`dbt-trino`)가 접속하는 쿼리 엔진. Iceberg 테이블을 읽고 써서 silver 모델을 만든다.
+- **(현행) 채택 이유**:
   - **Iceberg JDBC 카탈로그 공유** — Trino와 Dagster(pyiceberg)가 **같은 Postgres `iceberg_catalog`** 를
     재사용한다(별도 메타스토어 불필요, [overview.md](overview.md)).
   - **dbt 친화** — `dbt-trino` 어댑터로 SQL 변환을 선언적으로 관리.
   - **경량 SQL 전용** — 배치 SQL 변환이 주 워크로드라 범용 엔진(Spark)보다 단순(YAGNI).
-- **Spark 대비**: Trino=SQL 쿼리·연합·무상태(낮은 오버헤드) / Spark=범용 처리(코드 기반 변환·ML·대규모 셔플).
-  현재 워크로드(csv→Iceberg 적재 후 SQL 변환)엔 Trino가 적합. 대규모 rewrite/compaction·ML은 [spark.md](spark.md) 검토.
+- **제거 이유·트레이드오프**: 재설계에서 컴퓨트를 **Spark(배치)+Flink(스트림)** 2엔진으로 통일하며 Trino를 뺀다.
+  단일 PC 자원(6/16) 절약과 엔진 수 축소가 목적이나, **성숙한 인터랙티브 SQL·`dbt-trino`를 잃는 비용**을 감수한다
+  ([redesign.md](../redesign.md) §5). 배치 SQL은 dbt-spark, 대규모 rewrite/compaction은 Spark로 이관([spark.md](spark.md)).
 
-## 운영 메모
+## 운영 메모 (현행 compose 한정)
+
+> 재설계 이행 완료 시 아래는 레거시 참조가 된다. 유지보수 프로시저(`rewrite_data_files`·`remove_orphan_files`)는
+> Trino `ALTER TABLE ... EXECUTE`에서 **Spark 프로시저**로 이관한다([spark.md](spark.md)).
 
 - **JVM 기반** — 힙이 메모리 최다 소비. `trino/etc/jvm.config`의 `Xmx`를 호스트 한도 내로 유지
   ([resource-sizing.md](../resource-sizing.md)의 "3파일 메모리 제약").

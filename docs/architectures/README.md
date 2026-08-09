@@ -1,18 +1,20 @@
 # 아키텍처 문서 (architectures)
 
 이 프로젝트의 전체 스택과, 각 처리·배포 기술을 **프로젝트 결정 관점**으로 정리한다.
-현재 채택한 기술은 ✅, 미채택(참고·향후 검토)은 🔎로 표기한다.
+채택 ✅ / 채택·이행중(PoC 게이트) 🚧 / 미채택(참고·향후 검토) 🔎로 표기한다.
+
+> **재설계 진행중**: 호스트 Dagster + K8s(Spark Operator)로의 이행 로드맵은 [../redesign.md](../redesign.md).
 
 ## 목차
 
 | 문서 | 상태 | 내용 |
 | --- | --- | --- |
 | [overview.md](overview.md) | ✅ | 현행 전체 스택·데이터 흐름(Dagster·dbt·Trino·Iceberg·SeaweedFS) |
-| [trino.md](trino.md) | ✅ | MPP SQL 쿼리 엔진(채택) |
 | [docker.md](docker.md) | ✅ | 컨테이너·compose 배포(채택) |
-| [spark.md](spark.md) | 🔎 | 범용 분산 처리(미채택) |
-| [flink.md](flink.md) | 🔎 | 스트림 처리(미채택) |
-| [k8s.md](k8s.md) | 🔎 | 컨테이너 오케스트레이션(향후 배포 옵션) |
+| [spark.md](spark.md) | 🚧 | 배치 엔진 — 대용량 인제스트 + dbt-spark 마트 + 유지보수(이행중) |
+| [flink.md](flink.md) | 🚧 | 스트림 엔진 — 실시간 Sepsis-3 조기경보(이행중) |
+| [k8s.md](k8s.md) | 🚧 | 컨테이너 오케스트레이션 — 컴퓨트·데이터 서비스 이전(이행중) |
+| [trino.md](trino.md) | 🔎 | MPP SQL 엔진 — 현행 compose까지 채택, **재설계로 제거**(dbt→dbt-spark) |
 
 ## 각 문서 형식
 

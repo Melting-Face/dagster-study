@@ -1,0 +1,22 @@
+# PySpark + Iceberg + S3(SeaweedFS) 러너 이미지 (PoC Phase 0)
+# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:poc k8s/spark
+FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
+
+# 버전 핀(빌드 인자로 override 가능)
+ARG ICEBERG_VERSION=1.6.1
+ARG SCALA_BINARY=2.12
+ARG POSTGRES_JDBC_VERSION=42.7.4
+
+USER root
+
+# Iceberg Spark 런타임 + AWS 번들(S3FileIO용 AWS SDK v2 포함) + Postgres JDBC(카탈로그 접속)
+RUN set -eux; \
+    cd /opt/spark/jars; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_${SCALA_BINARY}/${ICEBERG_VERSION}/iceberg-spark-runtime-3.5_${SCALA_BINARY}-${ICEBERG_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"
+
+# 잡 스크립트 배치
+COPY poc_ingest.py /opt/spark/work-dir/poc_ingest.py
+
+USER spark

@@ -1,0 +1,50 @@
+# SparkApplication(Kubeflow Spark Operator) — PoC 인제스트 잡
+# 크리덴셜은 Secret(lakehouse-creds)에서 env로 주입(CRD 평문 노출 금지)
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+    name: poc-ingest
+    namespace: default
+spec:
+    type: Python
+    pythonVersion: "3"
+    mode: cluster
+    image: localhost:5001/spark-runner:poc
+    imagePullPolicy: Always
+    mainApplicationFile: local:///opt/spark/work-dir/poc_ingest.py
+    sparkVersion: 3.5.9
+    restartPolicy:
+        type: Never
+    driver:
+        cores: 1
+        memory: 1024m
+        serviceAccount: spark-operator-spark
+        env: &creds
+            - name: ICEBERG_JDBC_URI
+              value: jdbc:postgresql://catalog-postgres:5432/iceberg
+            - name: ICEBERG_WAREHOUSE
+              value: s3://warehouse
+            - name: S3_ENDPOINT
+              value: http://seaweedfs:8333
+            # AWS SDK v2(S3FileIO)는 region 필수 — SeaweedFS는 무시하나 값이 있어야 client가 뜬다
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: PG_USER
+              valueFrom:
+                  secretKeyRef: {name: lakehouse-creds, key: pg-user}
+            - name: PG_PASSWORD
+              valueFrom:
+                  secretKeyRef: {name: lakehouse-creds, key: pg-password}
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                  secretKeyRef: {name: lakehouse-creds, key: s3-access-key}
+            - name: S3_SECRET_KEY
+              valueFrom:
+                  secretKeyRef: {name: lakehouse-creds, key: s3-secret-key}
+    executor:
+        cores: 1
+        instances: 1
+        memory: 1024m
+        env: *creds

@@ -26,6 +26,7 @@ repos:
       - id: check-added-large-files
       - id: check-toml
       - id: check-yaml
+        args: [--allow-multiple-documents]  # k8s 매니페스트(--- 다중 문서) 허용
 
   # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff])
   - repo: https://github.com/astral-sh/ruff-pre-commit

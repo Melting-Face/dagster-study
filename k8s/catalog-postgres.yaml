@@ -1,0 +1,52 @@
+# Iceberg JDBC 카탈로그용 Postgres — PoC 최소 구성(데이터는 emptyDir, 재시작 시 소멸)
+# 접속 크리덴셜은 Secret(lakehouse-creds) 참조 — 하드코딩 금지
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: catalog-postgres
+    namespace: default
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: catalog-postgres
+    template:
+        metadata:
+            labels:
+                app: catalog-postgres
+        spec:
+            containers:
+                - name: postgres
+                  image: postgres:16.4
+                  env:
+                      - name: POSTGRES_DB
+                        value: iceberg
+                      - name: POSTGRES_USER
+                        valueFrom:
+                            secretKeyRef: {name: lakehouse-creds, key: pg-user}
+                      - name: POSTGRES_PASSWORD
+                        valueFrom:
+                            secretKeyRef: {name: lakehouse-creds, key: pg-password}
+                      - name: PGDATA
+                        value: /var/lib/postgresql/data/pgdata
+                  ports:
+                      - {containerPort: 5432, name: postgres}
+                  volumeMounts:
+                      - {name: data, mountPath: /var/lib/postgresql/data}
+                  resources:
+                      requests: {cpu: 250m, memory: 384Mi}
+                      limits: {cpu: 500m, memory: 512Mi}
+            volumes:
+                - name: data
+                  emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: catalog-postgres
+    namespace: default
+spec:
+    selector:
+        app: catalog-postgres
+    ports:
+        - {name: postgres, port: 5432, targetPort: 5432}

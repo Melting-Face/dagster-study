@@ -1,0 +1,13 @@
+# kind 클러스터 (로컬 K8s, Podman provider) — 재설계 PoC Phase 0
+# 로컬 레지스트리 localhost:5001을 호스트·클러스터 공통 이름으로 사용
+# (certs.d config_path 방식 — k8s-up.sh가 각 노드에 hosts.toml 주입)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: lakehouse
+containerdConfigPatches:
+    - |-
+        [plugins."io.containerd.grpc.v1.cri".registry]
+            config_path = "/etc/containerd/certs.d"
+nodes:
+    # PoC는 단일 노드. executor 스케줄 확인이 필요하면 worker role 노드를 추가한다.
+    - role: control-plane

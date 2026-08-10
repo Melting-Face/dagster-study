@@ -91,8 +91,9 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 
 - **Plan**: kind(on Podman) 클러스터 + Spark Operator(Helm) 위에, 최소 SparkApplication을 **Dagster 자산이
   `PipesK8sClient`로 제출**하고 Iceberg 테이블에 write까지 성공시킨다.
-- **Do**: ① podman machine(rootful,6/16) + kind + 로컬 레지스트리 ② Spark Operator Helm 설치
-  ③ PySpark+Iceberg 러너 이미지 빌드·push ④ SeaweedFS/카탈로그 Postgres 최소 기동 ⑤ Dagster 자산에서 CRD 제출·폴링.
+- **Do**: ① `scripts/k8s-up.sh`(podman machine rootful 6/16 + kind + 로컬 레지스트리, config는 `k8s/kind-cluster.yaml`)
+  ② `scripts/k8s-operators.sh`(Spark Operator Helm; Flink는 `INSTALL_FLINK=true`) ③ PySpark+Iceberg 러너 이미지 빌드·push
+  ④ SeaweedFS/카탈로그 Postgres 최소 기동 ⑤ Dagster 자산에서 CRD 제출·폴링. 정리는 `scripts/k8s-down.sh`.
 - **Check(성공 게이트)**: Iceberg 테이블 1개가 Spark로 append되고 **Spark SQL로 조회**되며, Dagster UI에
   로그·materialization이 회수된다.
 - **Act**: 검증된 최소 골격을 리소스(`SparkOperatorResource`)·러너 이미지 규격으로 확정.

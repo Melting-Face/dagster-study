@@ -13,21 +13,42 @@ REGISTRY_DIR="/etc/containerd/certs.d/localhost:${REGISTRY_PORT}"
 
 require_cli podman kind kubectl
 
-# 1) podman machine (rootful, 6/16/120) — Apple Silicon은 생성 시 자원 확정
-if ! podman machine inspect "${MACHINE_NAME}" >/dev/null 2>&1; then
-    log "podman machine 생성: ${MACHINE_NAME} (cpus=${MACHINE_CPUS}, mem=${MACHINE_MEMORY_MIB}MiB, disk=${MACHINE_DISK_GIB}GiB, rootful)"
-    podman machine init "${MACHINE_NAME}" \
-        --rootful \
-        --cpus "${MACHINE_CPUS}" \
-        --memory "${MACHINE_MEMORY_MIB}" \
-        --disk-size "${MACHINE_DISK_GIB}"
-else
-    log "podman machine 존재: ${MACHINE_NAME} (자원 변경은 재생성 필요 — Apple Silicon applehv)"
-fi
+# 1) podman machine — macOS podman은 동시 1개 VM만 활성.
+#    이미 실행 중인 머신이 있으면 재사용(비파괴적). 전용 머신을 강제하려면 MANAGE_MACHINE=true.
+RUNNING_MACHINE=""
+for m in $(podman machine list -q 2>/dev/null); do
+    if [ "$(podman machine inspect "${m}" --format '{{.State}}' 2>/dev/null)" = "running" ]; then
+        RUNNING_MACHINE="${m}"
+        break
+    fi
+done
 
-if [ "$(podman machine inspect "${MACHINE_NAME}" --format '{{.State}}' 2>/dev/null)" != "running" ]; then
-    log "podman machine 시작: ${MACHINE_NAME}"
-    podman machine start "${MACHINE_NAME}"
+if [ -n "${RUNNING_MACHINE}" ] && [ "${MANAGE_MACHINE:-false}" != "true" ]; then
+    ROOTFUL="$(podman machine inspect "${RUNNING_MACHINE}" --format '{{.Rootful}}' 2>/dev/null)"
+    log "실행 중 podman machine 재사용: ${RUNNING_MACHINE} (rootful=${ROOTFUL})"
+    if [ "${ROOTFUL}" != "true" ]; then
+        printf 'kind(Podman provider)는 rootful 머신이 필요하나 재사용 머신이 rootless입니다.\n' >&2
+        printf 'podman machine set --rootful 후 재시작하거나, MANAGE_MACHINE=true로 전용 머신(%s)을 쓰세요.\n' "${MACHINE_NAME}" >&2
+        exit 1
+    fi
+else
+    # 전용 머신 경로 (실행 중 머신이 없거나 MANAGE_MACHINE=true) — Apple Silicon은 생성 시 자원 확정
+    if ! podman machine inspect "${MACHINE_NAME}" >/dev/null 2>&1; then
+        log "podman machine 생성: ${MACHINE_NAME} (cpus=${MACHINE_CPUS}, mem=${MACHINE_MEMORY_MIB}MiB, disk=${MACHINE_DISK_GIB}GiB, rootful)"
+        podman machine init "${MACHINE_NAME}" \
+            --rootful \
+            --cpus "${MACHINE_CPUS}" \
+            --memory "${MACHINE_MEMORY_MIB}" \
+            --disk-size "${MACHINE_DISK_GIB}"
+    fi
+    if [ -n "${RUNNING_MACHINE}" ] && [ "${RUNNING_MACHINE}" != "${MACHINE_NAME}" ]; then
+        log "다른 머신 중지: ${RUNNING_MACHINE} (동시 1개 제약, MANAGE_MACHINE=true)"
+        podman machine stop "${RUNNING_MACHINE}"
+    fi
+    if [ "$(podman machine inspect "${MACHINE_NAME}" --format '{{.State}}' 2>/dev/null)" != "running" ]; then
+        log "podman machine 시작: ${MACHINE_NAME}"
+        podman machine start "${MACHINE_NAME}"
+    fi
 fi
 
 # 2) 로컬 레지스트리 컨테이너 (127.0.0.1:5001)

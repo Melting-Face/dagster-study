@@ -11,7 +11,8 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
 
 ## 이 프로젝트에서의 위치 — 🚧 채택·이행중(PoC 게이트)
 
-- **채택 방향**: 재설계로 **K8s의 Spark Operator**를 컴퓨트로 도입한다. 확장성 확보와 함께,
+- **채택 방향**: 재설계로 **K8s의 Apache Spark Operator**([apache/spark-kubernetes-operator](https://github.com/apache/spark-kubernetes-operator),
+  GA 1.0.0 2026-07-26)를 컴퓨트로 도입한다(Kubeflow spark-operator에서 이전). 확장성 확보와 함께,
   오케스트레이터↔원격 컴퓨트 분리를 시연하는 **학습/포트폴리오** 목적이다. 전체 로드맵은 [../redesign.md](../redesign.md).
 - **컴퓨트 분업(급소)**: Spark가 장식이 되지 않도록 역할을 분리한다.
   lineage는 **Spark(bronze·인제스트) → Iceberg → dbt-on-Trino(silver/gold)**.
@@ -24,8 +25,8 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
   - **Iceberg 유지보수를 Spark로**: Trino `optimize` 대신 `rewrite_data_files`·`remove_orphan_files`를 Spark 프로시저로 실행.
   - **(후속) ML/윈도우 피처** — SQL로 표현이 어려운 계층(PySpark).
   - **실시간 스트리밍은 Flink 담당** — 배치=Spark, 스트림=Flink로 역할 분리([flink.md](flink.md)).
-- **실행 방식**: 네이티브 `spark-submit`(명령형) 대신 **Spark Operator의 선언형 `SparkApplication`(CRD)** 을 쓴다.
-  오퍼레이터가 spark-submit을 대행하고 재시도·상태를 표면화해 GitOps/감사에 유리하다.
+- **실행 방식**: 네이티브 `spark-submit`(명령형) 대신 **선언형 `SparkApplication`(CRD, `spark.apache.org/v1`)** 을 쓴다.
+  오퍼레이터가 spark-submit을 대행하고 재시도·상태를 표면화해 GitOps/감사에 유리하다. 스펙은 `sparkConf` 중심이다([../conventions/k8s.md](../conventions/k8s.md) §9).
 - **Trino 대비**: Spark=범용·상태 있는 처리·코드 API / Trino=SQL 연합 쿼리·무상태·낮은 오버헤드([trino.md](trino.md)).
 
 ## 운영 메모 (이행)
@@ -68,6 +69,7 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
 
 - Spark 문서: https://spark.apache.org/docs/latest/
 - Spark 4.2.0 릴리스: https://spark.apache.org/releases/spark-release-4-2-0.html
+- Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/ · 릴리스: https://github.com/apache/spark-kubernetes-operator/releases
 - Iceberg + Spark: https://iceberg.apache.org/docs/latest/spark-getting-started/
 - Iceberg Spark 프로시저(`rewrite_data_files`): https://iceberg.apache.org/docs/latest/spark-procedures/
 - Trino Iceberg `optimize`(컴팩션): https://trino.io/docs/current/connector/iceberg.html

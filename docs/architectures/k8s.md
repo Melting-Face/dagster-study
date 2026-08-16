@@ -35,8 +35,8 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 
 - 패키징은 **Helm 차트**(값 분리·환경별 오버라이드). 이미지 태그 고정(`latest` 금지).
 - 상태 저장(Postgres·SeaweedFS)은 `StatefulSet`+PVC.
-- **Spark 실행**: Kubeflow **Spark Operator**를 Helm으로 설치(`ns=spark-operator`), Dagster 자산이
-  `PipesK8sClient`로 `SparkApplication`(CRD)을 제출·폴링한다. 규칙은 [../conventions/k8s.md](../conventions/k8s.md) §9~11.
+- **Spark 실행**: Apache 공식 **Spark Kubernetes Operator**(GA 1.0.0, Kubeflow에서 이전)를 Helm으로 설치(`ns=spark-operator`),
+  Dagster 자산이 `PipesK8sClient`로 `SparkApplication`(CRD, `spark.apache.org/v1`)을 제출·폴링한다. 규칙은 [../conventions/k8s.md](../conventions/k8s.md) §9~11.
 - **Dagster 위치 주의**: 본 프로젝트는 Dagster를 **호스트에 유지**한다. `dagster-k8s`의 `K8sRunLauncher`는
   Dagster를 **클러스터 내부에 배포**할 때 run을 파드로 실행하는 옵션으로, 본 토폴로지의 Spark 트리거 수단이
   아니다(후속 비교 과제, [../redesign.md](../redesign.md) Phase 4).
@@ -46,6 +46,6 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 - Kubernetes 문서: https://kubernetes.io/docs/home/
 - 릴리스: https://kubernetes.io/releases/
 - dagster-k8s: https://docs.dagster.io/deployment/oss/deployment-options/kubernetes
-- Kubeflow Spark Operator: https://www.kubeflow.org/docs/components/spark-operator/
+- Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/
 - Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
 - kind(로컬 K8s, Podman provider): https://kind.sigs.k8s.io/

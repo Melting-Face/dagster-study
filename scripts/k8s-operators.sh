@@ -12,23 +12,19 @@ require_cli helm kubectl
 
 kubectl config use-context "kind-${CLUSTER_NAME}"
 
-# 1) Spark Operator (Kubeflow) — SparkApplication CRD 제공
-# 자원값 근거: docs/resource-sizing.md "Kubernetes 재설계 시나리오"
-log "Spark Operator 설치 (ns=${SPARK_OPERATOR_NS}, ver=${SPARK_OPERATOR_CHART_VERSION})"
-helm repo add spark-operator https://kubeflow.github.io/spark-operator >/dev/null 2>&1 || true
+# 1) Spark Operator (Apache 공식) — SparkApplication CRD(spark.apache.org/v1) 제공
+#    Kubeflow spark-operator에서 이전. GA 1.0.0(2026-07-26).
+log "Spark Operator(Apache) 설치 (ns=${SPARK_OPERATOR_NS}, ver=${SPARK_OPERATOR_CHART_VERSION})"
+helm repo add "${SPARK_OPERATOR_REPO}" "${SPARK_OPERATOR_REPO_URL}" >/dev/null 2>&1 || true
 helm repo update >/dev/null
-helm upgrade --install spark-operator spark-operator/spark-operator \
+helm upgrade --install "${SPARK_OPERATOR_RELEASE}" "${SPARK_OPERATOR_REPO}/${SPARK_OPERATOR_CHART}" \
     --version "${SPARK_OPERATOR_CHART_VERSION}" \
     --namespace "${SPARK_OPERATOR_NS}" --create-namespace \
-    --set webhook.enable=true \
-    --set 'spark.jobNamespaces={default}' \
-    --set controller.resources.requests.cpu=100m \
-    --set controller.resources.requests.memory=256Mi \
-    --set controller.resources.limits.cpu=250m \
-    --set controller.resources.limits.memory=512Mi \
     --wait
-# 주의: 차트 버전에 따라 값 키가 다를 수 있음(구버전 sparkJobNamespaces).
-#       helm show values spark-operator/spark-operator --version <ver> 로 확인.
+# 주의: Apache 차트 values 키는 Kubeflow와 다르다(job 네임스페이스·컨트롤러 자원 한도 등).
+#       설치 대상 네임스페이스·컨트롤러 requests/limits는 아래로 확인 후 --set 추가한다
+#       (자원값 근거: docs/resource-sizing.md):
+#       helm show values "${SPARK_OPERATOR_REPO}/${SPARK_OPERATOR_CHART}" --version "${SPARK_OPERATOR_CHART_VERSION}"
 
 # 2) Flink Operator (선택) — FlinkDeployment CRD, webhook가 cert-manager 의존
 if [ "${INSTALL_FLINK}" = "true" ]; then

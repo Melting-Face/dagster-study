@@ -1,50 +1,54 @@
-# SparkApplication(Kubeflow Spark Operator) — PoC 인제스트 잡
-# 크리덴셜은 Secret(lakehouse-creds)에서 env로 주입(CRD 평문 노출 금지)
-apiVersion: sparkoperator.k8s.io/v1beta2
+# SparkApplication(Apache Spark K8s Operator) — PoC 인제스트 잡
+# Kubeflow(sparkoperator.k8s.io/v1beta2)에서 Apache 공식 오퍼레이터(spark.apache.org/v1, GA 1.0.0)로 이전.
+# Apache 오퍼레이터는 spark-submit 설정 기반이라 대부분을 sparkConf로 표현한다(구조적 driver/executor 블록 대신).
+# 크리덴셜은 Secret(lakehouse-creds)에서 env로 주입(CRD 평문 노출 금지) — spark.kubernetes.*.secretKeyRef 사용.
+#
+# TODO(검증 — 미검증 항목): 아래는 라이브 클러스터 배포 전 공식 예제/CRD로 확정한다.
+#   1) PySpark 진입점 필드명: 공식 예제(pi.yaml)는 Scala(mainClass+jars)만 제시. 파이썬 메인 파일
+#      지정 방식(pyFiles / mainApplicationFile 등)을 확인한다: https://apache.github.io/spark-kubernetes-operator/
+#   2) driver ServiceAccount 이름: Apache 차트가 생성하는 SA 이름 확인(pi.yaml 예제는 "spark").
+#   확정 전까지 이 매니페스트는 apply 대상이 아니라 "이전 초안"이다.
+apiVersion: spark.apache.org/v1
 kind: SparkApplication
 metadata:
     name: poc-ingest
     namespace: default
 spec:
-    type: Python
-    pythonVersion: "3"
-    mode: cluster
-    image: localhost:5001/spark-runner:poc
-    imagePullPolicy: Always
-    mainApplicationFile: local:///opt/spark/work-dir/poc_ingest.py
-    sparkVersion: 3.5.9
-    restartPolicy:
-        type: Never
-    driver:
-        cores: 1
-        memory: 1024m
-        serviceAccount: spark-operator-spark
-        env: &creds
-            - name: ICEBERG_JDBC_URI
-              value: jdbc:postgresql://catalog-postgres:5432/iceberg
-            - name: ICEBERG_WAREHOUSE
-              value: s3://warehouse
-            - name: S3_ENDPOINT
-              value: http://seaweedfs:8333
-            # AWS SDK v2(S3FileIO)는 region 필수 — SeaweedFS는 무시하나 값이 있어야 client가 뜬다
-            - name: AWS_REGION
-              value: us-east-1
-            - name: AWS_DEFAULT_REGION
-              value: us-east-1
-            - name: PG_USER
-              valueFrom:
-                  secretKeyRef: {name: lakehouse-creds, key: pg-user}
-            - name: PG_PASSWORD
-              valueFrom:
-                  secretKeyRef: {name: lakehouse-creds, key: pg-password}
-            - name: S3_ACCESS_KEY
-              valueFrom:
-                  secretKeyRef: {name: lakehouse-creds, key: s3-access-key}
-            - name: S3_SECRET_KEY
-              valueFrom:
-                  secretKeyRef: {name: lakehouse-creds, key: s3-secret-key}
-    executor:
-        cores: 1
-        instances: 1
-        memory: 1024m
-        env: *creds
+    runtimeVersions:
+        sparkVersion: "3.5.9"
+    # 파이썬 메인 파일 — 필드명 검증 필요(위 TODO 1)
+    pyFiles: "local:///opt/spark/work-dir/poc_ingest.py"
+    applicationTolerations:
+        resourceRetainPolicy: OnFailure
+    sparkConf:
+        # 러너 이미지(로컬 레지스트리, 호스트·클러스터 공통 이름)
+        spark.kubernetes.container.image: "localhost:5001/spark-runner:poc"
+        spark.kubernetes.container.image.pullPolicy: "Always"
+        spark.kubernetes.authenticate.driver.serviceAccountName: "spark"
+        # driver/executor 자원 (수치 근거: docs/resource-sizing.md)
+        spark.driver.cores: "1"
+        spark.driver.memory: "1024m"
+        spark.executor.instances: "1"
+        spark.executor.cores: "1"
+        spark.executor.memory: "1024m"
+        # 평문 env (driver: spark.kubernetes.driverEnv.* / executor: spark.executorEnv.*)
+        spark.kubernetes.driverEnv.ICEBERG_JDBC_URI: "jdbc:postgresql://catalog-postgres:5432/iceberg"
+        spark.kubernetes.driverEnv.ICEBERG_WAREHOUSE: "s3://warehouse"
+        spark.kubernetes.driverEnv.S3_ENDPOINT: "http://seaweedfs:8333"
+        # AWS SDK v2(S3FileIO)는 region 필수 — SeaweedFS는 무시하나 값이 있어야 client가 뜬다
+        spark.kubernetes.driverEnv.AWS_REGION: "us-east-1"
+        spark.kubernetes.driverEnv.AWS_DEFAULT_REGION: "us-east-1"
+        spark.executorEnv.ICEBERG_JDBC_URI: "jdbc:postgresql://catalog-postgres:5432/iceberg"
+        spark.executorEnv.ICEBERG_WAREHOUSE: "s3://warehouse"
+        spark.executorEnv.S3_ENDPOINT: "http://seaweedfs:8333"
+        spark.executorEnv.AWS_REGION: "us-east-1"
+        spark.executorEnv.AWS_DEFAULT_REGION: "us-east-1"
+        # Secret → env : spark.kubernetes.{driver,executor}.secretKeyRef.<ENV> = <secret>:<key>
+        spark.kubernetes.driver.secretKeyRef.PG_USER: "lakehouse-creds:pg-user"
+        spark.kubernetes.driver.secretKeyRef.PG_PASSWORD: "lakehouse-creds:pg-password"
+        spark.kubernetes.driver.secretKeyRef.S3_ACCESS_KEY: "lakehouse-creds:s3-access-key"
+        spark.kubernetes.driver.secretKeyRef.S3_SECRET_KEY: "lakehouse-creds:s3-secret-key"
+        spark.kubernetes.executor.secretKeyRef.PG_USER: "lakehouse-creds:pg-user"
+        spark.kubernetes.executor.secretKeyRef.PG_PASSWORD: "lakehouse-creds:pg-password"
+        spark.kubernetes.executor.secretKeyRef.S3_ACCESS_KEY: "lakehouse-creds:s3-access-key"
+        spark.kubernetes.executor.secretKeyRef.S3_SECRET_KEY: "lakehouse-creds:s3-secret-key"

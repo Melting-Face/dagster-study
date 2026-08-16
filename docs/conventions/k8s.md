@@ -64,14 +64,25 @@ resources:
 
 ## 9. Spark Operator·SparkApplication 규칙
 
-- **오퍼레이터**: Kubeflow **Spark Operator**를 Helm으로 `ns=spark-operator`에 설치한다. 오퍼레이터가
-  `spark-submit`을 대행하므로 자산은 명령형 submit 대신 **선언형 `SparkApplication`(CRD)** 을 제출한다.
+- **오퍼레이터**: Apache 공식 **Spark Kubernetes Operator**([apache/spark-kubernetes-operator](https://github.com/apache/spark-kubernetes-operator),
+  GA **1.0.0** 2026-07-26)를 Helm으로 `ns=spark-operator`에 설치한다. Kubeflow spark-operator에서 이전했다
+  (공식 생태계 무게중심 이동). 오퍼레이터가 `spark-submit`을 대행하므로 자산은 명령형 submit 대신
+  **선언형 `SparkApplication`(CRD)** 을 제출한다.
+- **CRD**: `apiVersion: spark.apache.org/v1`, `kind: SparkApplication`. Kubeflow(`sparkoperator.k8s.io/v1beta2`)와
+  **스펙이 다르다** — Apache는 **`spec.sparkConf` 중심**(spark-submit 설정 기반)이다.
+  - 이미지: `spark.kubernetes.container.image`
+  - Spark 런타임: `spec.runtimeVersions.sparkVersion`
+  - 자원: `spark.driver.{cores,memory}`·`spark.executor.{instances,cores,memory}`(§2 원칙, 수치는 [../resource-sizing.md](../resource-sizing.md))
+  - ServiceAccount: `spark.kubernetes.authenticate.driver.serviceAccountName`
+  - **Secret→env**: `spark.kubernetes.{driver,executor}.secretKeyRef.<ENV>=<secret>:<key>`(§4 비밀 참조, 평문 금지)
 - **버전 고정**: 오퍼레이터 차트/이미지와 Spark 런타임 태그는 **구체 버전으로 고정**한다(`latest` 금지, §4).
-  최신 릴리스는 설치 시점에 [releases](https://github.com/kubeflow/spark-operator/releases)에서 확인해 핀한다.
+  최신 릴리스는 설치 시점에 [releases](https://github.com/apache/spark-kubernetes-operator/releases)에서 확인해 핀한다.
 - **러너 이미지**: PySpark + `iceberg-spark-runtime` + S3A(하둡 aws) 의존을 포함한 **전용 이미지**를 빌드해
-  로컬 레지스트리에 push하고, `SparkApplication.spec.image`가 이를 참조한다(§10 이름 규칙 주의).
-- **자원**: driver/executor 각각 `cores`·`memory`를 명시한다(§2 원칙과 동일, 수치는 [../resource-sizing.md](../resource-sizing.md)).
-- **정기 실행**이 필요하면 `ScheduledSparkApplication`을 쓰되, 스케줄 주체는 원칙적으로 **Dagster(호스트)** 로 둔다(단일 오케스트레이션).
+  로컬 레지스트리에 push하고, `spark.kubernetes.container.image`가 이를 참조한다(§10 이름 규칙 주의).
+- **정기 실행**은 원칙적으로 **Dagster(호스트)** 가 주기적으로 `SparkApplication`을 제출한다(단일 오케스트레이션).
+- **주의(이전 중)**: Apache 오퍼레이터의 **PySpark 진입점 필드**와 Helm 차트 **values 키**는 Kubeflow와 달라
+  라이브 배포 전 [공식 문서](https://apache.github.io/spark-kubernetes-operator/)로 확정한다.
+  PoC 매니페스트 `k8s/spark/sparkapplication-poc.yaml`에 검증 TODO를 표기했다.
 
 ## 9-2. Flink Operator·FlinkDeployment 규칙 (스트리밍)
 
@@ -95,7 +106,7 @@ resources:
   안 컨테이너로 노드를 만든다. kind Podman provider는 experimental이라 **rootful 머신이 필수**이며,
   `export KIND_EXPERIMENTAL_PROVIDER=podman` 후 `kind create cluster` 한다. VM 자원(6/16)은 [../resource-sizing.md](../resource-sizing.md).
 - **로컬 레지스트리**: kind 공식 local-registry 방식을 쓴다 — containerd `config_path` 설정으로 **`localhost:5001`이
-  호스트·클러스터 내부 공통**으로 동작한다. `SparkApplication.spec.image` 등 매니페스트도 `localhost:5001/...` 로 참조한다.
+  호스트·클러스터 내부 공통**으로 동작한다. `spark.kubernetes.container.image` 등 매니페스트도 `localhost:5001/...` 로 참조한다.
   (참고: k3d는 내부/외부 이름이 달라 매니페스트에 내부 이름을 써야 하는 함정이 있으나, kind는 공통 이름으로 회피된다.)
 - **서비스 접근**: 호스트 → in-cluster 서비스는 `port-forward`(개발) 또는 `NodePort`/`Ingress`로 노출한다.
   Dagster 리소스(Trino·SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
@@ -118,7 +129,7 @@ resources:
 - Helm: https://helm.sh/docs/
 - dagster-k8s: https://docs.dagster.io/deployment/oss/deployment-options/kubernetes
 - Dagster Pipes / PipesK8sClient: https://docs.dagster.io/api/python-api/libraries/dagster-k8s
-- Kubeflow Spark Operator: https://www.kubeflow.org/docs/components/spark-operator/
+- Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/ · 릴리스: https://github.com/apache/spark-kubernetes-operator/releases
 - Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
 - kind Podman provider(rootless/rootful): https://kind.sigs.k8s.io/docs/user/rootless/
 - kind 로컬 레지스트리: https://kind.sigs.k8s.io/docs/user/local-registry/

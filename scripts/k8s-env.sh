@@ -15,10 +15,15 @@ REGISTRY_NAME="${REGISTRY_NAME:-kind-registry}"
 REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 REGISTRY_IMAGE="${REGISTRY_IMAGE:-docker.io/library/registry:2.8.3}"
 
-# --- 오퍼레이터 ---
+# --- Spark 오퍼레이터 (Apache 공식 — apache/spark-kubernetes-operator, GA 1.0.0 2026-07-26) ---
+# Kubeflow spark-operator에서 이전. CRD는 apiVersion: spark.apache.org/v1 (sparkConf 중심).
 SPARK_OPERATOR_NS="${SPARK_OPERATOR_NS:-spark-operator}"
-# 설치 전 최신 확인: helm search repo spark-operator/spark-operator --versions
-SPARK_OPERATOR_CHART_VERSION="${SPARK_OPERATOR_CHART_VERSION:-2.5.2}"
+SPARK_OPERATOR_RELEASE="${SPARK_OPERATOR_RELEASE:-spark-kubernetes-operator}"
+SPARK_OPERATOR_REPO="${SPARK_OPERATOR_REPO:-spark}"
+SPARK_OPERATOR_REPO_URL="${SPARK_OPERATOR_REPO_URL:-https://apache.github.io/spark-kubernetes-operator}"
+SPARK_OPERATOR_CHART="${SPARK_OPERATOR_CHART:-spark-kubernetes-operator}"
+# 설치 전 최신 확인: helm search repo spark/spark-kubernetes-operator --versions
+SPARK_OPERATOR_CHART_VERSION="${SPARK_OPERATOR_CHART_VERSION:-1.0.0}"
 
 INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-manager 의존)
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"

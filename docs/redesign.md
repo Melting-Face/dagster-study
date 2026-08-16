@@ -142,7 +142,7 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 
 ## 6. 참고 (공식 문서)
 
-- Kubeflow Spark Operator: https://www.kubeflow.org/docs/components/spark-operator/ · 릴리스: https://github.com/kubeflow/spark-operator/releases
+- Apache Spark Kubernetes Operator(GA 1.0.0, Kubeflow에서 이전): https://apache.github.io/spark-kubernetes-operator/ · 릴리스: https://github.com/apache/spark-kubernetes-operator/releases
 - Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
 - Dagster Pipes / dagster-k8s(PipesK8sClient): https://docs.dagster.io/api/python-api/libraries/dagster-k8s
 - Dagster & Spark: https://docs.dagster.io/integrations/libraries/spark

@@ -26,7 +26,7 @@
 
 ### 도구 (tooling)
 
-- [Claude Code 스킬](skills.md) — 프로젝트가 쓰는 Agent Skills 카탈로그(dagster-expert·dagster-integrations·dignified-python)와 사용 규칙(프로젝트 컨벤션 우선). 단일 출처: `skills-lock.json`
+- [Claude Code 스킬](skills.md) — Agent Skills 카탈로그: **잠긴 스킬**(skills-lock.json)과 **작업 유형별 매핑**(dbt·Spark·K8s·CI 등 런타임 제공 포함), 사용 규칙(프로젝트 컨벤션 우선)
 
 ### 코딩 규칙 (conventions)
 

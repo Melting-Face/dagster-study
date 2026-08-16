@@ -5,7 +5,10 @@
 
 > 전역 규칙(`~/.claude/CLAUDE.md`) *Preferences #4* — **관련 스킬이 있으면 사용한다.**
 
-## 설치된 스킬 (skills-lock.json)
+스킬은 두 부류다: **① 잠긴 스킬**(`skills-lock.json`에 고정·커밋 → 재현성)과
+**② 런타임 제공 스킬**(Claude Code 환경이 제공, lock 미고정 → 세션 가용성에 의존).
+
+## ① 잠긴 스킬 (skills-lock.json — 커밋·재현성)
 
 | 스킬 | 출처 | 언제 쓰나 |
 | --- | --- | --- |
@@ -15,12 +18,32 @@
 
 > `sourceType: github`, 각 스킬은 `computedHash`로 무결성을 고정한다(락 파일이 진실의 출처).
 
+## ② 작업 유형별 스킬 매핑 (런타임 제공 포함)
+
+이 프로젝트 스택에 대응하는 스킬. 🔒=잠긴 스킬, ⚙️=런타임 제공(lock 미고정).
+
+| 작업 영역 | 스킬 | 구분 |
+| --- | --- | --- |
+| Dagster 오케스트레이션·에셋 | `dagster-expert` · `dagster-integrations` | 🔒 |
+| Python 코드 품질 | `dignified-python`(프로젝트 컨벤션 우선) | 🔒 |
+| dbt 모델링·테스트·실행 | `using-dbt-for-analytics-engineering` · `adding-dbt-unit-test` · `running-dbt-commands` · `building-dbt-semantic-layer` · `troubleshooting-dbt-job-errors` · `fetching-dbt-docs` | ⚙️ |
+| Spark 배치·성능 튜닝 | `spark-engineer` · `spark-optimization` | ⚙️ |
+| SQL 성능 최적화 | `sql-optimization` | ⚙️ |
+| 분석·애드혹 질의 | `answering-natural-language-questions-with-dbt` · `duckdb` | ⚙️ |
+| 컨테이너·Compose | `docker-expert` | ⚙️ |
+| Kubernetes·k3s·Helm | `kubernetes-specialist` · `helm-chart-scaffolding` | ⚙️ |
+| CI/CD(GitHub Actions) | `github-actions-templates` | ⚙️ |
+| 쉘 스크립트 품질 | `shellcheck-configuration` | ⚙️ |
+| Terraform/IaC | **전용 스킬 없음** → [conventions/terraform.md](conventions/terraform.md) 규칙 준수 | — |
+
+- **워크플로 스킬**(도메인 아님, 슬래시 커맨드): `code-review` · `simplify` · `verify` · `security-review` · `run` ·
+  `find-skills` · `auditing-skills` — 검토·검증·실행 보조에 쓴다.
+- **주의**: ⚙️ 런타임 스킬은 `skills-lock.json`에 고정되지 않아 **세션마다 가용성이 다를 수 있다**.
+  자주 쓰는 스킬은 lock에 추가할지 검토한다(§관리).
+
 ## 사용 규칙
 
-1. **작업–스킬 매핑**을 우선 확인한다.
-   - Dagster 에셋/정의/디버깅 → `dagster-expert`
-   - 외부 기술 연동(`dagster-*`) 탐색 → `dagster-integrations`
-   - 순수 Python 작성·리팩터 → `dignified-python`(단, 프로젝트 컨벤션 우선)
+1. **작업–스킬 매핑**(§②)을 우선 확인해 해당 스킬을 사용한다(관련 스킬이 있으면 반드시 활용).
 2. **프로젝트 컨벤션 > 범용 스킬** (충돌 시).
    범용 스킬(`dignified-python`)과 본 저장소 규칙이 다르면 **저장소 규칙을 따른다**. 예:
    - 주석은 **한국어**, 식별자는 영어 ([conventions/python.md](conventions/python.md))

@@ -125,6 +125,38 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 
 > 요지: **쓰는 사람은 항상 한 명.** 나머지는 "무엇을 했는지"를 **반환**으로 넘기고, 저널 반영은 그 한 명이 한다.
 
+## 기록 시점 — 언제 쓰는가 (trigger)
+
+위치·포맷·주체만 정해두면 **저널은 쌓이지 않는다**. 기록이 일어나는 **시점**을 규약으로 못박는다.
+아래는 **supervisor(메인 루프)의 상시 의무**다.
+
+| 시점 | 동작 |
+| --- | --- |
+| **미션 개시** — 요청이 아래 "미션 판단 기준"에 해당할 때 | `_TEMPLATE.md` 복사 → `$OBSIDIAN_VAULT/agents/<KST 날짜>/<mission-slug>.md` 생성, `status: in-progress`, `started` 기입 |
+| **계층 간 이벤트 직후** — 배정·보고·질의·반려·승인 | `## 🔀 상호작용 로그`에 한 줄 append(KST 시각) |
+| **director/subagent 결과 수령 직후** | 반환값을 해당 계층 섹션(`## 🏷 director:` / `#### 🔧 subagent:`)에 옮겨 적기 |
+| **미션 종료 — 사용자 최종 보고 직전** | `## ✅ supervisor — 취합·보고` 작성, `status: done`(막히면 `blocked`), `updated` 갱신 |
+| **세션 종료·컨텍스트 요약 직전** | 진행 중이면 현재 상태까지 저장(유실 방지) |
+
+**미션 판단 기준** — 다음 중 **하나라도** 해당하면 저널을 연다.
+
+- 저장소 파일을 **생성·수정**하는 작업(코드·문서·설정 모두)
+- **director/subagent 위임**이 일어나는 작업
+- 사용자와 **결정·합의**가 오간 작업(규약·아키텍처·기술 선택)
+- 인프라 **`apply`·배포·마이그레이션** 등 비가역 작업
+
+**열지 않는 것(YAGNI)**: 단순 조회·질의응답, 읽기 전용 탐색, 1회성 명령 실행.
+
+- **`mission-slug`** 는 영문 kebab-case(예: `oci-terraform-setup`). 같은 날 같은 미션이 이어지면 **같은 파일에 append**한다.
+- **수동 트리거**: `/journal` 슬래시 커맨드([`.claude/commands/journal.md`](../../.claude/commands/journal.md))로 언제든 현재 세션을
+  저널에 기록·갱신한다. 자동 기록이 누락됐을 때의 **보정 수단**이자, 사용자가 명시적으로 기록을 요구하는 통로다.
+- **볼트 경로 설정**: `$OBSIDIAN_VAULT`는 **셸 환경변수**로 둔다 — `~/.zshenv`에
+  `export OBSIDIAN_VAULT="${OBSIDIAN_VAULT:-$HOME/obsidian}"`. `$HOME` 기준이라 **절대경로 하드코딩이 없고**,
+  셸·스크립트·AI 세션이 **한 곳**에서 값을 받는다(*12-Factor Config* / [operations.md](../operations.md#1-환경변수-주입)).
+  - **프로젝트 `.env`에 두지 않는다** — `.env`는 compose가 **컨테이너에 주입**하는 런타임 경로이고(AI 세션은 이를 읽지 않는다),
+    볼트 경로는 **프로젝트 무관·머신 전역** 값이며 **비밀정보도 아니다**. 성격·전파 경로가 모두 다르다.
+  - 미설정 환경에서는 `~/obsidian`으로 폴백한다(`${OBSIDIAN_VAULT:-$HOME/obsidian}`).
+
 ## 기록 원칙
 
 1. **있었던 일만** 기록한다(가상 director/subagent 활동 금지).

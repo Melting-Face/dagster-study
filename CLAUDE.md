@@ -13,6 +13,8 @@
 - 형식 `type(scope): 설명` — 설명은 한국어, 제목 72자 이내.
 - type: `feat`·`fix`·`docs`·`style`·`refactor`·`perf`·`test`·`build`·`ci`·`chore`·`revert`.
 - gitlint `contrib-title-conventional-commits`로 강제. 상세·매핑은 [`docs/conventions/general.md`](docs/conventions/general.md).
+- **git 워크플로**(브랜치 전략·논리적 커밋 단위·병렬 세션 **git worktree**·AI 세션 git 규칙)는
+  [`docs/conventions/git.md`](docs/conventions/git.md). 커밋·푸시는 **사용자 요청 시에만**, 락 파일(`.terraform.lock.hcl`·`skills-lock.json`)은 커밋.
 
 ## 코딩 철학
 
@@ -117,8 +119,14 @@
   전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링)은 `profiles`로 분리**(뼈대는 profile
   없이 항상 실행, `--profile <name>`으로 opt-in). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
   K8s 이행 규칙(도입 시)은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md).
-- **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s)을 **프로젝트 결정 관점**(채택 이유·
+- **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
+  **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,
+  부트스트랩은 **cloud-init 선언형**. 첫 스택은 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s).
+  상세 [`docs/conventions/terraform.md`](docs/conventions/terraform.md), 결정 배경 [`docs/architectures/oci.md`](docs/architectures/oci.md).
+- **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s·oci)을 **프로젝트 결정 관점**(채택 이유·
   대안 비교)으로 [`docs/architectures/`](docs/architectures/README.md)에 정리(채택 ✅ / 미채택 🔎).
+- **Claude Code 스킬**: 프로젝트가 쓰는 Agent Skills와 사용 규칙(**프로젝트 컨벤션 우선**)은
+  [`docs/skills.md`](docs/skills.md), 단일 출처는 [`skills-lock.json`](skills-lock.json).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).
 - **보안·데이터 거버넌스**: 원천 진료 데이터·`.env`·크리덴셜은 **저장소 커밋 금지**(비식별 연구

@@ -75,6 +75,8 @@ uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/
 [Conventional Commits](https://www.conventionalcommits.org/) 규약을 따른다.
 gitlint `contrib-title-conventional-commits` 룰로 강제한다(루트 `.gitlint`, pre-commit `commit-msg` 훅).
 
+> 브랜치 전략·커밋 단위·병렬 세션(git worktree)·AI 세션 git 규칙 등 **워크플로**는 [git.md](git.md).
+
 - **형식**: `type(scope): 설명` — `scope`는 선택, **설명은 한국어**.
 - 제목은 **72자 이내**(`title-max-length`).
 - 파괴적 변경은 `type!: ...` 또는 본문에 `BREAKING CHANGE:` 표기.

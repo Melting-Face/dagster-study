@@ -1,0 +1,154 @@
+# 에이전트 오케스트레이션·기록관 규약 (agents)
+
+AI 세션에서 작업을 **3계층(supervisor → director → subagent)** 으로 나누고, "누가 무엇을
+왜 했는가"를 **기록관(archivist) 저널**로 마크다운에 남기는 규약이다. 이 문서가 규약의 **정본**이며,
+요약은 [`CLAUDE.md`](../../CLAUDE.md) 운영 섹션에 둔다.
+
+> 원칙: **단순함(YAGNI)** — 계층·기록관은 필요할 때만 늘린다. **추적 용이성** — 결정과 근거(왜)를
+> 남겨 나중에 grep/점프 가능하게 한다. **있었던 일만 기록** — 하지 않은 활동은 남기지 않는다.
+
+## 역할 계층 (3-tier)
+
+| 계층 | 실체(Claude Code 대응) | 책임 | 경계(하지 않는 것) |
+| --- | --- | --- | --- |
+| **supervisor** | 메인 루프(대화 주체) | 미션 목표·성공조건 정의 → 도메인 단위 분해 → director 배정 → 결과 취합·충돌조정 → 사용자 보고. 미션 저널(MOC) 개설·유지 | 직접 실행작업(워커에 위임) |
+| **director** | `Agent` 툴로 띄운 **단일 조율 서브에이전트**(`director`, 도메인 무관) | 미션 하위작업 분해 → subagent 배정·병렬조율 → **품질·승인 게이트** → 결과 요약을 supervisor에 보고. 도메인 지식은 컨벤션·스킬로 참조 | 미션 전체 조정(supervisor 몫) |
+| **subagent / agent** | `Agent` 툴 **워커 서브에이전트** | 배정받은 **단일 작업** 수행(코드·조사·테스트) → **director 승인 아래** 실행하고 결과를 반환·보고 | 다른 워커 배정, 무승인 실행 |
+
+- **director는 우선 1명**(도메인 무관). 도메인 지식(Dagster·dbt·infra·docs)은 해당 [컨벤션 문서](README.md)·스킬로 참조한다.
+  부하·전문성 분리가 필요해지면 도메인별 director로 **분화**할 수 있다(YAGNI: 지금은 1명).
+- 규모가 작은 미션은 계층을 접는다 — supervisor가 director/subagent 없이 직접 수행해도 된다(YAGNI).
+  이때 저널에는 director/subagent를 **"미배정"** 으로 남긴다(가상 활동 금지).
+
+## 승인 게이트 (approval gate)
+
+**subagent는 자율 실행하지 않는다 — 담당 director의 승인 아래 움직인다.** 권한·책임 소재를 명확히 하고, 잘못된 실행을 상위로
+넘기기 전에 거른다. Claude Code 서브에이전트는 **실행 중 중단이 불가**하므로 승인은 두 시점으로 실현한다.
+
+- **사전 승인(plan-first)** — 되돌리기 어렵거나 위험한 작업(파일 대량 변경·삭제, 인프라 `apply`, 커밋/푸시, 스키마·데이터 파괴)은
+  director가 워커에게 **계획만 반환**하게 하고, 검토 후 `[승인]` 하면 **별도 실행**을 배정한다. 위험하면 `[반려]`.
+- **사후 승인(품질 게이트)** — 일반·가역 작업은 워커가 실행·반환한 뒤 director가 결과를 검증해 `[승인]`(supervisor로 보고) 또는
+  `[반려]`(사유와 함께 재작업 배정)한다.
+- 같은 게이트가 **supervisor↔director** 에도 적용된다 — supervisor가 director 결과를 `[승인]`/`[반려]` 한다.
+- 승인·반려는 **상호작용 로그에 실제 이벤트**로 남는다(`[승인]`·`[반려]`). "누가 무엇을 허가/반려했는가"가 추적된다.
+
+> 요지: **실행은 항상 승인을 거친다.** 위험하면 계획을 먼저 승인(사전), 아니면 결과를 승인(사후). 무승인 자율 실행은 없다.
+
+## 기록관(archivist)
+
+- **별도 에이전트가 아니라 프로토콜**이다. 각 계층이 **종료 시 자기 기록을 저널에 남기는 규약** +
+  supervisor가 미션 저널(MOC)을 유지하는 것으로 갈음한다(YAGNI). 필요해지면 전용 archivist
+  서브에이전트로 분리할 수 있다.
+- 기록관은 **관측·기록만** 한다 — 판단·작업을 하지 않는다.
+
+## 저널 저장 위치
+
+- 저널은 **개인 Obsidian 볼트**에 누적한다. **저장소(repo)에는 커밋하지 않는다** — 볼트는 자체 git으로 관리.
+- 볼트 경로는 **환경마다 다를 수 있다**. 환경변수 **`$OBSIDIAN_VAULT`(기본값 `~/obsidian`)** 로 참조한다.
+  머신·계정이 바뀌면 이 값만 조정하면 된다(하드코딩 금지, *12-Factor Config*).
+
+```
+$OBSIDIAN_VAULT/agents/            # 저널 루트 (기본 ~/obsidian/agents/)
+  _TEMPLATE.md                     # 재사용 저널 템플릿
+  <YYYY-MM-DD>/                    # 작업일자(KST) 폴더
+    <mission-slug>.md              # 미션당 1파일 — 하루에 여러 미션이면 파일 여러 개
+    <mission-slug>/                # (예외) 병렬 subagent가 많은 미션만 하위폴더로 액터 분리
+```
+
+- **작업일자는 KST**(`Asia/Seoul`) 기준으로 폴더를 나눈다([타임존 정책](timezone.md)).
+- **미션당 1파일**에 supervisor → director → subagent를 **계층 섹션**으로 누적(append)한다.
+  파일 수 최소·시간순 가독이 목적. 병렬 subagent가 많은 미션만 예외로 하위폴더로 분리한다.
+
+## 저널 포맷
+
+원본 템플릿은 `$OBSIDIAN_VAULT/agents/_TEMPLATE.md`. 새 미션은 이를 복사해 채운다.
+
+### 프론트매터(YAML)
+
+```yaml
+---
+mission: <mission-slug>
+date: <YYYY-MM-DD>
+status: planned          # planned | in-progress | done | blocked
+supervisor: main-loop
+agent: <runtime>         # 실행 런타임/도구: claude-code | codex | cursor | ...
+model: <model-id>        # supervisor 모델(예: claude-opus-4-8[1m])
+directors: []            # 배정된 도메인 director 목록
+tags: [agent/mission, mission/<mission-slug>]
+started: <YYYY-MM-DDThh:mm+09:00>    # KST
+updated: <YYYY-MM-DDThh:mm+09:00>    # KST
+---
+```
+
+- **`agent`(실행 런타임/도구)** 와 **`model`(모델 ID)** 를 반드시 남긴다 — 어떤 도구·모델이 한 일인지
+  추적·재현·비교하기 위함. 프론트매터 값은 **supervisor(세션 주체)** 기준이다.
+- director/subagent가 **다른 도구·모델**로 돌면(예: 일부는 `codex`, 일부는 `claude-code`), 각 섹션에
+  `agent·model` 을 개별 표기한다(아래 본문 규칙).
+
+### 본문 — PDCA 계층 섹션
+
+- `## 🧭 supervisor — 미션 정의·분해` : 입력(사용자 요청)·성공조건·도메인 분해·**결정 로그(왜)**.
+- `## 🔀 상호작용 로그` : **계층 간 주고받음**을 시간순으로(아래 별도 규칙).
+- `## 🏷 director: <domain>` : 계획(Plan)·검증(Check 품질게이트), 그 아래 `#### 🔧 subagent: <id>`
+  각각 **`agent·model`**(실행 도구·모델)·입력·실행(Do)·결과(Check)·산출물·조치(Act).
+  세션 전체가 supervisor와 동일 도구·모델이면 생략하고, **다를 때만** 명시한다.
+- `## ✅ supervisor — 취합·보고` : 도메인 결과 종합·사용자 보고 요약·후속(Act).
+- 노트 간 연결은 Obsidian `[[위키링크]]` 를 쓴다(부모↔자식 노트·후속 미션).
+
+### 상호작용 로그 (`## 🔀 상호작용 로그`)
+
+이 저널의 **핵심 목적**은 "누가 무엇을 했나"에 더해 **agent↔subagent 사이에 어떤 주고받음이 있었나**(배정·보고·질의·반려)를
+남기는 것이다. 계층 간 이벤트를 **시간순 한 줄씩** 방향(`→`)과 유형 태그로 적는다.
+
+```markdown
+## 🔀 상호작용 로그 (dispatch ↔ report)
+- `23:05` **supervisor → director-dbt** `[배정]` bronze source 매핑 정합성 점검
+- `23:06` **director-dbt → subagent dbt-1** `[배정]` staging 3개 모델 sqlfluff 수정
+- `23:14` **subagent dbt-1 → director-dbt** `[보고]` 3/3 수정·`dbt build` 통과, 산출물 링크
+- `23:15` **director-dbt → supervisor** `[보고]` 도메인 완료 요약 / `[반려]`·재작업 있으면 사유
+```
+
+- **유형 태그**: `[배정]`(dispatch) · `[보고]`(report) · `[질의]`(query) · `[반려]`(reject/재작업) · `[승인]`(approve).
+- **방향**은 항상 `보낸 주체 → 받는 주체`. 병렬 배정은 각 줄로 나눈다.
+- 시각은 **KST**. **실제 오간 것만** 적는다(가상 상호작용 금지). 세부 결과는 해당 계층 섹션에 두고, 여기엔 **오간 사실**만 남긴다.
+
+## 기록 주체 — 단일 기록자 원칙 (single-writer)
+
+병렬 서브에이전트가 같은 미션 파일에 **동시에 append하면 경합·손상**이 난다. 그래서 저널의 기록 주체를 **한 명으로 고정**한다.
+
+- **미션 저널 1파일 = 기록자 1명 = supervisor(메인 루프).** director/subagent는 **저널을 직접 쓰지 않는다.**
+- **상호작용 로그**는 supervisor가 관측 시점에 기록한다 — 배정 직전 `[배정]`, 서브에이전트 반환 수령 직후 `[보고]`.
+- **계층 섹션(director/subagent 상세)** 은 서브에이전트가 **구조화된 결과를 반환**하고(요약·Do·Check·산출물·조치, 필요 시 `agent·model`),
+  supervisor가 그 반환값을 저널에 **옮겨 적는다**. 서브에이전트는 자기 관측을 **반환으로만** 전달한다.
+- **예외 1 — archivist**: 사후 **단독 실행**(동시 writer 없음)이라 저널을 **직접 편집**한다(정합성·누락·MOC).
+- **예외 2 — 직접 기록 위임**: 서브에이전트를 **직렬**로 돌리고 supervisor가 명시 위임하면, 그 서브에이전트가 자기 섹션을 직접 append 할 수 있다(동시 writer 없음이 보장될 때만).
+
+> 요지: **쓰는 사람은 항상 한 명.** 나머지는 "무엇을 했는지"를 **반환**으로 넘기고, 저널 반영은 그 한 명이 한다.
+
+## 기록 원칙
+
+1. **있었던 일만** 기록한다(가상 director/subagent 활동 금지).
+2. **결정에는 근거(왜)** 를 함께 남긴다 — 나중에 추적·재현 가능하도록.
+3. 시각은 **KST**, 저장 시각·`updated` 를 갱신한다.
+4. 저널은 **볼트에만**(repo 커밋 금지). 저장소에는 이 **규약(정본)** 만 둔다 — 단일 출처 분리.
+
+## 네이티브 구현 (`.claude/agents/`)
+
+계층은 **Claude Code 서브에이전트**로 구현되어 있다. 각 정의는 종료 시 저널용 결과를 **반환**하도록(supervisor가 기록) 지시문에 못박는다.
+
+| 파일 | 계층 | 역할 |
+| --- | --- | --- |
+| (없음) | supervisor | 메인 루프(대화 주체) — 파일로 만들 수 없음 |
+| `.claude/agents/director.md` | director | **단일 조율자(도메인 무관)** — 분해·배정·품질/승인 게이트·보고. 도메인 지식은 컨벤션·스킬로 참조 |
+| (내장 `general-purpose`) | subagent/worker | 단일 작업 워커 — 별도 파일 불필요(YAGNI) |
+| `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
+
+- director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 `general-purpose`를 쓴다.
+- **새 `.claude/agents/*.md`는 세션 시작 시 로드**된다 — 추가 직후 같은 세션에서는 `subagent_type`으로 못 부르니(레지스트리 미갱신) 새 세션에서 사용한다.
+- 부하·전문성 분리가 필요해 도메인별 director로 분화하면 이 표와 `.claude/agents/`를 함께 갱신한다.
+
+## 참고
+
+- 타임존 정책: [`timezone.md`](timezone.md) (KST 기준 일자·시각)
+- 문서 동기화: [`../doc-sync.md`](../doc-sync.md)
+- 코딩 철학(단순함·추적 용이성): [`../philosophy.md`](../philosophy.md)

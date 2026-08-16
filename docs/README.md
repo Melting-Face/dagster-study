@@ -42,6 +42,7 @@
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |
 | [Kubernetes](conventions/k8s.md)    | (이행) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm + **Spark/Flink Operator·호스트 Dagster 트리거(Pipes)·kind on Podman/레지스트리·컴퓨트 시분할** |
 | [Terraform/IaC](conventions/terraform.md) | (도입) 스택 구조, 버전 고정·lock 커밋, `terraform fmt`(2-space) 고정, state·비밀 커밋 금지, cloud-init 선언형, templatefile 주의 |
+| [에이전트 오케스트레이션](conventions/agents.md) | AI 세션 **3계층**(supervisor→director→subagent, director 우선 1명) 역할·경계, **상호작용 로그·승인 게이트·단일 기록자**, **기록관 저널** 규약(개인 Obsidian 볼트 `$OBSIDIAN_VAULT/agents/<날짜>/<미션>.md`, 작업일자별·미션당 1파일, repo 커밋 금지) |
 
 ### 운영 (operations)
 

@@ -1,0 +1,47 @@
+#cloud-config
+# k3s 단일 노드 부트스트랩 (OCI Ubuntu, arm64) — Terraform templatefile로 렌더링.
+# 주의: 보간되는 Terraform 변수는 k3s_version 하나뿐이다.
+#       쉘 변수는 브레이스 없는 $VAR 형태로 써서 템플릿 보간과 충돌하지 않게 한다.
+package_update: true
+package_upgrade: false
+
+write_files:
+    - path: /usr/local/bin/bootstrap-k3s.sh
+      permissions: "0755"
+      content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          # 1) OCI Ubuntu 기본 iptables는 대부분의 ingress를 막는다 — k3s 통신 포트 허용
+          #    (미설정 시 flannel/CNI·API 통신이 막혀 노드가 NotReady로 남는다)
+          iptables -I INPUT 1 -p tcp --dport 6443 -j ACCEPT
+          iptables -I INPUT 1 -p tcp --dport 10250 -j ACCEPT
+          iptables -I INPUT 1 -p udp --dport 8472 -j ACCEPT   # flannel VXLAN
+          iptables -I INPUT 1 -s 10.42.0.0/16 -j ACCEPT       # 파드 CIDR
+          iptables -I INPUT 1 -s 10.43.0.0/16 -j ACCEPT       # 서비스 CIDR
+          netfilter-persistent save || true
+
+          # 2) 인스턴스 공인 IP 자동 발견(OCI 메타데이터 v2) — kubeconfig TLS SAN에 사용
+          PUBLIC_IP="$(curl -s -H 'Authorization: Bearer Oracle' http://169.254.169.254/opc/v2/vnics/ | grep -o '"publicIp"[^,]*' | head -1 | cut -d'"' -f4)"
+
+          # 3) k3s 설치 (버전 핀 — 비어 있으면 stable 채널)
+          K3S_VER="${k3s_version}"
+          if [ -n "$K3S_VER" ]; then
+              export INSTALL_K3S_VERSION="$K3S_VER"
+          else
+              export INSTALL_K3S_CHANNEL="stable"
+          fi
+          curl -sfL https://get.k3s.io | sh -s - server \
+              --write-kubeconfig-mode 644 \
+              --tls-san "$PUBLIC_IP" \
+              --node-external-ip "$PUBLIC_IP" \
+              --disable traefik
+
+          # 4) 호스트에서 바로 쓰도록 공인 IP가 반영된 kubeconfig 사본 생성
+          install -d -o ubuntu -g ubuntu /home/ubuntu/.kube
+          sed "s/127.0.0.1/$PUBLIC_IP/g" /etc/rancher/k3s/k3s.yaml > /home/ubuntu/.kube/config-public
+          chown ubuntu:ubuntu /home/ubuntu/.kube/config-public
+          chmod 600 /home/ubuntu/.kube/config-public
+
+runcmd:
+    - [bash, /usr/local/bin/bootstrap-k3s.sh]

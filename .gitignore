@@ -24,3 +24,14 @@ shared/
 
 # k8s values (로컬 전용)
 values.yaml
+
+# Terraform — state·크리덴셜·plan은 커밋 금지 (lock 파일은 재현성 위해 추적)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+!**/*.tfvars.example
+*.tfplan
+crash.log
+# 회수한 클러스터 kubeconfig(공인 IP·토큰 포함)
+kubeconfig-oci

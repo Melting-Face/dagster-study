@@ -1,0 +1,25 @@
+# 복사해서 terraform.tfvars로 채운다(terraform.tfvars는 커밋 금지 — .gitignore 처리됨).
+#   cp terraform.tfvars.example terraform.tfvars
+
+# --- OCI 인증 (콘솔 API Keys 발급 시 내려받는 config 스니펫 값) ---
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxxx"
+user_ocid        = "ocid1.user.oc1..xxxxx"
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
+region           = "ap-chuncheon-1" # 또는 ap-seoul-1 등
+compartment_ocid = "ocid1.compartment.oc1..xxxxx" # 루트면 tenancy_ocid와 동일
+
+# --- SSH ---
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# --- 접근 제어(보안 강화 권장: 본인 공인 IP/32로 좁힌다) ---
+# allowed_ssh_cidr = "203.0.113.10/32"
+# allowed_api_cidr = "203.0.113.10/32"
+
+# --- 컴퓨트(기본값이 Always Free A1 최대치: 4 OCPU / 24 GB / 50 GB) ---
+# instance_ocpus      = 4
+# instance_memory_gbs = 24
+# boot_volume_gbs     = 50
+
+# --- k3s 버전 핀(권장). 비우면 stable 채널 최신 ---
+# k3s_version = "v1.31.5+k3s1"

@@ -203,12 +203,32 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `.claude/agents/director.md` | director | **단일 조율자(도메인 무관)** — 분해·배정·품질/승인 게이트·보고. 도메인 지식은 컨벤션·스킬로 참조 |
 | (내장 `general-purpose`) | subagent/worker | 단일 작업 워커 — 별도 파일 불필요(YAGNI) |
 | `.claude/agents/security.md` | subagent/worker (전문) | **보안 담당** — 비밀누출·데이터 거버넌스·인프라 노출·ISMS-P 준수를 **읽기 전용** 점검, 발견만 반환 |
+| `.claude/agents/data-engineer.md` | subagent/worker (전문) | **데이터 엔지니어** — Dagster 에셋·dbt 모델·S3→Iceberg 적재를 **구현·수정**(쓰기 워커) |
+| `.claude/agents/data-verifier.md` | subagent/worker (전문) | **데이터 검증자** — 적재된 **실제 데이터 값**을 Trino로 원천과 대조(**읽기 전용**), 불일치만 반환 |
+| `.claude/agents/data-qa.md` | subagent/worker (전문) | **데이터 품질보증** — dbt 테스트 커버리지·게이트 등 **검증 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
 
-- director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 `general-purpose`를 쓰고,
-  **보안 점검은 `security`** 를 쓴다(전문 워커는 필요한 도메인만 파일로 둔다 — 지금은 보안 1종).
-- **전문 워커 = 읽기 전용 원칙**: `security`처럼 판정이 목적인 워커에는 `Write`/`Edit`를 주지 않는다.
+- director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 기본 `general-purpose`,
+  도메인이 맞으면 **전문 워커**(`security`·`data-engineer`·`data-verifier`·`data-qa`)를 쓴다.
+- **전문 워커 = 읽기 전용 원칙**: `security`·`data-verifier`·`data-qa`처럼 **판정이 목적**인 워커에는 `Write`/`Edit`를 주지 않는다.
   발견을 반환하면 승인 후 **수정은 별도 워커에 배정**한다(승인 게이트가 실제로 작동하게 하는 장치).
+  **구현이 목적**인 워커(`data-engineer`)는 예외로 쓰기를 갖되, **비가역 작업**(커밋·푸시·`apply`·파괴적 변경)은
+  계획만 반환하고 사전 승인을 받는다.
+
+### 데이터 워커 3종의 경계 (중첩 금지)
+
+`verifier`/`qa`는 통상 의미가 겹치므로 **축을 명시**해 나눈다 — 겹치면 배정 판단이 흐려지고 규약이 형식화된다.
+
+| 워커 | 보는 대상 | 질문 | 대표 근거 |
+| --- | --- | --- | --- |
+| `data-engineer` | **코드** | "어떻게 만드는가" | 구현 후 `dg check`·`ruff`·`sqlfluff` 통과 |
+| `data-verifier` | **데이터 인스턴스** | "데이터 값이 맞는가" | Trino `SELECT` 수치 ↔ 원천 대조(행 수·grain·범위·타임존) |
+| `data-qa` | **테스트 코드·게이트** | "검증 장치가 있는가" | `data_tests`/`unit_tests` 커버리지, CI 게이트 유무 |
+
+- 흐름: `data-engineer` 구현 → `data-verifier` 값 대조 → `data-qa`가 그 규칙을 **테스트로 상시화**하도록 계획 반환 →
+  승인 후 `data-engineer`가 테스트 작성. 판정자는 절대 스스로 고치지 않는다.
+- 데이터 워커의 정본은 [`test.md`](../test.md)(테스트 계층)·[`dataset_schema.md`](../dataset_schema.md)(grain·범위)·
+  [`dagster.md`](dagster.md)·[`dbt.md`](dbt.md)다. 워커 정의는 **정본을 집행**할 뿐 규칙을 새로 만들지 않는다.
 - **새 `.claude/agents/*.md`는 추가 직후 같은 세션에서 쓸 수 있다** — 런타임이 레지스트리를 갱신한다(2026-08-17 `security` 추가 시 실측).
   다만 갱신은 런타임 동작이라 보장 대상이 아니다. `subagent_type`을 찾지 못하면 새 세션에서 재시도한다.
 - 부하·전문성 분리가 필요해 도메인별 director로 분화하면 이 표와 `.claude/agents/`를 함께 갱신한다.

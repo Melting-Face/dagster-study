@@ -35,3 +35,10 @@ values.yaml
 crash.log
 # 회수한 클러스터 kubeconfig(공인 IP·토큰 포함)
 kubeconfig-oci
+
+# 개인키·인증서 (API 키·SSH 키·TLS). 키는 저장소 밖에 두는 것이 원칙이고,
+# 이 규칙은 실수로 복사해 들어왔을 때의 2차 방어다. 공개키(.pub)는 대상 아님.
+**/*.pem
+**/*.key
+**/id_rsa
+**/id_ed25519

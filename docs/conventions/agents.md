@@ -206,29 +206,38 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `.claude/agents/data-engineer.md` | subagent/worker (전문) | **데이터 엔지니어** — Dagster 에셋·dbt 모델·S3→Iceberg 적재를 **구현·수정**(쓰기 워커) |
 | `.claude/agents/data-verifier.md` | subagent/worker (전문) | **데이터 검증자** — 적재된 **실제 데이터 값**을 Trino로 원천과 대조(**읽기 전용**), 불일치만 반환 |
 | `.claude/agents/data-qa.md` | subagent/worker (전문) | **데이터 품질보증** — dbt 테스트 커버리지·게이트 등 **검증 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
+| `.claude/agents/devops-engineer.md` | subagent/worker (전문) | **데브옵스 엔지니어** — compose·Dockerfile·k8s manifest·Terraform HCL을 **구현·수정**(쓰기 워커, 로컬 compose 기동 허용) |
+| `.claude/agents/devops-verifier.md` | subagent/worker (전문) | **데브옵스 검증자** — 실행 중 인프라의 **런타임 상태**를 선언과 대조(**읽기 전용**), 불일치만 반환 |
+| `.claude/agents/devops-qa.md` | subagent/worker (전문) | **데브옵스 품질보증** — 인프라 **선언 파일·게이트 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
 
 - director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 기본 `general-purpose`,
-  도메인이 맞으면 **전문 워커**(`security`·`data-engineer`·`data-verifier`·`data-qa`)를 쓴다.
-- **전문 워커 = 읽기 전용 원칙**: `security`·`data-verifier`·`data-qa`처럼 **판정이 목적**인 워커에는 `Write`/`Edit`를 주지 않는다.
-  발견을 반환하면 승인 후 **수정은 별도 워커에 배정**한다(승인 게이트가 실제로 작동하게 하는 장치).
-  **구현이 목적**인 워커(`data-engineer`)는 예외로 쓰기를 갖되, **비가역 작업**(커밋·푸시·`apply`·파괴적 변경)은
-  계획만 반환하고 사전 승인을 받는다.
+  도메인이 맞으면 **전문 워커**(`security` · `data-*` 3종 · `devops-*` 3종)를 쓴다.
+- **전문 워커 = 읽기 전용 원칙**: `security`·`data-verifier`·`data-qa`·`devops-verifier`·`devops-qa`처럼
+  **판정이 목적**인 워커에는 `Write`/`Edit`를 주지 않는다. 발견을 반환하면 승인 후 **수정은 별도 워커에 배정**한다
+  (승인 게이트가 실제로 작동하게 하는 장치).
+  **구현이 목적**인 워커(`data-engineer`·`devops-engineer`)는 예외로 쓰기를 갖되, **비가역 작업**(커밋·푸시·
+  `terraform apply`·`kubectl apply`·`compose down -v`·파괴적 변경)은 계획만 반환하고 사전 승인을 받는다.
 
-### 데이터 워커 3종의 경계 (중첩 금지)
+### 전문 워커 3종 세트의 경계 (중첩 금지)
 
 `verifier`/`qa`는 통상 의미가 겹치므로 **축을 명시**해 나눈다 — 겹치면 배정 판단이 흐려지고 규약이 형식화된다.
+데이터·인프라 도메인에 **같은 축**을 적용해 판단 규칙을 하나로 유지한다.
 
-| 워커 | 보는 대상 | 질문 | 대표 근거 |
-| --- | --- | --- | --- |
-| `data-engineer` | **코드** | "어떻게 만드는가" | 구현 후 `dg check`·`ruff`·`sqlfluff` 통과 |
-| `data-verifier` | **데이터 인스턴스** | "데이터 값이 맞는가" | Trino `SELECT` 수치 ↔ 원천 대조(행 수·grain·범위·타임존) |
-| `data-qa` | **테스트 코드·게이트** | "검증 장치가 있는가" | `data_tests`/`unit_tests` 커버리지, CI 게이트 유무 |
+| 축 | 보는 대상 | 질문 | 데이터 | 인프라 |
+| --- | --- | --- | --- | --- |
+| **구현** | 코드·선언 파일 | "어떻게 만드는가" | `data-engineer` | `devops-engineer` |
+| **인스턴스** | 지금 존재하는 실체 | "실제가 맞는가" | `data-verifier`(테이블 값) | `devops-verifier`(컨테이너·파드 상태) |
+| **체계** | 검증 장치·게이트 | "상시 장치가 있는가" | `data-qa`(dbt 테스트 커버리지) | `devops-qa`(규약 준수·CI 게이트) |
 
-- 흐름: `data-engineer` 구현 → `data-verifier` 값 대조 → `data-qa`가 그 규칙을 **테스트로 상시화**하도록 계획 반환 →
-  승인 후 `data-engineer`가 테스트 작성. 판정자는 절대 스스로 고치지 않는다.
-- 데이터 워커의 정본은 [`test.md`](../test.md)(테스트 계층)·[`dataset_schema.md`](../dataset_schema.md)(grain·범위)·
-  [`dagster.md`](dagster.md)·[`dbt.md`](dbt.md)다. 워커 정의는 **정본을 집행**할 뿐 규칙을 새로 만들지 않는다.
+- 흐름(양 도메인 동일): `*-engineer` 구현 → `*-verifier` 실측 대조 → `*-qa`가 그 규칙을 **상시 게이트로 만들 계획** 반환 →
+  승인 후 `*-engineer`가 작성. **판정자는 절대 스스로 고치지 않는다.**
+- **`security`와의 경계**: `security`는 **비밀 누출·인그레스 노출·RBAC·ISMS-P 준수**의 정본 판정자다.
+  `devops-qa`는 같은 파일을 보더라도 **운영 신뢰성·재현성**(태그 고정·자원 한도·healthcheck·CI 게이트)만 본다.
+  겹치는 항목은 `devops-qa`가 중복 제기하지 않고 **`security` 확인 요청으로 넘긴다**.
+- 정본: 데이터 = [`test.md`](../test.md)·[`dataset_schema.md`](../dataset_schema.md)·[`dagster.md`](dagster.md)·[`dbt.md`](dbt.md) /
+  인프라 = [`docker.md`](docker.md)·[`k8s.md`](k8s.md)·[`terraform.md`](terraform.md)·[`resource-sizing.md`](../resource-sizing.md)·[`operations.md`](../operations.md).
+  워커 정의는 **정본을 집행**할 뿐 규칙을 새로 만들지 않는다.
 - **새 `.claude/agents/*.md`는 추가 직후 같은 세션에서 쓸 수 있다** — 런타임이 레지스트리를 갱신한다(2026-08-17 `security` 추가 시 실측).
   다만 갱신은 런타임 동작이라 보장 대상이 아니다. `subagent_type`을 찾지 못하면 새 세션에서 재시도한다.
 - 부하·전문성 분리가 필요해 도메인별 director로 분화하면 이 표와 `.claude/agents/`를 함께 갱신한다.

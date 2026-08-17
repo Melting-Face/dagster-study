@@ -135,9 +135,11 @@
   **기록 시점(필수)**: ① 미션 개시 시 파일 생성 ② 계층 간 이벤트 직후 상호작용 로그 append ③ 서브에이전트 결과 수령 직후
   계층 섹션 기록 ④ **사용자 최종 보고 직전** 취합·`status`/`updated` 갱신 ⑤ 세션 종료·컨텍스트 요약 직전 현재 상태 저장.
   **미션 판단**: 파일 생성·수정 / 위임 발생 / 결정·합의 / 비가역 작업 중 하나면 저널을 연다(단순 조회·질의응답은 제외).
-  누락 보정·수동 기록은 **`/journal`** 슬래시 커맨드. 전문 워커는 **`security`**(보안 점검) ·
-  **`data-verifier`**(실제 데이터 값 ↔ 원천 대조) · **`data-qa`**(테스트 커버리지·게이트 감사) — 모두 **읽기 전용**으로 발견만 반환하고,
-  구현 워커 **`data-engineer`**(에셋·dbt·적재 구현)만 쓰기를 갖되 비가역 작업(커밋·`apply`·파괴적 변경)은 계획만 반환한다.
+  누락 보정·수동 기록은 **`/journal`** 슬래시 커맨드. 전문 워커는 **`security`**(보안 점검) + 데이터·인프라 **각 3종 세트**로,
+  **같은 축**(구현 / 실측 대조 / 체계 감사)을 공유한다 — 데이터는 **`data-engineer`·`data-verifier`·`data-qa`**,
+  인프라는 **`devops-engineer`·`devops-verifier`·`devops-qa`**. **판정자(`*-verifier`·`*-qa`·`security`)는 읽기 전용**으로
+  발견만 반환하고, 구현 워커(`*-engineer`)만 쓰기를 갖되 비가역 작업(커밋·`terraform/kubectl apply`·`compose down -v`·
+  파괴적 변경)은 계획만 반환한다. `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성) 관점 분리.
   서브에이전트를 호출하면 **실행 메타**(`subagent_type`·`agent`/`model`·허용 도구·도구 호출 수·토큰·소요·승인 결과)와
   **경계 준수 여부**를 저널에 남긴다(수치 없으면 `미측정` — 추정치 금지).
   상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).

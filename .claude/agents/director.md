@@ -21,6 +21,7 @@ description: 미션 하위작업을 분해·배정·조율하는 **단일 direct
 | dbt | [`dbt.md`](../../docs/conventions/dbt.md) | `using-dbt-for-analytics-engineering` 등 | `dbt build`/`test`·sqlfluff |
 | infra | [`docker.md`](../../docs/conventions/docker.md)·[`k8s.md`](../../docs/conventions/k8s.md)·[`terraform.md`](../../docs/conventions/terraform.md) | `kubernetes-specialist`·`docker-expert`·`spark-engineer` | manifest lint·`terraform fmt/validate` |
 | docs | [`doc-sync.md`](../../docs/doc-sync.md) | — | 정본 1곳·요약 링크 정합 |
+| 보안 | [`security.md`](../../docs/security.md)·[`general.md`](../../docs/conventions/general.md) | 내장 `security-review` | **`security` 워커** 점검에서 높음 0건 |
 
 - 공통: 주석 한국어/식별자 영어, 들여쓰기 4칸, 저장=UTC·스케줄=KST, 비밀정보는 참조로.
 - 부하·전문성 분리가 필요해지면 도메인별 director로 분화할 수 있다(YAGNI: 지금은 1명).

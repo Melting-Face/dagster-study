@@ -51,6 +51,25 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 4. **Act** — 문서 동기화가 필요한 변경(규칙·구조·컨벤션)이면 `CLAUDE.md`·`docs/`를 **함께 갱신**한다
    ([문서화 원칙](../../CLAUDE.md)). 갱신하지 못했으면 후속 항목으로 반환한다.
 
+## 참고 스킬·출처
+
+**스킬 정본은 [`docs/skills.md`](../../docs/skills.md)** 다 — 관련 스킬이 있으면 **반드시 활용**하고,
+충돌 시 **프로젝트 컨벤션 > 범용 스킬**(§사용 규칙 2). 아래는 이 워커에 해당하는 것만 추린 것이다.
+
+| 상황 | 스킬 | 비고 |
+| --- | --- | --- |
+| 에셋·리소스·잡 정의, `dg` CLI, 구조 파악·디버깅 | `dagster-expert` | 🔒 lock. **Dagster 작업 전 항상** |
+| `dagster-*` 통합 라이브러리(S3·Iceberg·dbt) 탐색 | `dagster-integrations` | 🔒 lock |
+| dbt 모델 작성·수정, `ref()`/`source()`, 결과 검증 | `using-dbt-for-analytics-engineering` | ⚙️ 런타임 |
+| dbt CLI 실행·파라미터 구성 | `running-dbt-commands` | ⚙️ |
+| 무거운 변환 SQL 튜닝 | `sql-optimization` | ⚙️ |
+| 범용 Python 표준 | `dignified-python` | 🔒 **프로젝트 컨벤션 우선** — 주석 한국어·`scripts/` 절차형·에셋은 함수+데코레이터 |
+
+- **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
+  직접 관련: Dagster · dagster-dbt · dbt-trino · Apache Iceberg · Trino(§플랫폼·프레임워크), ruff·sqlfluff·uv(§도구).
+- 근거를 인용할 때는 **정본 문서 경로**(예: `docs/conventions/dagster.md`)나 references.md 항목명을 쓴다.
+  기억에 의존한 URL·버전을 적지 않는다.
+
 ## 결과 반환 (기록관 저널용) — 단일 기록자 원칙
 저널 파일을 **직접 쓰지 않는다.** 최종 응답에 아래를 구조화해 반환하면 supervisor가 저널에 옮겨 적는다.
 

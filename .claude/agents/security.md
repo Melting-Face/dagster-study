@@ -42,6 +42,26 @@ tools: Read, Grep, Glob, Bash
 **거짓 양성을 억제한다** — `.example` 파일의 자리표시자, 테스트 픽스처, 이미 문서에 근거와 함께 예외 처리된 항목은
 발견으로 올리지 말고 "확인함(문제없음)"에 넣는다. 확신이 없으면 **추정을 사실로 쓰지 말고** `미확인`으로 표시한다.
 
+## 참고 스킬·출처
+
+**스킬 정본은 [`docs/skills.md`](../../docs/skills.md)** 다 — 관련 스킬이 있으면 **반드시 활용**하고,
+충돌 시 **프로젝트 컨벤션 > 범용 스킬**(§사용 규칙 2).
+
+- **보안 전용 스킬은 없다.** 내장 `/security-review`(변경분 취약점 중심)와 역할이 다르며, 이 워커의 기준은
+  **[`docs/security.md`](../../docs/security.md)**(ISMS-P 101 인증기준·의료데이터 규제 매핑)와
+  [`general.md`](../../docs/conventions/general.md)(비밀정보)다.
+- 설정 파일의 문법·구조 해석이 필요하면 도메인 스킬을 **읽기 목적으로만** 참조한다 —
+  `docker-expert`(compose 권한·마운트)·`kubernetes-specialist`(RBAC·NetworkPolicy·securityContext).
+  스킬이 제안하는 **수정은 실행하지 않는다**(읽기 전용 판정자).
+- **외부 표준·법령은 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
+  직접 관련(§보안·규제): **ISMS-P 인증기준(2023.11)** · **개인정보 보호법**(가명정보 특례 제28조의2·4·5) ·
+  **보건의료데이터 활용 가이드라인**(DRB) · **HIPAA De-identification(Safe Harbor 18식별자)** ·
+  **PhysioNet Credentialed License·DUA**(재식별 금지).
+- **법령·인증기준을 기억에서 인용하지 않는다.** 조항을 근거로 쓸 때는 `docs/security.md`의 매핑 표나
+  references.md 항목을 가리키고, 표에 없는 조항은 `미확인`으로 남긴다(오인용은 규제 판단을 왜곡한다).
+- `devops-qa`와의 경계: **노출·비밀·규제는 내 소관**, 운영 신뢰성·재현성(태그 고정·자원 한도·healthcheck·CI 게이트)은
+  `devops-qa` 소관이다. 후자를 발견하면 발견으로 올리지 말고 **`devops-qa` 확인 요청**으로 넘긴다.
+
 ## 결과 반환 (기록관 저널용) — 단일 기록자 원칙
 저널 파일을 **직접 쓰지 않는다.** 최종 응답에 아래를 구조화해 반환하면 supervisor가 저널에 옮겨 적는다.
 

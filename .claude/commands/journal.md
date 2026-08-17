@@ -11,7 +11,7 @@ allowed-tools: Read, Write, Edit, Glob, Bash(date:*), Bash(ls:*), Bash(mkdir:*)
 1. **볼트 경로 확정** — `${OBSIDIAN_VAULT:-$HOME/obsidian}`. 저널 루트는 `<볼트>/agents/`.
 2. **KST 날짜·시각 확인** — `TZ=Asia/Seoul date '+%Y-%m-%d %H:%M'`. 폴더는 이 날짜를 쓴다.
 3. **미션 슬러그 결정** — 인자 `$1`이 있으면 그것을, 없으면 이번 세션의 주 작업에서 영문 kebab-case로 유추한다.
-4. **대상 파일** — `<볼트>/agents/<YYYY-MM-DD>/<mission-slug>.md`
+4. **대상 파일** — `<볼트>/agents/<YYYY-MM-DD>/<NN>-<mission-slug>.md`
    - **있으면**: 읽고 **누락분만 append**한다(기존 내용 보존, 중복 금지). `updated`·`status` 갱신.
    - **없으면**: `<볼트>/agents/_TEMPLATE.md`를 읽어 그 구조대로 새로 만든다.
 5. **채울 내용** — 이번 세션에서 **실제로 있었던 일만**:

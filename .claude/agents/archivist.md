@@ -12,7 +12,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 ## 저널 위치
 - 루트: `${OBSIDIAN_VAULT:-~/obsidian}/agents/` — 개인 Obsidian 볼트(**저장소 커밋 대상 아님**).
-- 미션 파일: `<YYYY-MM-DD>/<mission-slug>.md` (일자는 `TZ=Asia/Seoul date +%F`, KST).
+- 미션 파일: `<YYYY-MM-DD>/<NN>-<mission-slug>.md` (NN=그날 착수 순번, 일자는 `TZ=Asia/Seoul date +%F`, KST).
 
 ## 할 일
 1. **정합성 점검**: 미션 저널에 프론트매터(`mission`·`status`·`agent`·`model`·`started`/`updated`)와 계층 섹션(supervisor·director·subagent)이 규약대로 있는지 확인. 빠진 필드·섹션을 채우거나 `TODO`로 표시.

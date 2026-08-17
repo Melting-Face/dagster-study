@@ -50,10 +50,16 @@ AI 세션에서 작업을 **3계층(supervisor → director → subagent)** 으�
 ```
 $OBSIDIAN_VAULT/agents/            # 저널 루트 (기본 ~/obsidian/agents/)
   _TEMPLATE.md                     # 재사용 저널 템플릿
+  _MOC.md                          # 전체 미션 지도(Map of Content) — 기록관이 유지
   <YYYY-MM-DD>/                    # 작업일자(KST) 폴더
-    <mission-slug>.md              # 미션당 1파일 — 하루에 여러 미션이면 파일 여러 개
-    <mission-slug>/                # (예외) 병렬 subagent가 많은 미션만 하위폴더로 액터 분리
+    <NN>-<mission-slug>.md         # 미션당 1파일. NN = 그날의 착수 순번(01부터, 날짜마다 초기화)
+    <NN>-<mission-slug>/           # (예외) 병렬 subagent가 많은 미션만 하위폴더로 액터 분리
 ```
+
+- 파일명 앞 `NN` 은 그날 미션을 **착수한 순서**다(`01`·`02`…). 파일 목록만 봐도 **작업 순서**가 드러나고 정렬이 시간순이 된다.
+  날짜 폴더가 바뀌면 `01`부터 다시 시작한다.
+- 순번은 **파일명에만** 붙인다. 프론트매터 `mission:`·`tags:`의 슬러그는 **번호 없이** 유지한다(미션 정체성은 순서와 무관).
+- 위키링크는 파일명 그대로 쓴다 — `[[01-agent-journal-trigger]]`. 표시를 줄이려면 별칭 `[[01-x|x]]`도 가능.
 
 - **작업일자는 KST**(`Asia/Seoul`) 기준으로 폴더를 나눈다([타임존 정책](timezone.md)).
 - **미션당 1파일**에 supervisor → director → subagent를 **계층 섹션**으로 누적(append)한다.
@@ -150,7 +156,7 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 
 | 시점 | 동작 |
 | --- | --- |
-| **미션 개시** — 요청이 아래 "미션 판단 기준"에 해당할 때 | `_TEMPLATE.md` 복사 → `$OBSIDIAN_VAULT/agents/<KST 날짜>/<mission-slug>.md` 생성, `status: in-progress`, `started` 기입 |
+| **미션 개시** — 요청이 아래 "미션 판단 기준"에 해당할 때 | `_TEMPLATE.md` 복사 → `$OBSIDIAN_VAULT/agents/<KST 날짜>/<NN>-<mission-slug>.md`(NN=그날 착수 순번) 생성, `status: in-progress`, `started` 기입 |
 | **계층 간 이벤트 직후** — 배정·보고·질의·반려·승인 | `## 🔀 상호작용 로그`에 한 줄 append(KST 시각) |
 | **director/subagent 결과 수령 직후** | 반환값을 해당 계층 섹션(`## 🏷 director:` / `#### 🔧 subagent:`)에 옮겨 적기 |
 | **미션 종료 — 사용자 최종 보고 직전** | `## ✅ supervisor — 취합·보고` 작성, `status: done`(막히면 `blocked`), `updated` 갱신 |

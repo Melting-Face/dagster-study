@@ -130,7 +130,7 @@
 - **에이전트 오케스트레이션·기록관**: AI 세션을 **3계층(supervisor→director→subagent)** 으로 나눈다(**director는 우선 1명**,
   도메인 무관). subagent 실행은 director **승인 게이트**를 거치고, 미션 저널은 **supervisor 단독 기록**(경합 방지). "누가 무엇을 왜
   했는가"와 **계층 간 상호작용(배정·보고·질의·반려·승인)**·실행 `agent`/`model`을 **기록관 저널**로 남긴다. 저널은 개인 Obsidian 볼트
-  **`$OBSIDIAN_VAULT`(기본 `~/obsidian`, 환경마다 다를 수 있음)** 의 `agents/<YYYY-MM-DD>/<mission>.md`
+  **`$OBSIDIAN_VAULT`(기본 `~/obsidian`, 환경마다 다를 수 있음)** 의 `agents/<YYYY-MM-DD>/<NN>-<mission>.md`(NN=그날 착수 순번)
   (작업일자별·미션당 1파일, 계층 섹션 누적)에 쌓으며 **저장소 커밋 대상 아님**.
   **기록 시점(필수)**: ① 미션 개시 시 파일 생성 ② 계층 간 이벤트 직후 상호작용 로그 append ③ 서브에이전트 결과 수령 직후
   계층 섹션 기록 ④ **사용자 최종 보고 직전** 취합·`status`/`updated` 갱신 ⑤ 세션 종료·컨텍스트 요약 직전 현재 상태 저장.

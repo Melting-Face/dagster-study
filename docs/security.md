@@ -58,9 +58,9 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 
 | 인증기준(분야) | 현 프로젝트 통제 | 상태 | 미비점·TODO |
 | --- | --- | --- | --- |
-| **2.5 인증 및 권한관리** | (study 단일 사용자) 서비스 계정은 `.env` 크리덴셜로 분리 | 🟡 | Trino·Dagster·SeaweedFS **RBAC/최소권한** 미문서화. 확장 시 계정·권한 매트릭스 필요 |
-| **2.6 접근통제** | 내부 네트워크(compose)로 서비스 격리, 비밀 설정 `:ro` 마운트([philosophy #4](philosophy.md)) | 🟡 | 관리 UI(SeaweedFS·Dagster) **포트 노출** 범위 점검·인증 필요 |
-| **2.7 암호화 적용** | 비밀정보 **하드코딩 금지·참조 주입**(`dg.EnvVar`/`${ENV:...}`), `.env` gitignore ([general.md](conventions/general.md#비밀정보-secrets)) | 🟡 | **저장 암호화(at-rest)** 미설정(SeaweedFS·Postgres·Iceberg). **전송 암호화(TLS)** — S3 endpoint `http://`(내부 평문). 실서비스는 HTTPS/TLS 필요 |
+| **2.5 인증 및 권한관리** | (study 단일 사용자) 서비스 계정은 `.env` 크리덴셜로 분리. **OCI API 키는 로컬 생성·공개키만 업로드**, SSH 키는 **용도별 분리**, k3s kubeconfig `600` | 🟡 | Trino·Dagster·SeaweedFS **RBAC/최소권한** 미문서화. **k3s 클러스터 RBAC**(기본 cluster-admin 단일 kubeconfig) 미분리 |
+| **2.6 접근통제** | 내부 네트워크(compose)로 서비스 격리, 비밀 설정 `:ro` 마운트([philosophy #4](philosophy.md)). **OCI 공개 노드**는 Security List `/32` 화이트리스트(SSH 22·API 6443, `0.0.0.0/0`은 `validation`으로 차단) + 호스트 iptables([terraform.md](conventions/terraform.md)) | 🟡 | 관리 UI(SeaweedFS·Dagster) **포트 노출** 범위 점검·인증 필요. 호스트 iptables의 **kubelet 10250이 소스 무제한**(SL이 앞단 방어) — 방어 심화 필요 |
+| **2.7 암호화 적용** | 비밀정보 **하드코딩 금지·참조 주입**(`dg.EnvVar`/`${ENV:...}`), `.env` gitignore ([general.md](conventions/general.md#비밀정보-secrets)). 개인키·`*.tfstate`·`*.tfvars`·회수 kubeconfig는 **gitignore + 권한 600** | 🟡 | **저장 암호화(at-rest)** 미설정(SeaweedFS·Postgres·Iceberg). **전송 암호화(TLS)** — S3 endpoint `http://`(내부 평문). `tfstate` **원격 백엔드+암호화** 미도입(현재 로컬 평문) |
 | **2.8 정보시스템 도입 및 개발 보안** | pre-commit **gitleaks** 시크릿 스캔·`ruff`·`hadolint`, 이미지 `latest` 금지([docker.md](conventions/docker.md)) | ✅ | 의존성 취약점 스캔(SCA) 미도입 |
 | **2.9 시스템 및 서비스 운영관리** | Docker 로그 보존(`max-size 10m × 20`), healthcheck+`depends_on`, `deploy.resources` 명시 | ✅ | — |
 | **2.10 시스템 및 서비스 보안관리** | UTC 저장/KST 표시로 **로그 타임스탬프 일관성**([timezone.md](conventions/timezone.md)) | 🟡 | 중앙 **감사 로그(접속기록)** 수집·보관 미설정 |

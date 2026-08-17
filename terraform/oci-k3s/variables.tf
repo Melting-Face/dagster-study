@@ -44,16 +44,26 @@ variable "subnet_cidr" {
   default     = "10.0.1.0/24"
 }
 
+# 접근 제어에는 기본값을 두지 않는다 — 기본값이 있으면 "안 채워도 apply되는" 경로가 생기고,
+# 그 경로의 끝이 전체 개방이면 실수 한 번이 곧 노출이다. 미지정 시 apply가 실패하는 편이 낫다.
 variable "allowed_ssh_cidr" {
-  description = "SSH(22) 허용 소스 CIDR. 보안상 본인 IP/32로 좁히길 권장(기본 전체 개방)"
+  description = "SSH(22) 허용 소스 CIDR. 본인 공인 IP/32 (확인: curl -s https://checkip.amazonaws.com)"
   type        = string
-  default     = "0.0.0.0/0"
+
+  validation {
+    condition     = var.allowed_ssh_cidr != "0.0.0.0/0"
+    error_message = "SSH를 전체(0.0.0.0/0)에 열지 않는다. 본인 공인 IP/32를 지정한다."
+  }
 }
 
 variable "allowed_api_cidr" {
-  description = "Kubernetes API(6443) 허용 소스 CIDR. 본인 IP/32 권장(기본 전체 개방)"
+  description = "Kubernetes API(6443) 허용 소스 CIDR. 본인 공인 IP/32"
   type        = string
-  default     = "0.0.0.0/0"
+
+  validation {
+    condition     = var.allowed_api_cidr != "0.0.0.0/0"
+    error_message = "K8s API(6443)를 전체(0.0.0.0/0)에 열지 않는다 — cluster-admin 진입점이다. 본인 공인 IP/32를 지정한다."
+  }
 }
 
 # --- 컴퓨트 (Always Free A1 Flex, ARM) ---
@@ -122,7 +132,12 @@ variable "ssh_public_key_path" {
 
 # --- k3s ---
 variable "k3s_version" {
-  description = "k3s 버전 핀(예: v1.31.5+k3s1). 빈 문자열이면 stable 채널 최신. 권장: 릴리스에서 핀 https://github.com/k3s-io/k3s/releases"
+  description = "k3s 버전 핀. 빈 문자열이면 stable 채널 최신이 설치돼 재현성이 깨진다. 릴리스: https://github.com/k3s-io/k3s/releases"
   type        = string
-  default     = ""
+  default     = "v1.36.3+k3s1" # 2026-08-04 릴리스. latest 금지 규칙과 동일 취지 — 부트스트랩 산출물을 고정한다
+
+  validation {
+    condition     = var.k3s_version != ""
+    error_message = "k3s 버전을 핀한다(예: v1.36.3+k3s1). 채널 최신은 부팅 시점마다 달라져 재현·감사가 불가능하다."
+  }
 }

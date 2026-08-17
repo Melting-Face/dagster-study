@@ -31,8 +31,10 @@ write_files:
           else
               export INSTALL_K3S_CHANNEL="stable"
           fi
+          # 설치 스크립트 자체의 신뢰 근거는 TLS다. 다운로드되는 k3s 바이너리는 설치 스크립트가
+          # 릴리스 sha256과 대조하므로, 버전을 핀하면 설치 산출물이 결정적으로 고정된다.
           curl -sfL https://get.k3s.io | sh -s - server \
-              --write-kubeconfig-mode 644 \
+              --write-kubeconfig-mode 600 \
               --tls-san "$PUBLIC_IP" \
               --node-external-ip "$PUBLIC_IP" \
               --disable traefik

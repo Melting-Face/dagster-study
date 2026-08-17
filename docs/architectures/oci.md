@@ -57,8 +57,17 @@
 ## 운영 메모
 
 - **A1 용량 부족(Out of host capacity, HTTP 500)**: 무료 A1은 인기가 높아 `apply`가 용량 오류로 실패한다.
-  **시간차 재시도가 유일한 무료 해법**이다 → [`scripts/oci-k3s-retry-apply.sh`](../../scripts/oci-k3s-retry-apply.sh)
-  (기본 5분 간격·72회, 용량 부족 외 오류는 즉시 중단).
+  **시간차 재시도가 유일한 무료 해법**이다 → [`scripts/oci_k3s_retry_apply.py`](../../scripts/oci_k3s_retry_apply.py)
+  (기본 60초 간격·720회 = 약 12시간, 용량 부족 외 오류는 즉시 중단).
+  - **재시도는 `apply` 반복이 아니라 용량 폴링이다** — `apply` 1회는 plan 재계산까지 포함해 무거워
+    간격을 좁힐 수 없는데, A1 재고는 초 단위로 열렸다 닫힌다. 읽기 전용·경량인
+    [CreateComputeCapacityReport](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/core/models/oci.core.models.CapacityReportShapeAvailability.html)로
+    폴링하고 `availability_status == "AVAILABLE"`인 순간에만 `apply`를 던진다.
+    실패하는 `LaunchInstance` 반복은 API 스로틀링(429)도 자초하므로 이 편이 두 배로 유리하다.
+  - **판정은 `availability_status`로만 한다** — 같은 응답의 `available_count`는 무료 테넌시에서
+    비어(`null`) 온다(2026-08-17 도쿄 AD-1 실측). 카운트를 조건에 넣으면 재고가 열려도 건너뛴다.
+  - enum은 `AVAILABLE` / `OUT_OF_HOST_CAPACITY` / `HARDWARE_NOT_SUPPORTED` 세 가지다.
+    `HARDWARE_NOT_SUPPORTED`는 재고가 아니라 **설정** 문제이므로 즉시 중단한다.
   - **shape을 줄여도 소용없다** — 2026-08-17 실측: 4/24·2/12·1/6 **모두 동일 실패**. 크기가 아니라 호스트 재고 문제다.
   - **쿼터와 용량은 다른 축이다** — 같은 시점 `oci_limits_resource_availability` 조회 결과 `standard-a1-core-count`
     한도 41·사용 0으로 **쿼터는 여유**였다. 500이 나와도 한도를 의심할 필요는 없다.

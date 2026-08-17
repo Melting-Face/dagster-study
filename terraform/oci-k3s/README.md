@@ -38,7 +38,11 @@ cp terraform.tfvars.example terraform.tfvars   # 값 채우기(OCID·키 경로�
 terraform init
 terraform validate
 terraform plan
-terraform apply        # A1 용량 부족(500)이면 잠시 후/다른 AD·리전으로 재시도
+terraform apply        # A1 용량 부족(500)이면 아래 폴링 스크립트로 전환
+
+# 용량 부족(500)일 때: 재고를 폴링하다 열리는 순간에만 apply (권장)
+#   ONCE=1 을 붙이면 현재 재고만 1회 조회하고 끝난다
+uv run ../../scripts/oci_k3s_retry_apply.py
 
 # kubeconfig 회수 후 접속 확인 (완료 게이트)
 ../../scripts/oci-k3s-kubeconfig.sh

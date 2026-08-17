@@ -15,15 +15,21 @@ REGISTRY_NAME="${REGISTRY_NAME:-kind-registry}"
 REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 REGISTRY_IMAGE="${REGISTRY_IMAGE:-docker.io/library/registry:2.8.3}"
 
-# --- Spark 오퍼레이터 (Apache 공식 — apache/spark-kubernetes-operator, GA 1.0.0 2026-07-26) ---
-# Kubeflow spark-operator에서 이전. CRD는 apiVersion: spark.apache.org/v1 (sparkConf 중심).
+# --- Spark 오퍼레이터 (Apache 공식 — apache/spark-kubernetes-operator) ---
+# Kubeflow spark-operator에서 이전. CRD는 apiVersion: spark.apache.org/v1beta1 (sparkConf 중심).
 SPARK_OPERATOR_NS="${SPARK_OPERATOR_NS:-spark-operator}"
 SPARK_OPERATOR_RELEASE="${SPARK_OPERATOR_RELEASE:-spark-kubernetes-operator}"
 SPARK_OPERATOR_REPO="${SPARK_OPERATOR_REPO:-spark}"
 SPARK_OPERATOR_REPO_URL="${SPARK_OPERATOR_REPO_URL:-https://apache.github.io/spark-kubernetes-operator}"
 SPARK_OPERATOR_CHART="${SPARK_OPERATOR_CHART:-spark-kubernetes-operator}"
-# 설치 전 최신 확인: helm search repo spark/spark-kubernetes-operator --versions
-SPARK_OPERATOR_CHART_VERSION="${SPARK_OPERATOR_CHART_VERSION:-1.0.0}"
+# 주의: chart 버전 ≠ appVersion. GA appVersion 1.0.0 = **chart 1.8.0**(chart 1.0.0은 appVersion 0.2.0).
+# 확인: helm search repo spark/spark-kubernetes-operator --versions
+SPARK_OPERATOR_CHART_VERSION="${SPARK_OPERATOR_CHART_VERSION:-1.8.0}"
+# Spark 잡을 띄울 네임스페이스. 차트 기본값은 비어 있고 overrideWatchedNamespaces=true라,
+# 비워두면 **감시 네임스페이스가 없고 workload SA/rolebinding도 안 생긴다** → 반드시 지정한다.
+SPARK_JOB_NS="${SPARK_JOB_NS:-default}"
+# driver가 쓰는 ServiceAccount (차트 workloadResources.serviceAccount.name 기본값)
+SPARK_JOB_SA="${SPARK_JOB_SA:-spark}"
 
 INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-manager 의존)
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"

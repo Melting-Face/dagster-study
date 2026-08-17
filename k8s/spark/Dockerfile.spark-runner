@@ -17,6 +17,10 @@ RUN set -eux; \
     curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"
 
 # 잡 스크립트 배치
-COPY poc_ingest.py /opt/spark/work-dir/poc_ingest.py
+# 주의: driver의 CWD(=이미지 WORKDIR `/opt/spark/work-dir`)에 두면 안 된다.
+#   spark-submit은 local:// 진입점을 CWD로 복사하는데, 복사 전 대상을 삭제한다
+#   (SparkSubmit.downloadResourcesToCurrentDirectory). 소스=대상이면 소스가 지워져
+#   NoSuchFileException으로 죽는다(2026-08-17 실측). 공식 예제도 CWD 밖(/opt/spark/examples/...)에 둔다.
+COPY poc_ingest.py /opt/spark/app/poc_ingest.py
 
 USER spark

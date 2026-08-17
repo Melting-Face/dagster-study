@@ -6,7 +6,7 @@ tenancy_ocid     = "ocid1.tenancy.oc1..xxxxx"
 user_ocid        = "ocid1.user.oc1..xxxxx"
 fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
 private_key_path = "~/.oci/oci_api_key.pem"
-region           = "ap-chuncheon-1" # 또는 ap-seoul-1 등
+region           = "ap-tokyo-1" # 테넌시 홈 리전(변경 불가) — Always Free는 홈 리전에서만 생성된다
 compartment_ocid = "ocid1.compartment.oc1..xxxxx" # 루트면 tenancy_ocid와 동일
 
 # --- SSH ---
@@ -16,9 +16,10 @@ ssh_public_key_path = "~/.ssh/id_ed25519.pub"
 # allowed_ssh_cidr = "203.0.113.10/32"
 # allowed_api_cidr = "203.0.113.10/32"
 
-# --- 컴퓨트(기본값이 Always Free A1 최대치: 4 OCPU / 24 GB / 50 GB) ---
-# instance_ocpus      = 4
-# instance_memory_gbs = 24
+# --- 컴퓨트(기본값이 Always Free A1 최대치: 2 OCPU / 12 GB / 50 GB) ---
+# 2026-06-15부터 무료 한도가 4/24 → 2/12로 축소됐다. 초과 시 초과분이 과금되며 variables.tf validation이 막는다.
+# instance_ocpus      = 2
+# instance_memory_gbs = 12
 # boot_volume_gbs     = 50
 
 # --- k3s 버전 핀(권장). 비우면 stable 채널 최신 ---

@@ -9,14 +9,20 @@
 
 - **k3s**: 단일 바이너리 K8s. etcd 대신 기본 SQLite, containerd 내장, 인증받은 배포판(CNCF conformant).
   엣지·소규모·홈랩·CI에 적합.
-- **Always Free A1**: 테넌시당 **월 3,000 OCPU시간 + 18,000 GB시간**(≈ 4 OCPU/24 GB 상시), 블록스토리지 200 GB
+- **Always Free A1**: 테넌시당 **월 1,500 OCPU시간 + 9,000 GB시간**(≈ **2 OCPU/12 GB** 상시), 블록스토리지 200 GB
   무료. ARM64이므로 컨테이너 이미지는 **arm64 빌드**가 필요하다.
+  > **2026-06-15 한도 축소**: 4 OCPU/24 GB → **2 OCPU/12 GB**(절반). 기존 초과 사용분은 2026-08-18까지 축소하지 않으면
+  > 종료된다고 Oracle이 통보했다. 초과 설정은 **과금**되므로 `variables.tf`에 `validation`으로 상한을 걸어뒀다.
+  > 출처: [Always Free Resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) ·
+  > [Oracle Cloud Customer Connect 공지](https://community.oracle.com/customerconnect/discussion/970310/oci-always-free-updated-ampere-a1-compute-allocation)
 
 ## 이 프로젝트에서의 위치 — 🔎 학습·확장 경로(로컬 이후)
 
-- **채택 방향**: 로컬 **kind on Podman**(6 CPU/16 GB 상한)으로 검증한 K8s 재설계를, **비용 0**으로
-  더 큰 상시 클러스터(4 OCPU/**24 GB**)에서 재현한다. 포트폴리오상 "IaC(Terraform)로 클라우드 K8s 프로비저닝"
+- **채택 방향**: 로컬 **kind on Podman**(6 CPU/16 GB 상한)으로 검증한 K8s 재설계를, **비용 0**의
+  상시 클러스터(**2 OCPU/12 GB**)에서 재현한다. 포트폴리오상 "IaC(Terraform)로 클라우드 K8s 프로비저닝"
   경험을 더한다.
+  > 한도 축소(2026-06) 이후 클라우드 쪽이 로컬(6 CPU/16 GB)보다 **작다**. "더 큰 클러스터"가 아니라
+  > **상시 가동·IaC 경험**이 채택 이유로 남는다.
 - **범위(현재)**: VCN·보안·A1 인스턴스·k3s 부트스트랩·kubeconfig 회수까지. 데이터스택(Spark Operator 등)은 후속.
 - **코드 위치**: [`terraform/oci-k3s/`](../../terraform/oci-k3s/README.md), 회수 스크립트 `scripts/oci-k3s-kubeconfig.sh`.
 
@@ -50,8 +56,15 @@
 
 ## 운영 메모
 
-- **A1 용량 부족(Out of host capacity, HTTP 500)**: 무료 A1은 인기가 높아 `apply`가 용량 오류로 실패할 수 있다.
-  다른 AD/리전 재시도 또는 시간차 재시도. (자동 재시도 루프는 미구현 — 필요 시 후속.)
+- **A1 용량 부족(Out of host capacity, HTTP 500)**: 무료 A1은 인기가 높아 `apply`가 용량 오류로 실패한다.
+  **시간차 재시도가 유일한 무료 해법**이다 → [`scripts/oci-k3s-retry-apply.sh`](../../scripts/oci-k3s-retry-apply.sh)
+  (기본 5분 간격·72회, 용량 부족 외 오류는 즉시 중단).
+  - **shape을 줄여도 소용없다** — 2026-08-17 실측: 4/24·2/12·1/6 **모두 동일 실패**. 크기가 아니라 호스트 재고 문제다.
+  - **쿼터와 용량은 다른 축이다** — 같은 시점 `oci_limits_resource_availability` 조회 결과 `standard-a1-core-count`
+    한도 41·사용 0으로 **쿼터는 여유**였다. 500이 나와도 한도를 의심할 필요는 없다.
+  - **AD·리전 우회는 사실상 불가** — Always Free는 **홈 리전 전용**이고 홈 리전은 **변경 불가**
+    ([Managing Regions](https://docs.oracle.com/en-us/iaas/Content/Identity/Tasks/managingregions.htm)).
+    `ap-tokyo-1`은 AD도 1개라 AD 변경 여지도 없다.
 - **호스트 방화벽**: OCI Ubuntu 기본 iptables가 ingress를 막는다 → cloud-init에서 6443·10250·VXLAN(8472)·
   파드/서비스 CIDR 허용(누락 시 노드 NotReady). 규칙은 [conventions/k8s.md](../conventions/k8s.md)와 정합.
 - **공인 IP**: ephemeral 공인 IP는 재시작 시 변경 → kubeconfig TLS SAN 어긋남. 안정화 시 **예약 공인 IP**로 승격.

@@ -22,7 +22,7 @@ variable "private_key_path" {
 }
 
 variable "region" {
-  description = "OCI 리전 식별자(예: ap-seoul-1, ap-chuncheon-1)"
+  description = "OCI 리전 식별자. Always Free는 테넌시 홈 리전에서만 생성되며 홈 리전은 변경 불가(예: ap-tokyo-1)"
   type        = string
 }
 
@@ -76,15 +76,25 @@ variable "instance_shape" {
 }
 
 variable "instance_ocpus" {
-  description = "OCPU 수(A1 무료 한도 총 4)"
+  description = "OCPU 수. A1 무료 한도 총 2(2026-06-15 4→2 축소). 초과 시 초과분 과금"
   type        = number
-  default     = 4
+  default     = 2
+
+  validation {
+    condition     = var.instance_ocpus <= 2
+    error_message = "A1 Always Free 한도는 총 2 OCPU다(월 1,500 OCPU시간). 초과하면 과금되므로 의도적일 때만 이 검증을 완화한다."
+  }
 }
 
 variable "instance_memory_gbs" {
-  description = "메모리 GB(A1 무료 한도 총 24)"
+  description = "메모리 GB. A1 무료 한도 총 12(2026-06-15 24→12 축소). 초과 시 초과분 과금"
   type        = number
-  default     = 24
+  default     = 12
+
+  validation {
+    condition     = var.instance_memory_gbs <= 12
+    error_message = "A1 Always Free 한도는 총 12 GB다(월 9,000 GB시간). 초과하면 과금되므로 의도적일 때만 이 검증을 완화한다."
+  }
 }
 
 variable "boot_volume_gbs" {

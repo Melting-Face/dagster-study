@@ -173,10 +173,15 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | (없음) | supervisor | 메인 루프(대화 주체) — 파일로 만들 수 없음 |
 | `.claude/agents/director.md` | director | **단일 조율자(도메인 무관)** — 분해·배정·품질/승인 게이트·보고. 도메인 지식은 컨벤션·스킬로 참조 |
 | (내장 `general-purpose`) | subagent/worker | 단일 작업 워커 — 별도 파일 불필요(YAGNI) |
+| `.claude/agents/security.md` | subagent/worker (전문) | **보안 담당** — 비밀누출·데이터 거버넌스·인프라 노출·ISMS-P 준수를 **읽기 전용** 점검, 발견만 반환 |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
 
-- director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 `general-purpose`를 쓴다.
-- **새 `.claude/agents/*.md`는 세션 시작 시 로드**된다 — 추가 직후 같은 세션에서는 `subagent_type`으로 못 부르니(레지스트리 미갱신) 새 세션에서 사용한다.
+- director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 `general-purpose`를 쓰고,
+  **보안 점검은 `security`** 를 쓴다(전문 워커는 필요한 도메인만 파일로 둔다 — 지금은 보안 1종).
+- **전문 워커 = 읽기 전용 원칙**: `security`처럼 판정이 목적인 워커에는 `Write`/`Edit`를 주지 않는다.
+  발견을 반환하면 승인 후 **수정은 별도 워커에 배정**한다(승인 게이트가 실제로 작동하게 하는 장치).
+- **새 `.claude/agents/*.md`는 추가 직후 같은 세션에서 쓸 수 있다** — 런타임이 레지스트리를 갱신한다(2026-08-17 `security` 추가 시 실측).
+  다만 갱신은 런타임 동작이라 보장 대상이 아니다. `subagent_type`을 찾지 못하면 새 세션에서 재시도한다.
 - 부하·전문성 분리가 필요해 도메인별 director로 분화하면 이 표와 `.claude/agents/`를 함께 갱신한다.
 
 ## 참고

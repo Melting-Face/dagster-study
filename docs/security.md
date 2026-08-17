@@ -93,6 +93,17 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | ★★★☆☆ | Postgres·SeaweedFS **백업·복구** 정책 | 2.12 | [operations.md](operations.md) |
 | ★★☆☆☆ | 중앙 **감사 로그·접속기록** 수집·보관 | 2.10 · 3.2 | — |
 
+### 3-1. 점검 수단 — `security` 서브에이전트
+
+위 항목의 **준수 여부 점검**은 AI 세션의 보안 담당 워커 [`.claude/agents/security.md`](../.claude/agents/security.md)에 배정한다
+(3계층 규약 [conventions/agents.md](conventions/agents.md)).
+
+- **읽기 전용**이다 — 발견을 심각도(높음·중간·낮음)로 **반환만** 하고, 수정·커밋은 승인 후 별도 워커가 한다(승인 게이트).
+- 점검 범위는 이 문서(ISMS-P 매핑·§0 철칙)와 [general.md](conventions/general.md)·[operations.md](operations.md)·
+  인프라 컨벤션(terraform·k8s·docker)이며, **규칙을 새로 만들지 않고 정본을 집행**한다.
+- 보고 시 **비밀값 원문은 마스킹**한다. 내장 `/security-review`(변경분 취약점 중심)와 병행 — 이 워커는 **거버넌스·컨벤션 준수**를 본다.
+- 권장 시점: 커밋 전, 인프라 변경(terraform·k8s·docker) 리뷰 시, §2 매핑표 갱신 시.
+
 ## 4. TODO 실행 절차
 
 각 절차는 **제안(TODO)** 이며 현재 미구현이다. 구현 시 이 문서와 해당 정본 문서

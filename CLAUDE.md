@@ -135,7 +135,8 @@
   **기록 시점(필수)**: ① 미션 개시 시 파일 생성 ② 계층 간 이벤트 직후 상호작용 로그 append ③ 서브에이전트 결과 수령 직후
   계층 섹션 기록 ④ **사용자 최종 보고 직전** 취합·`status`/`updated` 갱신 ⑤ 세션 종료·컨텍스트 요약 직전 현재 상태 저장.
   **미션 판단**: 파일 생성·수정 / 위임 발생 / 결정·합의 / 비가역 작업 중 하나면 저널을 연다(단순 조회·질의응답은 제외).
-  누락 보정·수동 기록은 **`/journal`** 슬래시 커맨드. 상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).
+  누락 보정·수동 기록은 **`/journal`** 슬래시 커맨드. 전문 워커는 **`security`**(보안 점검, **읽기 전용**—발견만 반환).
+  상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).
 - **보안·데이터 거버넌스**: 원천 진료 데이터·`.env`·크리덴셜은 **저장소 커밋 금지**(비식별 연구

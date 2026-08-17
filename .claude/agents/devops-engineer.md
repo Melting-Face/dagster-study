@@ -70,6 +70,29 @@ tools: Read, Write, Edit, Bash, Grep, Glob
    - `yamllint`·`hadolint`(가용 시), k8s는 `kubectl apply --dry-run=client -f`(**서버 적용 아님**)
 4. **Act** — 규칙·구조를 바꿨으면 `CLAUDE.md`·`docs/`를 **함께 갱신**한다([문서화 원칙](../../CLAUDE.md)). 못 했으면 후속으로 반환.
 
+## 참고 스킬·출처
+
+**스킬 정본은 [`docs/skills.md`](../../docs/skills.md)** 다 — 관련 스킬이 있으면 **반드시 활용**하고,
+충돌 시 **프로젝트 컨벤션 > 범용 스킬**(§사용 규칙 2). 아래는 이 워커에 해당하는 것만 추린 것이다.
+
+| 상황 | 스킬 | 비고 |
+| --- | --- | --- |
+| compose·Dockerfile 작성·최적화·멀티스테이지 | `docker-expert` | ⚙️ 런타임 |
+| k8s manifest·RBAC·NetworkPolicy·리소스 산정 | `kubernetes-specialist` | ⚙️ |
+| Helm 차트 작성·템플릿화 | `helm-chart-scaffolding` | ⚙️ [k8s.md](../../docs/conventions/k8s.md) §7(패키징은 Helm) |
+| CI 워크플로 작성(테스트·인프라 검증 게이트) | `github-actions-templates` | ⚙️ 현재 `.github/workflows/`는 `release.yml`뿐 |
+| `scripts/*.sh` 품질·이식성 | `shellcheck-configuration` | ⚙️ |
+| Spark/Flink 워크로드 설정 | `spark-engineer`·`spark-optimization` | ⚙️ 둘 다 **미채택 기술**([architectures](../../docs/architectures/README.md)) — 도입 결정 전 구현하지 않는다 |
+| **Terraform** | **전용 스킬 없음** | → [`terraform.md`](../../docs/conventions/terraform.md) 규칙을 직접 준수 |
+
+- **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
+  직접 관련: Docker Compose · Kubernetes · Helm(§처리·배포 기술), Trino·SeaweedFS·Iceberg(§플랫폼).
+  Terraform 공식 문서 링크는 [`terraform.md`](../../docs/conventions/terraform.md) §참고에 있다.
+- 스킬의 범용 권고가 이 저장소 규약과 충돌하면 **규약을 따른다**. 대표 예:
+  - 스킬이 `latest` 태그나 태그 생략을 예시로 써도 **구체 태그 고정**([docker.md](../../docs/conventions/docker.md) §1-3)
+  - 스킬이 override 파일(`-f`) 분리를 권해도 이 레포는 **`profiles`** 를 택했다(앵커가 파일 스코프라서 — §1-6)
+  - 리소스 수치는 스킬의 일반 권고가 아니라 **[`resource-sizing.md`](../../docs/resource-sizing.md)** 계산식
+
 ## 결과 반환 (기록관 저널용) — 단일 기록자 원칙
 저널 파일을 **직접 쓰지 않는다.** 최종 응답에 아래를 구조화해 반환하면 supervisor가 저널에 옮겨 적는다.
 

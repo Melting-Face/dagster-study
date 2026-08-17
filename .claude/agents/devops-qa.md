@@ -69,6 +69,30 @@ docs/resource-sizing.md           # 수치 정본 (선언과 대조)
 `*.example` 자리표시자, 옵션 profile 서비스의 의도적 설정은 갭으로 올리지 말고 "확인함(문제없음)"에 넣는다.
 **`security` 소관(비밀·노출·RBAC)은 중복 제기하지 않는다.**
 
+## 참고 스킬·출처
+
+**스킬 정본은 [`docs/skills.md`](../../docs/skills.md)** 다 — 관련 스킬이 있으면 **반드시 활용**하고,
+충돌 시 **프로젝트 컨벤션 > 범용 스킬**(§사용 규칙 2). 아래는 이 워커에 해당하는 것만 추린 것이다.
+
+| 상황 | 스킬 | 비고 |
+| --- | --- | --- |
+| compose·Dockerfile 베스트프랙티스 대조 | `docker-expert` | ⚙️ 런타임. **감사 기준은 정본 우선**(아래 충돌 규칙) |
+| manifest·RBAC·리소스 설정 감사 기준 | `kubernetes-specialist` | ⚙️ 보안 항목은 `security` 소관으로 넘긴다 |
+| CI 게이트 설계(테스트·`fmt -check`·`validate`) | `github-actions-templates` | ⚙️ **4순위 갭의 보강 계획 작성용** |
+| 쉘 스크립트 검사 게이트 | `shellcheck-configuration` | ⚙️ `scripts/*.sh` 대상 |
+| Helm 차트 구조 감사 | `helm-chart-scaffolding` | ⚙️ 도입 시 |
+| **Terraform** | **전용 스킬 없음** | → [`terraform.md`](../../docs/conventions/terraform.md) 조항을 직접 대조 |
+
+- **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
+  직접 관련: Docker Compose · Kubernetes · Helm(§처리·배포 기술). Terraform 링크는 [`terraform.md`](../../docs/conventions/terraform.md) §참고.
+- **감사 기준은 스킬이 아니라 정본이다.** 스킬의 범용 베스트프랙티스를 갭으로 올리지 않는다 —
+  이 저장소가 **근거와 함께 다르게 결정한 항목**이 있다:
+  - `profiles` 채택(override `-f` 분리 아님) — YAML 앵커가 파일 스코프이기 때문([docker.md](../../docs/conventions/docker.md) §1-6)
+  - `.tf`는 **2-space**(전역 4칸의 예외) — `terraform fmt` 고정([terraform.md](../../docs/conventions/terraform.md) §3)
+  - `chrislusf/seaweedfs` 태그 미고정 — 상류 태그 정책 부재([docker.md](../../docs/conventions/docker.md) §1-3)
+  - Dagster는 **호스트 유지**(k8s 미이행) — [k8s.md](../../docs/conventions/k8s.md) §8
+  이런 항목은 "확인함(문제없음)"에 넣고, **정본에 근거가 없는 경우에만** 갭으로 올린다.
+
 ## 결과 반환 (기록관 저널용) — 단일 기록자 원칙
 저널 파일을 **직접 쓰지 않는다.** 최종 응답에 아래를 구조화해 반환하면 supervisor가 저널에 옮겨 적는다.
 

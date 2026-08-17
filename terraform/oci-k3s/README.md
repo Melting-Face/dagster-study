@@ -11,6 +11,20 @@ OCI **Always Free**(Ampere A1, ARM64) 인스턴스 1대에 **k3s 단일 노드**
 > 개인키·`kubeconfig-oci`는 **커밋 금지**(`.gitignore` 처리됨). `allowed_ssh_cidr`·`allowed_api_cidr`는
 > **본인 공인 IP/32**로 좁히는 것을 권장한다.
 
+## 현황 — ⏸ 보류 (2026-08-17)
+
+**A1 컴퓨트가 Out of host capacity로 생성되지 않아 보류**하고, 검증은 로컬 K8s(kind on Podman)에서 이어간다.
+배경·재개 조건은 [`../../docs/architectures/oci.md`](../../docs/architectures/oci.md) §현황.
+
+| 리소스 | 상태 |
+| --- | --- |
+| `oci_core_vcn` · `oci_core_subnet` · `oci_core_internet_gateway` · `oci_core_route_table` · `oci_core_security_list` | ✅ 생성됨(state serial 33) — **전부 Always Free, 과금 0** |
+| `oci_core_instance.k3s` (A1 컴퓨트) | ❌ 미생성 — 용량 부족 |
+
+- **재개**: `terraform apply`(또는 `../../scripts/oci_k3s_retry_apply.py`) — 네트워크는 이미 있어 **컴퓨트만 추가**된다.
+- **`terraform.tfstate`를 지우지 않는다** — 지우면 위 5종이 orphan이 되어 콘솔 수동 삭제만 가능해진다.
+- **완전 정리**: `terraform destroy`(무료라 급하지 않다).
+
 ## 구성 리소스
 
 | 파일 | 리소스 |

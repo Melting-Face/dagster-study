@@ -68,8 +68,15 @@ resources:
   GA **1.0.0** 2026-07-26)를 Helm으로 `ns=spark-operator`에 설치한다. Kubeflow spark-operator에서 이전했다
   (공식 생태계 무게중심 이동). 오퍼레이터가 `spark-submit`을 대행하므로 자산은 명령형 submit 대신
   **선언형 `SparkApplication`(CRD)** 을 제출한다.
-- **CRD**: `apiVersion: spark.apache.org/v1`, `kind: SparkApplication`. Kubeflow(`sparkoperator.k8s.io/v1beta2`)와
+- **차트 버전 ≠ appVersion**(설치 시 최다 실수): GA **appVersion 1.0.0**은 **chart 1.8.0**이다.
+  `--version 1.0.0`을 주면 **appVersion 0.2.0**이 깔린다. `helm search repo spark/spark-kubernetes-operator --versions`로
+  대조하고 `scripts/k8s-env.sh`의 `SPARK_OPERATOR_CHART_VERSION`에 **chart 버전**을 핀한다.
+- **CRD**: `apiVersion: spark.apache.org/**v1beta1**`, `kind: SparkApplication`
+  (chart 1.8.0이 제공하는 버전은 v1beta1 **단일**이다. 상류 main 예제의 `v1`을 그대로 쓰면 apply가 실패한다 —
+  설치한 차트의 `crds/`로 확인한다). Kubeflow(`sparkoperator.k8s.io/v1beta2`)와
   **스펙이 다르다** — Apache는 **`spec.sparkConf` 중심**(spark-submit 설정 기반)이다.
+  - **PySpark 진입점**: `spec.pyFiles`(문자열). `mainApplicationFile` 필드는 **없다**
+    (근거: 공식 예제 `examples/pi-python.yaml`).
   - 이미지: `spark.kubernetes.container.image`
   - Spark 런타임: `spec.runtimeVersions.sparkVersion`
   - 자원: `spark.driver.{cores,memory}`·`spark.executor.{instances,cores,memory}`(§2 원칙, 수치는 [../resource-sizing.md](../resource-sizing.md))
@@ -79,10 +86,19 @@ resources:
   최신 릴리스는 설치 시점에 [releases](https://github.com/apache/spark-kubernetes-operator/releases)에서 확인해 핀한다.
 - **러너 이미지**: PySpark + `iceberg-spark-runtime` + S3A(하둡 aws) 의존을 포함한 **전용 이미지**를 빌드해
   로컬 레지스트리에 push하고, `spark.kubernetes.container.image`가 이를 참조한다(§10 이름 규칙 주의).
+  - **진입점 스크립트는 driver CWD 밖에 둔다** — 이미지 WORKDIR(`/opt/spark/work-dir`)에 두면
+    `spark-submit`이 `local://` 진입점을 CWD로 복사하며 **대상을 먼저 삭제**해 소스가 사라지고
+    `NoSuchFileException`으로 죽는다(2026-08-17 실측). 이 레포는 `/opt/spark/app/`을 쓴다.
+- **잡 네임스페이스를 반드시 지정**한다 — 차트 기본값 `workloadResources.namespaces.data`는 비어 있고
+  `overrideWatchedNamespaces: true`라, 비워두면 **감시 네임스페이스가 없고 workload SA·rolebinding도 생기지 않는다**.
+  설치 시 `--set workloadResources.namespaces.data[0]=<ns>`.
+- **정리 권한 보완(deletecollection)**: 차트의 `spark-workload-clusterrole`은 verbs가 템플릿에 하드코딩돼
+  **`deletecollection`이 빠져 있다**(values로 조정 불가). driver는 종료 시 라벨 셀렉터로 일괄 삭제를 호출하므로,
+  없으면 잡이 성공해도 `*-driver-svc`·PVC가 남고 ERROR가 찍힌다. 최소권한(§5)에 맞춰 **잡 네임스페이스 한정 Role**로
+  `deletecollection`만 보완한다 → `k8s/spark/spark-workload-cleanup-rbac.yaml`.
 - **정기 실행**은 원칙적으로 **Dagster(호스트)** 가 주기적으로 `SparkApplication`을 제출한다(단일 오케스트레이션).
-- **주의(이전 중)**: Apache 오퍼레이터의 **PySpark 진입점 필드**와 Helm 차트 **values 키**는 Kubeflow와 달라
-  라이브 배포 전 [공식 문서](https://apache.github.io/spark-kubernetes-operator/)로 확정한다.
-  PoC 매니페스트 `k8s/spark/sparkapplication-poc.yaml`에 검증 TODO를 표기했다.
+- **검증 상태**: PoC 잡(`k8s/spark/sparkapplication-poc.yaml`)이 Apache 오퍼레이터에서 **동작 확인됨**
+  (2026-08-17 — Iceberg write+read-back `rows=3`, exitCode 0, 정리 오류 0건).
 
 ## 9-2. Flink Operator·FlinkDeployment 규칙 (스트리밍)
 

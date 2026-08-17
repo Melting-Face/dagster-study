@@ -1,0 +1,32 @@
+# Spark workload SA 보완 RBAC — 종료 시 리소스 정리(deletecollection) 권한
+#
+# 배경: Apache spark-kubernetes-operator 차트(1.8.0)가 만드는 `spark-workload-clusterrole`은
+#   verbs가 템플릿에 하드코딩되어 있고 **deletecollection이 빠져 있다**(values로 조정 불가).
+#   Spark driver는 종료 시 라벨 셀렉터로 일괄 삭제(DELETE ...?labelSelector=spark-app-selector=<app>)를
+#   호출하므로, 권한이 없으면 잡은 성공해도 driver-svc·PVC가 남고 ERROR 로그가 찍힌다(2026-08-17 실측).
+#
+# 최소권한 원칙(conventions/k8s.md §5)에 따라 ClusterRole이 아니라 **잡 네임스페이스 한정 Role**로,
+# **deletecollection 하나만** 추가한다. 나머지 권한은 차트 clusterrole이 이미 제공한다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+    name: spark-workload-cleanup
+    namespace: default
+rules:
+    - apiGroups: [""]
+      resources: ["services", "persistentvolumeclaims", "pods", "configmaps"]
+      verbs: ["deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    name: spark-workload-cleanup
+    namespace: default
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: spark-workload-cleanup
+subjects:
+    - kind: ServiceAccount
+      name: spark
+      namespace: default

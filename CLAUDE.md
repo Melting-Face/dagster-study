@@ -118,11 +118,15 @@
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
   전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링)은 `profiles`로 분리**(뼈대는 profile
   없이 항상 실행, `--profile <name>`으로 opt-in). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
-  K8s 이행 규칙(도입 시)은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md).
+- **로컬 K8s(현행 검증 환경)**: **kind on Podman**(rootful 머신 필수) 클러스터 `lakehouse` +
+  로컬 레지스트리 `localhost:5001`. 기동은 `scripts/k8s-up.sh` → `k8s-operators.sh` → `k8s-poc-storage.sh`
+  (설정 단일 출처 `scripts/k8s-env.sh`). Dagster는 **호스트 유지**, 컴퓨트·스토리지만 클러스터에 둔다.
+  규칙 [`docs/conventions/k8s.md`](docs/conventions/k8s.md), 예산·배분 [`docs/resource-sizing.md`](docs/resource-sizing.md).
 - **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
   **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,
-  부트스트랩은 **cloud-init 선언형**. 첫 스택은 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s).
-  상세 [`docs/conventions/terraform.md`](docs/conventions/terraform.md), 결정 배경 [`docs/architectures/oci.md`](docs/architectures/oci.md).
+  부트스트랩은 **cloud-init 선언형**. 첫 스택 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s)는
+  **⏸ 보류**(A1 용량 부족 — 네트워크 5종만 생성됨·과금 0, **state 유지**).
+  상세 [`docs/conventions/terraform.md`](docs/conventions/terraform.md), 현황·재개 [`docs/architectures/oci.md`](docs/architectures/oci.md).
 - **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s·oci)을 **프로젝트 결정 관점**(채택 이유·
   대안 비교)으로 [`docs/architectures/`](docs/architectures/README.md)에 정리(채택 ✅ / 미채택 🔎).
 - **Claude Code 스킬**: 프로젝트가 쓰는 Agent Skills와 사용 규칙(**프로젝트 컨벤션 우선**)은

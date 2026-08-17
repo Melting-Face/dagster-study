@@ -1,14 +1,16 @@
 # SparkApplication(Apache Spark K8s Operator) — PoC 인제스트 잡
-# Kubeflow(sparkoperator.k8s.io/v1beta2)에서 Apache 공식 오퍼레이터(spark.apache.org/v1, GA 1.0.0)로 이전.
+# Kubeflow(sparkoperator.k8s.io/v1beta2)에서 Apache 공식 오퍼레이터로 이전 완료.
 # Apache 오퍼레이터는 spark-submit 설정 기반이라 대부분을 sparkConf로 표현한다(구조적 driver/executor 블록 대신).
 # 크리덴셜은 Secret(lakehouse-creds)에서 env로 주입(CRD 평문 노출 금지) — spark.kubernetes.*.secretKeyRef 사용.
 #
-# TODO(검증 — 미검증 항목): 아래는 라이브 클러스터 배포 전 공식 예제/CRD로 확정한다.
-#   1) PySpark 진입점 필드명: 공식 예제(pi.yaml)는 Scala(mainClass+jars)만 제시. 파이썬 메인 파일
-#      지정 방식(pyFiles / mainApplicationFile 등)을 확인한다: https://apache.github.io/spark-kubernetes-operator/
-#   2) driver ServiceAccount 이름: Apache 차트가 생성하는 SA 이름 확인(pi.yaml 예제는 "spark").
-#   확정 전까지 이 매니페스트는 apply 대상이 아니라 "이전 초안"이다.
-apiVersion: spark.apache.org/v1
+# CRD·공식 예제 실측(chart 1.8.0 = appVersion 1.0.0 GA):
+#   - 이 차트가 제공하는 CRD 버전은 **v1beta1 단일**이다(상류 main 예제는 v1이나 여기선 미제공 — apply 실패).
+#   - PySpark 진입점은 spec 직속 **pyFiles**(type: string). `mainApplicationFile` 필드는 없다.
+#     근거: examples/pi-python.yaml 이 pyFiles로 pi.py를 지정한다.
+#   - driver SA는 차트 workloadResources.serviceAccount.name 기본값 **spark**(잡 네임스페이스에 생성).
+#   - 진입점은 **driver CWD(/opt/spark/work-dir) 밖**에 둔다 — 같으면 복사 전 삭제 로직에 소스가 지워진다
+#     (Dockerfile.spark-runner 주석 참고). 공식 예제도 /opt/spark/examples/... 를 쓴다.
+apiVersion: spark.apache.org/v1beta1
 kind: SparkApplication
 metadata:
     name: poc-ingest
@@ -16,8 +18,8 @@ metadata:
 spec:
     runtimeVersions:
         sparkVersion: "3.5.9"
-    # 파이썬 메인 파일 — 필드명 검증 필요(위 TODO 1)
-    pyFiles: "local:///opt/spark/work-dir/poc_ingest.py"
+    # 파이썬 메인 파일 (spec 직속 pyFiles — CRD·공식 예제로 확정)
+    pyFiles: "local:///opt/spark/app/poc_ingest.py"
     applicationTolerations:
         resourceRetainPolicy: OnFailure
     sparkConf:

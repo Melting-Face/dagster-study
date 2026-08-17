@@ -54,6 +54,24 @@
 
 **4) 토폴로지** — *단일 노드 채택* (다중/HA는 자원상 후속)
 
+## 현황 — ⏸ 보류 (2026-08-17)
+
+**로컬 K8s(kind on Podman)로 방향을 되돌렸다.** OCI 이행은 중단이 아니라 **보류**이며, 코드·state를 그대로 둔다.
+
+- **보류 사유**: A1 인스턴스가 **Out of host capacity로 생성되지 않는다**(아래 §운영 메모 — shape 축소·AD 우회
+  모두 무효). 용량 폴링 재시도([`scripts/oci_k3s_retry_apply.py`](../../scripts/oci_k3s_retry_apply.py))를 돌려도
+  재고가 열리지 않아, **검증 가능한 로컬 환경**([k8s.md](k8s.md) · `kind` 클러스터 `lakehouse`)을 우선하기로 했다.
+- **프로비저닝 상태**: `terraform.tfstate`(serial 33)에 **네트워크 5종이 실재**한다 —
+  `oci_core_vcn` · `oci_core_subnet` · `oci_core_internet_gateway` · `oci_core_route_table` · `oci_core_security_list`.
+  **`oci_core_instance.k3s`(A1 컴퓨트)는 미생성**이다.
+  - **과금 없음**: 위 5종은 모두 Always Free 대상이며, 과금 요인인 컴퓨트·블록스토리지가 없다.
+  - **state를 지우지 않는다** — 지우면 위 5종이 orphan이 되어 terraform으로 관리·삭제할 수 없고
+    OCI 콘솔에서 수동 삭제해야 한다. 보류 중 유지 비용은 0이므로 유지가 안전하다.
+- **재개 방법**: `terraform/oci-k3s/`에서 `terraform apply`(또는 용량 폴링 스크립트) 재실행. 네트워크는 이미 있으므로
+  **컴퓨트만 추가 생성**된다. 재개 전 [`terraform.tfvars`](../../terraform/oci-k3s/terraform.tfvars.example) 값과
+  무료 한도(**2 OCPU/12 GB**)를 재확인한다.
+- **정리하려면**: `terraform destroy`로 5종을 지운다(코드·문서는 보존). 무료라서 서둘 이유는 없다.
+
 ## 운영 메모
 
 - **A1 용량 부족(Out of host capacity, HTTP 500)**: 무료 A1은 인기가 높아 `apply`가 용량 오류로 실패한다.

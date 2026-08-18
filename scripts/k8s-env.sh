@@ -16,7 +16,8 @@ REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 REGISTRY_IMAGE="${REGISTRY_IMAGE:-docker.io/library/registry:2.8.3}"
 
 # --- Spark 오퍼레이터 (Apache 공식 — apache/spark-kubernetes-operator) ---
-# Kubeflow spark-operator에서 이전. CRD는 apiVersion: spark.apache.org/v1beta1 (sparkConf 중심).
+# Kubeflow spark-operator에서 이전. CRD는 apiVersion: spark.apache.org/v1 (sparkConf 중심).
+# v1beta1도 served지만 storage 버전이 v1이라 v1이 정본이다(docs/conventions/k8s.md §9).
 SPARK_OPERATOR_NS="${SPARK_OPERATOR_NS:-spark-operator}"
 SPARK_OPERATOR_RELEASE="${SPARK_OPERATOR_RELEASE:-spark-kubernetes-operator}"
 SPARK_OPERATOR_REPO="${SPARK_OPERATOR_REPO:-spark}"

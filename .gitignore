@@ -47,3 +47,9 @@ kubeconfig-oci
 # 같은 .claude/ 아래여도 settings.json은 **커밋 대상**(공유 권한 게이트·hook 배선)이라 글롭으로 묶지 않는다.
 # 근거: docs/conventions/git.md §5
 .claude/settings.local.json
+
+# Dagster 로컬 인스턴스 산출물 (DAGSTER_HOME=dagster/dockerfile.d/src 로 호스트 실행 시 생성)
+dagster/dockerfile.d/src/storage/
+dagster/dockerfile.d/src/.telemetry/
+dagster/dockerfile.d/src/history/
+dagster/dockerfile.d/src/schedules/

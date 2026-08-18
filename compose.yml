@@ -21,6 +21,8 @@ x-dagster-common: &dagster-common
   environment:
     # 로그·프로세스 로컬 시간을 KST로 (스케줄 해석은 execution_timezone이 담당, 저장은 UTC 유지)
     - TZ=Asia/Seoul
+    # 컨테이너에서는 항상 compose 서비스명으로 접속한다(호스트 실행 시엔 .env의 localhost).
+    - POSTGRES_HOST=postgres
     - POSTGRES_USER=${POSTGRES_USER}
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     - POSTGRES_DB=${POSTGRES_DB}
@@ -71,6 +73,10 @@ services:
     <<: *docker-logging
     container_name: postgres
     image: postgres:15
+    # 호스트 Dagster(`uv run dg dev`)가 메타 스토리지에 붙어야 하므로 노출한다.
+    # 루프백 바인딩으로 외부 노출은 막는다(docs/security.md — 최소 노출).
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

@@ -2,10 +2,39 @@
 
 import os
 
+# SeaweedFS 호환 shim — 반드시 S3 클라이언트 생성 **전에** 적용되어야 한다.
+#   최신 AWS SDK는 PutObject에 flexible checksum(CRC64NVME)을 기본 적용하며
+#   본문을 `aws-chunked`로 감싼다. 이 프로젝트의 SeaweedFS는 이를 풀지 못해
+#   **프레이밍 바이트를 객체 내용에 그대로 저장**한다(2026-08-18 실측:
+#   Iceberg metadata.json이 `11\r\n{...}\r\n0\r\nx-amz-checksum-...`로 저장되어
+#   pyiceberg가 JSON 파싱에 실패). 오류가 쓰기 시점이 아니라 **다음 읽기에서** 나므로
+#   원인을 찾기 어렵다 → 기본값을 코드로 못 박는다.
+#   env로 이미 지정했다면 존중한다(운영에서 상위 설정이 이기도록).
+os.environ.setdefault("AWS_REQUEST_CHECKSUM_CALCULATION", "when_required")
+os.environ.setdefault("AWS_RESPONSE_CHECKSUM_VALIDATION", "when_required")
+
 # Iceberg JDBC 카탈로그 — Trino iceberg.properties의 catalog-name과 반드시 일치
 CATALOG_NAME = "iceberg"
-ICEBERG_CATALOG_DB = "iceberg_catalog"
 WAREHOUSE = os.environ.get("ICEBERG_WAREHOUSE", "s3://warehouse")
+
+# 카탈로그 접속은 **환경마다 다르다** — compose(기본)와 K8s를 env로 전환한다.
+#   compose : postgres:5432/iceberg_catalog, Dagster 메타 DB와 같은 계정
+#   K8s     : catalog-postgres:5432/iceberg, 전용 계정(Secret lakehouse-creds)
+# 호스트에서 K8s를 대상으로 돌릴 땐 port-forward 주소를 넣는다(operations.md §1-2).
+ICEBERG_CATALOG_HOST = os.environ.get("ICEBERG_CATALOG_HOST", "postgres")
+ICEBERG_CATALOG_PORT = os.environ.get("ICEBERG_CATALOG_PORT", "5432")
+ICEBERG_CATALOG_DB = os.environ.get("ICEBERG_CATALOG_DB", "iceberg_catalog")
+# 계정은 별도 지정이 없으면 메타 DB 계정을 따른다(compose 기존 동작 보존).
+ICEBERG_CATALOG_USER = (
+    os.environ.get("ICEBERG_CATALOG_USER") or os.environ["POSTGRES_USER"]
+)
+ICEBERG_CATALOG_PASSWORD = (
+    os.environ.get("ICEBERG_CATALOG_PASSWORD") or os.environ["POSTGRES_PASSWORD"]
+)
+ICEBERG_CATALOG_URI = (
+    f"postgresql+psycopg2://{ICEBERG_CATALOG_USER}:{ICEBERG_CATALOG_PASSWORD}"
+    f"@{ICEBERG_CATALOG_HOST}:{ICEBERG_CATALOG_PORT}/{ICEBERG_CATALOG_DB}"
+)
 
 # SeaweedFS(S3 호환) 엔드포인트 (scheme 포함)
 S3_ENDPOINT = os.environ.get("ICEBERG_S3_ENDPOINT", "http://seaweedfs:8333")

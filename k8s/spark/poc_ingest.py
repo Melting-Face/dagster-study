@@ -9,7 +9,12 @@ import os
 
 from pyspark.sql import SparkSession
 
-CATALOG = "jdbccat"
+# 카탈로그 이름은 **모든 엔진이 같아야 한다**. Iceberg JDBC 카탈로그는 catalog_name으로
+# 네임스페이스·테이블 레지스트리를 분할하므로, 이름이 다르면 같은 DB를 봐도
+# 서로의 테이블이 보이지 않는다
+# (2026-08-18 실측: Spark=jdbccat vs Dagster=iceberg로 갈려 있었다).
+# 정본은 `iceberg` — Trino iceberg.properties·Dagster common/constants.py와 일치시킨다.
+CATALOG = os.environ.get("ICEBERG_CATALOG_NAME", "iceberg")
 NAMESPACE = "poc"
 TABLE = f"{CATALOG}.{NAMESPACE}.sample"
 

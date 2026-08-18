@@ -1,5 +1,5 @@
 # PySpark + Iceberg + S3(SeaweedFS) 러너 이미지 (PoC Phase 0)
-# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.3.0 k8s/spark
+# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.4.0 k8s/spark
 # 태그는 구체 버전 고정(가변 채널 태그 금지, docs/conventions/docker.md). 0.1.0 = 구 `:poc`.
 FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
 

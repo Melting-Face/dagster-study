@@ -98,7 +98,7 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
   로그·materialization이 회수된다.
 - **Act**: 검증된 최소 골격을 리소스(`SparkOperatorResource`)·러너 이미지 규격으로 확정.
 - **검증 결과(2026-08-18)**: 호스트 Dagster 자산 → `SparkApplication`(Apache CRD `spark.apache.org/v1`) 제출·폴링 →
-  Iceberg `jdbccat.poc.sample` write + Spark SQL read-back → driver 로그 회수 → materialization 메타
+  Iceberg `iceberg.poc.sample` write + Spark SQL read-back → driver 로그 회수 → materialization 메타
   `rows=3` 기록, webserver GraphQL 노출 확인. 러너 이미지 `localhost:5001/spark-runner:0.2.0`(S3A 포함).
 - **이 과정에서 고친 잠복 결함 3건**(모두 조용히 실패하던 것):
   ① Apache 이전이 `k8s/`·`scripts/`에만 적용되고 **Dagster 글루(`defs/poc/`)는 Kubeflow 스펙**으로 남아 있었다.
@@ -133,7 +133,16 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **선행 조건(로드맵에 없던 발견)**: bronze 테이블이 **K8s 카탈로그에 없다**(compose 쪽 카탈로그에만 존재).
   실행 단계 검증은 **Phase 2(대용량 적재 Spark 이전)와 순서가 얽힌다** — 데이터 이관이 먼저다.
 
-### Phase 2 — 대용량 bronze 인제스트 Spark 전환
+### Phase 2 — 대용량 bronze 인제스트 Spark 전환 ⏸ **원천 데이터 부재로 대기**
+
+> **2026-08-18 실측**: 이관할 bronze가 **어디에도 없다**. compose Postgres에 `iceberg_catalog` DB가 없고,
+> compose SeaweedFS는 **버킷 0개**, 호스트에도 csv.gz가 없다. 즉 이 단계는 "이관"이 아니라 **최초 적재**이며,
+> MIMIC-IV·eICU는 **PhysioNet 자격증명 + DUA** 대상이라 사용자가 직접 받아야 한다(저장소 커밋 금지).
+> 데이터가 준비되면 `scripts/upload_raw_to_seaweedfs.py`로 `s3://warehouse/raw/`에 올린다.
+>
+> **데이터 없이 미리 끝낸 것**(합성 3행으로 전 구간 검증 후 정리):
+> S3(csv.gz) → Dagster 자산 → Iceberg 적재 → **Spark Connect에서 조회**까지 K8s 스택에서 통과.
+> 이 과정에서 카탈로그 이름 분리·SeaweedFS 체크섬 두 결함을 찾아 고쳤다([conventions/k8s.md](conventions/k8s.md) §11).
 
 - **Plan/Do**: `chartevents`·`labevents`·`eicu.nurse_charting` 적재를 **SparkApplication**으로 이전,
   `load_heavy_csv_gz_to_iceberg`(boto3 청크) **은퇴**.

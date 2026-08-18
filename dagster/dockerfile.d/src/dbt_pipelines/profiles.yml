@@ -42,17 +42,17 @@ dbt_pipelines:
         # 러너 이미지와 **같은 Iceberg 버전**을 쓴다(Spark 3.5 계열).
         spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{{ env_var('ICEBERG_VERSION', '1.6.1') }},org.apache.iceberg:iceberg-aws-bundle:{{ env_var('ICEBERG_VERSION', '1.6.1') }},org.postgresql:postgresql:42.7.4"
         spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
-        spark.sql.catalog.jdbccat: "org.apache.iceberg.spark.SparkCatalog"
-        spark.sql.catalog.jdbccat.catalog-impl: "org.apache.iceberg.jdbc.JdbcCatalog"
-        spark.sql.catalog.jdbccat.uri: "{{ env_var('ICEBERG_JDBC_URI') }}"
-        spark.sql.catalog.jdbccat.jdbc.user: "{{ env_var('ICEBERG_PG_USER') }}"
-        spark.sql.catalog.jdbccat.jdbc.password: "{{ env_var('ICEBERG_PG_PASSWORD') }}"
-        spark.sql.catalog.jdbccat.warehouse: "{{ env_var('ICEBERG_WAREHOUSE') }}"
-        spark.sql.catalog.jdbccat.io-impl: "org.apache.iceberg.aws.s3.S3FileIO"
-        spark.sql.catalog.jdbccat.s3.endpoint: "{{ env_var('ICEBERG_S3_ENDPOINT') }}"
-        spark.sql.catalog.jdbccat.s3.path-style-access: "true"
+        spark.sql.catalog.iceberg: "org.apache.iceberg.spark.SparkCatalog"
+        spark.sql.catalog.iceberg.catalog-impl: "org.apache.iceberg.jdbc.JdbcCatalog"
+        spark.sql.catalog.iceberg.uri: "{{ env_var('ICEBERG_JDBC_URI') }}"
+        spark.sql.catalog.iceberg.jdbc.user: "{{ env_var('ICEBERG_PG_USER') }}"
+        spark.sql.catalog.iceberg.jdbc.password: "{{ env_var('ICEBERG_PG_PASSWORD') }}"
+        spark.sql.catalog.iceberg.warehouse: "{{ env_var('ICEBERG_WAREHOUSE') }}"
+        spark.sql.catalog.iceberg.io-impl: "org.apache.iceberg.aws.s3.S3FileIO"
+        spark.sql.catalog.iceberg.s3.endpoint: "{{ env_var('ICEBERG_S3_ENDPOINT') }}"
+        spark.sql.catalog.iceberg.s3.path-style-access: "true"
         # S3 키는 AWS 표준 env(AWS_ACCESS_KEY_ID/SECRET)로 자격증명 체인이 집어간다 → 여기 적지 않는다.
-        spark.sql.defaultCatalog: "jdbccat"
+        spark.sql.defaultCatalog: "iceberg"
 
     spark_connect:
       <<: *spark_session

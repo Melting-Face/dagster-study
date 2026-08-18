@@ -31,6 +31,9 @@ x-dagster-common: &dagster-common
     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
     - ENDPOINT_URL=${ENDPOINT_URL}
+    # SeaweedFS는 AWS SDK의 aws-chunked 체크섬 업로드를 못 푼다(객체가 깨진다).
+    - AWS_REQUEST_CHECKSUM_CALCULATION=${AWS_REQUEST_CHECKSUM_CALCULATION:-when_required}
+    - AWS_RESPONSE_CHECKSUM_VALIDATION=${AWS_RESPONSE_CHECKSUM_VALIDATION:-when_required}
   volumes:
     - ./shared:/shared
   depends_on:

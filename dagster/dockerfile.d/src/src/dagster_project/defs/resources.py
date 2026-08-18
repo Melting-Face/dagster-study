@@ -10,8 +10,6 @@ S3 접속·dbt·데이터셋별 IO 매니저·대용량 테이블 바인딩을 �
 Trino의 iceberg JDBC 카탈로그와 동일한 pyiceberg properties를 쓴다.
 """
 
-import os
-
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.arrow import PyArrowIcebergIOManager
@@ -23,7 +21,7 @@ from dagster_project.common.constants import (
     AWS_REGION,
     AWS_SECRET_ACCESS_KEY,
     CATALOG_NAME,
-    ICEBERG_CATALOG_DB,
+    ICEBERG_CATALOG_URI,
     S3_ENDPOINT,
     TRINO_HOST,
     TRINO_PORT,
@@ -39,9 +37,7 @@ from dagster_project.defs.mimic_iv.constants import NAMESPACE as MIMICIV_NS
 @dg.definitions
 def resources() -> dg.Definitions:
     """공유 리소스를 Definitions로 반환한다(load_defs가 자동 수집)."""
-    # 비밀값은 정의 로드 시점(컨테이너)의 os.environ에서 읽는다(EnvVar 미지원).
-    user = os.environ["POSTGRES_USER"]
-    password = os.environ["POSTGRES_PASSWORD"]
+    # 카탈로그 접속 문자열은 common.constants에서 env로 조립한다(단일 출처).
     return dg.Definitions(
         resources={
             # 공유: S3 접속(SeaweedFS). 파라미터는 common.constants에서 추적.
@@ -63,7 +59,7 @@ def resources() -> dg.Definitions:
                 config=IcebergCatalogConfig(
                     properties={
                         "type": "sql",
-                        "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
+                        "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
                         "s3.access-key-id": AWS_ACCESS_KEY_ID,
@@ -79,7 +75,7 @@ def resources() -> dg.Definitions:
                 config=IcebergCatalogConfig(
                     properties={
                         "type": "sql",
-                        "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
+                        "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
                         "s3.access-key-id": AWS_ACCESS_KEY_ID,
@@ -97,7 +93,7 @@ def resources() -> dg.Definitions:
                 config=IcebergCatalogConfig(
                     properties={
                         "type": "sql",
-                        "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
+                        "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
                         "s3.access-key-id": AWS_ACCESS_KEY_ID,
@@ -114,7 +110,7 @@ def resources() -> dg.Definitions:
                 config=IcebergCatalogConfig(
                     properties={
                         "type": "sql",
-                        "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
+                        "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
                         "s3.access-key-id": AWS_ACCESS_KEY_ID,
@@ -131,7 +127,7 @@ def resources() -> dg.Definitions:
                 config=IcebergCatalogConfig(
                     properties={
                         "type": "sql",
-                        "uri": f"postgresql+psycopg2://{user}:{password}@postgres:5432/{ICEBERG_CATALOG_DB}",
+                        "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
                         "s3.access-key-id": AWS_ACCESS_KEY_ID,

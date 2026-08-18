@@ -23,7 +23,7 @@ TaskManager가 병렬 처리하며, 배치는 스트림의 특수 경우로 취�
   Spark는 driver JVM이 끝나면 UI도 사라져 History Server가 필요하지만, Flink 세션 클러스터는 그렇지 않다.
   접근은 `kubectl port-forward svc/<name>-rest 8081:8081`.
 - **검증 완료(2026-08-18)**: 세션 클러스터에서 **Spark가 적재한 Iceberg 테이블을 Flink SQL로 조회**
-  (`jdbccat.poc.sample` 3행). 두 엔진이 **같은 JDBC 카탈로그 + SeaweedFS**를 공유함을 실증했다(급소② 전제).
+  (`iceberg.poc.sample` 3행). 두 엔진이 **같은 JDBC 카탈로그 + SeaweedFS**를 공유함을 실증했다(급소② 전제).
 - **Spark 스트리밍 대비**: Flink=네이티브 스트림(레코드 단위·낮은 지연·풍부한 상태) /
   Spark Structured Streaming=마이크로배치. 저지연·상태 중심이라 Flink를 택한다.
 

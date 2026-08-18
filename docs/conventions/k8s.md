@@ -198,9 +198,24 @@ resources:
 
 - **SeaweedFS는 path-style 전용**: Spark·Trino 양쪽에서 path-style 접근을 강제한다
   (Spark `spark.hadoop.fs.s3a.path.style.access=true`). 미설정 시 버킷 DNS 서브도메인 가정으로 접근 실패.
-- **공유 JDBC 카탈로그**: Spark·Trino가 **동일 Postgres 기반 Iceberg JDBC 카탈로그**를 공유한다(낙관적 동시성).
-  메타 테이블(`iceberg_tables`·`iceberg_namespace_properties`) 스키마를 양쪽이 동일하게 보게 유지한다.
+- **공유 JDBC 카탈로그**: Spark·Flink·Dagster(pyiceberg)·dbt가 **동일 Postgres 기반 Iceberg JDBC 카탈로그**를
+  공유한다(낙관적 동시성). 메타 테이블(`iceberg_tables`·`iceberg_namespace_properties`) 스키마를 동일하게 유지한다.
   장기적으로 REST 카탈로그(Nessie·Polaris·lakekeeper) 이행은 후속 과제([../redesign.md](../redesign.md) 급소②).
+- 🔴 **카탈로그 이름은 전 엔진이 같아야 한다 — 정본은 `iceberg`.**
+  JDBC 카탈로그는 `catalog_name` 컬럼으로 네임스페이스·테이블 레지스트리를 **분할**한다.
+  이름이 다르면 **같은 DB·같은 버킷을 봐도 서로의 테이블이 보이지 않는다**(빈 카탈로그처럼 동작).
+  2026-08-18 실측: Spark/Flink가 `jdbccat`, Dagster/Trino가 `iceberg`로 갈려 있어
+  Dagster 적재분이 Spark에서 보이지 않을 상태였다 → `iceberg`로 통일하고 기존 행을 마이그레이션했다.
+  설정 위치: Spark `spark.sql.catalog.<name>`·`ICEBERG_CATALOG_NAME`(러너 env) / Flink `CREATE CATALOG <name>` /
+  Dagster `common/constants.py:CATALOG_NAME` / Trino `iceberg.jdbc-catalog.catalog-name`.
+- 🔴 **SeaweedFS는 AWS SDK의 flexible checksum(aws-chunked)을 풀지 못한다.**
+  최신 SDK는 PutObject에 CRC64NVME 체크섬을 기본 적용하며 본문을 청크로 감싸는데, SeaweedFS가 이를
+  해제하지 않아 **프레이밍 바이트가 객체 내용에 그대로 저장**된다
+  (2026-08-18 실측: Iceberg `metadata.json`이 `11\r\n{...}\r\n0\r\nx-amz-checksum-...`로 저장 →
+  다음 읽기에서 pyiceberg가 JSON 파싱 실패). **오류가 쓰기가 아니라 이후 읽기에서 나므로 추적이 어렵다.**
+  → `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`(+`AWS_RESPONSE_CHECKSUM_VALIDATION`)로 끈다.
+  코드에도 `common/constants.py`가 `os.environ.setdefault`로 기본값을 못 박는다(환경 누락 시 조용한 손상 방지).
+  Java SDK 경로(Spark·Flink의 iceberg-aws-bundle)는 영향받지 않는다 — 파이썬(pyiceberg/pyarrow·boto3) 경로만 해당.
 
 ## 참고
 

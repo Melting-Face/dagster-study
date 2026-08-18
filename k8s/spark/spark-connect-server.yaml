@@ -25,7 +25,7 @@ spec:
             serviceAccountName: spark
             containers:
                 - name: spark-connect
-                  image: localhost:5001/spark-runner:0.3.0
+                  image: localhost:5001/spark-runner:0.4.0
                   imagePullPolicy: Always
                   command: ["/bin/bash", "-c"]
                   args:
@@ -35,16 +35,16 @@ spec:
                           --master "local[2]" \
                           --conf spark.connect.grpc.binding.port=15002 \
                           --conf spark.sql.extensions="$ICEBERG_EXTENSIONS" \
-                          --conf spark.sql.catalog.jdbccat=org.apache.iceberg.spark.SparkCatalog \
-                          --conf spark.sql.catalog.jdbccat.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
-                          --conf spark.sql.catalog.jdbccat.uri="$ICEBERG_JDBC_URI" \
-                          --conf spark.sql.catalog.jdbccat.jdbc.user="$PG_USER" \
-                          --conf spark.sql.catalog.jdbccat.jdbc.password="$PG_PASSWORD" \
-                          --conf spark.sql.catalog.jdbccat.warehouse="$ICEBERG_WAREHOUSE" \
-                          --conf spark.sql.catalog.jdbccat.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-                          --conf spark.sql.catalog.jdbccat.s3.endpoint="$S3_ENDPOINT" \
-                          --conf spark.sql.catalog.jdbccat.s3.path-style-access=true \
-                          --conf spark.sql.defaultCatalog=jdbccat \
+                          --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+                          --conf spark.sql.catalog.iceberg.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
+                          --conf spark.sql.catalog.iceberg.uri="$ICEBERG_JDBC_URI" \
+                          --conf spark.sql.catalog.iceberg.jdbc.user="$PG_USER" \
+                          --conf spark.sql.catalog.iceberg.jdbc.password="$PG_PASSWORD" \
+                          --conf spark.sql.catalog.iceberg.warehouse="$ICEBERG_WAREHOUSE" \
+                          --conf spark.sql.catalog.iceberg.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
+                          --conf spark.sql.catalog.iceberg.s3.endpoint="$S3_ENDPOINT" \
+                          --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
+                          --conf spark.sql.defaultCatalog=iceberg \
                           spark-internal
                   ports:
                       - {name: grpc, containerPort: 15002}

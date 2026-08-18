@@ -67,6 +67,12 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
   (루프백 바인딩 — 외부 노출 금지, [security.md](security.md)).
 - 호스트 실행 시 **`DAGSTER_HOME`을 `dagster.yaml`이 있는 디렉터리**(`dagster/dockerfile.d/src`)로 지정한다.
   지정하지 않으면 임시 sqlite 인스턴스가 쓰여 **UI에 런이 안 남는다**.
+- **Iceberg 적재 대상 전환 키**: `ICEBERG_CATALOG_HOST`·`_PORT`·`_DB`·`_USER`·`_PASSWORD`.
+  미지정 시 compose 기본값(`postgres:5432/iceberg_catalog`, 메타 DB 계정)을 쓰므로 기존 동작이 보존된다.
+  K8s 카탈로그를 대상으로 하려면 이 값들을 K8s 쪽(전용 계정)으로 넘긴다.
+- **`AWS_REQUEST_CHECKSUM_CALCULATION`/`AWS_RESPONSE_CHECKSUM_VALIDATION`**: SeaweedFS 호환 필수 키.
+  값이 없으면 최신 SDK 기본값이 객체를 손상시킨다([conventions/k8s.md](conventions/k8s.md) §11).
+  코드 기본값이 있지만 컨테이너·외부 도구를 위해 `.env`·compose 앵커에도 명시한다.
 - **dbt-spark 타깃 키**(`ICEBERG_*`·`SPARK_REMOTE`)도 같은 성격이다. 호스트에서 dbt를 돌리면
   in-cluster 서비스(카탈로그 Postgres·SeaweedFS·Spark Connect)에 **port-forward가 필요**하므로
   `.env` 기본값은 `localhost:<로컬포트>`를 가리킨다. 클러스터 안에서 도는 워크로드는

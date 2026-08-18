@@ -129,6 +129,9 @@
   Spark·Flink가 **같은 Iceberg JDBC 카탈로그**를 공유한다. 버전은 **엔진 최신이 아니라 Iceberg가 지원하는 짝**으로
   고정한다(예: `iceberg-flink-runtime`이 2.1까지라 Flink는 2.1). Spark Connect는 유일한 상주 컴퓨트라
   미사용 시 `--replicas=0`으로 내린다.
+  **Iceberg 카탈로그 이름은 전 엔진 `iceberg`로 통일**한다 — JDBC 카탈로그는 `catalog_name`으로 레지스트리를
+  분할해, 이름이 다르면 같은 DB를 봐도 서로의 테이블이 안 보인다. 또 **SeaweedFS는 AWS SDK의 aws-chunked
+  체크섬을 못 풀어** 객체가 조용히 손상되므로 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`를 유지한다.
 - **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
   **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,
   부트스트랩은 **cloud-init 선언형**. 첫 스택 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s)는

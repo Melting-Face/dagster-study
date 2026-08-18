@@ -191,8 +191,27 @@ resources:
 - **로컬 레지스트리**: kind 공식 local-registry 방식을 쓴다 — containerd `config_path` 설정으로 **`localhost:5001`이
   호스트·클러스터 내부 공통**으로 동작한다. `spark.kubernetes.container.image` 등 매니페스트도 `localhost:5001/...` 로 참조한다.
   (참고: k3d는 내부/외부 이름이 달라 매니페스트에 내부 이름을 써야 하는 함정이 있으나, kind는 공통 이름으로 회피된다.)
-- **서비스 접근**: 호스트 → in-cluster 서비스는 `port-forward`(개발) 또는 `NodePort`/`Ingress`로 노출한다.
-  Dagster 리소스(Trino·SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
+- **서비스 접근**: **웹 UI는 Ingress**(고정 URL), **데이터 접속은 `port-forward`** 를 기본으로 한다.
+  Dagster 리소스(SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
+- 🔴 **kind는 공개 포트를 클러스터 생성 시점에만 정할 수 있다.** 노드가 컨테이너라 사후에 포트를 추가할 수 없어,
+  `kind-cluster.yaml`에 **`extraPortMappings`가 없으면 Ingress·NodePort 둘 다 호스트에서 닿지 않는다**
+  (`hostNetwork: true`도 소용없다 — 노드는 podman VM 안이라 VM 네트워크까지만 닿는다).
+  빠뜨렸다면 **클러스터 재생성**이 유일한 방법이므로 처음부터 넣어둔다(2026-08-19 실측 후 도입).
+  - 호스트 포트는 **8080/8443**을 쓴다. macOS에서 1024 미만 바인딩은 root가 필요한데
+    podman의 포트 포워딩(gvproxy)은 사용자 권한으로 돈다.
+  - 재생성 시 **`k8s-down.sh`를 쓰지 말고 `kind delete cluster`만** 한다. down 스크립트는
+    **레지스트리까지 지워** 러너 이미지를 잃는다(재빌드 수 분). 클러스터만 지우면 `k8s-up.sh`가 멱등적으로 다시 붙인다.
+- **Ingress 규칙**: 컨트롤러는 **ingress-nginx**(kind provider 매니페스트, 버전은 `k8s-env.sh`에 핀).
+  호스트명은 **`<service>.localtest.me`** — 공개 DNS가 127.0.0.1로 응답해 `/etc/hosts` 수정이 필요 없다.
+  - Flink는 오퍼레이터 네이티브 **`FlinkDeployment.spec.ingress`**(`template`·`className`)를 쓴다.
+  - Spark(Connect UI)는 일반 `Ingress` 리소스로 4040을 노출한다. **gRPC(15002)는 Ingress로 내보내지 않는다**
+    — nginx의 gRPC 백엔드는 TLS 등 별도 설정이 필요하고, dbt는 port-forward/in-cluster 주소로 충분하다(YAGNI).
+  - 설치 대기는 `wait --for=condition=ready pod`가 아니라 **`rollout status deploy/...`** 로 한다.
+    파드 생성 전이면 전자는 `no matching resources found`로 **즉시 실패**한다(2026-08-19 실측).
+  - 기동 직후 컨트롤러가 **liveness 실패로 1회 재시작**할 수 있다(노드가 다른 롤아웃으로 바쁠 때
+    `/healthz` 타임아웃). 자체 회복하므로 곧바로 실패로 판단하지 않는다.
+- **`kubectl proxy`는 UI 대안으로 쓰지 않는다**: Flink는 동작하지만 **Spark UI는 302 `Location`이
+  프록시 포트가 아니라 API 서버 주소를 가리켜** 브라우저가 따라가지 못한다(2026-08-19 실측).
 
 ## 11. 오브젝트 스토어·Iceberg 카탈로그 정합
 

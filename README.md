@@ -52,6 +52,24 @@ INSTALL_FLINK=true ./scripts/k8s-operators.sh   # Spark Operator (+ cert-manager
 ./scripts/k8s-down.sh                     # 정리
 ```
 
+### 2-1. Web UI 접근 (port-forward 불필요)
+
+`k8s-up.sh`가 ingress-nginx까지 설치하므로 브라우저에서 바로 열린다.
+(`localtest.me`는 공개 DNS가 127.0.0.1로 응답 — `/etc/hosts` 수정 불필요)
+
+| URL | 대상 |
+| --- | --- |
+| http://flink.localtest.me:8080 | Flink Web UI (JobManager) |
+| http://spark.localtest.me:8080 | Spark Web UI (Connect 서버, 쿼리 이력 누적) |
+
+데이터 접속(카탈로그 Postgres·SeaweedFS·Spark Connect gRPC)은 `port-forward`를 쓴다.
+
+```shell
+kubectl port-forward svc/catalog-postgres 15432:5432   # Iceberg JDBC 카탈로그
+kubectl port-forward svc/seaweedfs        18333:8333   # S3 API
+kubectl port-forward svc/spark-connect    15002:15002  # dbt(spark_connect 타깃)
+```
+
 ### 3. Dagster (호스트)
 
 Dagster는 **클러스터 밖 호스트**에서 돌며 K8s를 원격 컴퓨트로 트리거한다

@@ -124,6 +124,14 @@ flowchart TB
   권한 규칙은 세션 전체(메인 루프 + 모든 워커)에 걸린다. `.claude/agents/*.md`의
   "커밋·`apply`·`down -v` 금지"가 **실제로 지켜지는 근거**가 이것이다.
 - **`bypassPermissions` 모드에서는 `ask`가 무력화된다.** 워커를 그 모드로 돌리지 않는다.
+- ⚠️ **규칙은 도구별이라 `Bash`로 우회된다.** `Edit(.claude/settings.json)`을 걸어도
+  `Bash(python3 … write_text …)`·`sed -i`·`>` 리다이렉트로 같은 파일을 쓰면 걸리지 않는다
+  (2026-08-18 실측 — 권한 게이트를 보강하는 작업 자체가 그 경로였다).
+  → **보호 경로 가드**([`scripts/protected_paths_guard.py`](../../scripts/protected_paths_guard.py))가
+  `PreToolUse`(matcher `Bash`)에서 **보호 경로 + 쓰기 신호**를 함께 감지해 사용자 확인으로 올린다(`escalate`).
+  보호 경로 목록은 **`ask` 규칙의 `Edit(...)`·`Write(...)`에서 자동 추출**한다 — 목록을 두 곳에 두면 어긋난다.
+  차단이 아니라 **확인**이며, 문자열 휴리스틱이라 완전하지 않다(변수 치환·별칭으로 우회 가능).
+  목표는 봉쇄가 아니라 **실수와 무심코를 잡는 것**이다.
 
 **배치 (단일 출처 3파일)**
 
@@ -489,7 +497,9 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 저널 규약 중 **기계가 판정할 수 있는 것**은 문서가 아니라 hook이 강제한다. 근거는 위 경합 사고다 —
 규약은 각 세션의 컨텍스트 안에만 있고, 파일시스템은 하나다.
 
-- 구현: [`scripts/journal_guard.py`](../../scripts/journal_guard.py) (의존성 없음·PEP 723·서브커맨드 3종)
+- 구현 ①: [`scripts/journal_guard.py`](../../scripts/journal_guard.py) — **저널 넘버링·기록 누락**(서브커맨드 3종)
+- 구현 ②: [`scripts/protected_paths_guard.py`](../../scripts/protected_paths_guard.py) — **보호 경로 `Bash` 쓰기**(위 §권한 게이트)
+- 둘 다 의존성 없음·PEP 723·**fail-open**(가드 실패가 작업을 막지 않는다)
 - 배선: [`.claude/settings.json`](../../.claude/settings.json) (프로젝트 범위, 커밋 대상)
 
 > `.claude/settings.json` 한 파일이 **hook 배선 + 프로젝트 `permissions`**(§권한 게이트)를 함께 담는다.
@@ -500,12 +510,27 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `SessionStart`(`startup\|resume\|clear\|compact`) | `session-start` | 오늘의 **다음 `NN`**·기존 저널·최근 7일 **열린 미션**(`planned`·`in-progress`·`blocked`)을 stdout으로 **컨텍스트 주입** | 주입 없음(작업 계속) |
 | `PreToolUse`(matcher `Write`) | `pre-write` | 볼트 저널 **신규 생성**만 검사 — `NN` 중복·번호 건너뜀·파일명(`<NN>-<slug>.md`)·날짜 폴더(`YYYY-MM-DD`) 위반이면 **차단**하고 올바른 번호를 반환 | 통과(fail-open) |
 | `Stop` | `stop` | 오늘 저장소 변경(working tree 또는 당일 커밋)이 있는데 **오늘자 저널 부재** 또는 `updated` 미갱신이면 사용자에게 경고 | 경고 없음 |
+| `PreToolUse`(matcher `Bash`) | — | 보호 경로(`ask` 규칙에서 자동 추출) + 쓰기 신호 동시 감지 시 **사용자 확인으로 상신**(`escalate`) | 통과(fail-open) |
 
 - **차단은 `PreToolUse`만** 한다. 공식 스펙상 `Stop`의 exit 2는 "정지를 막고 대화를 계속"이라 경고 용도로
   부적합하므로, `Stop`은 exit 0 + JSON `systemMessage`로 알린다.
 - **기존 저널 수정·`_` 접두 파일(`_MOC`·`_TEMPLATE`)·볼트 밖 경로는 검사하지 않는다** — 가드는 넘버링에만 관여한다.
 - `$OBSIDIAN_VAULT`가 없거나 볼트가 없는 환경(다른 머신·CI)에서는 **조용히 통과**한다.
   가드가 개인 환경 의존성을 세션의 전제조건으로 만들면 안 된다.
+### 실발동 확인 (hook 변경 후 필수)
+
+**hook 배선은 세션 시작 시 로드된다** — 배선을 바꾼 세션에서는 적용되지 않는다. 그래서 "설정했으니 된다"고
+믿으면 안 된다(2026-08-18: 넘버링 가드를 만든 바로 그 세션에서 `NN` 중복이 두 번 더 났다).
+
+| 단계 | 확인 | 통과 기준 |
+| --- | --- | --- |
+| 1 | 스크립트 단위 | 각 서브커맨드에 stdin JSON을 넣어 기대 출력 확인 |
+| 2 | 배선 유효성 | `.claude/settings.json` JSON 파싱 + `hooks` 키·matcher 확인 |
+| 3 | **새 세션에서 실발동** | `/hooks` 메뉴에 이벤트별로 뜨는지, `SessionStart` 주입 문구가 실제로 보이는지 |
+| 4 | 음성 통제 | 일부러 규약 위반(중복 `NN` 생성 시도)을 걸어 **차단되는지** |
+
+3~4단계는 **다음 세션에서만** 가능하다. 그 전까지 hook은 "배선됨"이지 "작동 확인됨"이 아니다 — 문서·보고에 그렇게 쓴다.
+
 - 가드가 판정할 수 없는 것(내용의 진실성·결정 근거·계층 기록)은 여전히 **supervisor의 책임**이다.
   hook은 규율을 대체하지 않고 **경합만** 없앤다.
 

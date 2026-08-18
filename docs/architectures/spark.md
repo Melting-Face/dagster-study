@@ -32,9 +32,23 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
 ## 운영 메모 (이행)
 
 - **트리거**: Dagster(호스트) 자산이 `PipesK8sClient`로 `SparkApplication`을 제출·폴링하고 로그·materialization을 회수한다([../conventions/k8s.md](../conventions/k8s.md) §9~11).
-- **Iceberg 접속**: `iceberg-spark-runtime`으로 Trino와 **동일 JDBC 카탈로그** 공유(낙관적 동시성).
+- **Iceberg 접속**: `iceberg-spark-runtime`으로 Trino·**Flink와 동일 JDBC 카탈로그** 공유(낙관적 동시성).
   메타 테이블(`iceberg_tables`·`iceberg_namespace_properties`) 스키마 정합 유지.
-- **S3(SeaweedFS)**: path-style만 지원하므로 `spark.hadoop.fs.s3a.path.style.access=true` 필수, `S3FileIO`/S3A 엔드포인트·키 설정.
+  2026-08-18 **Flink가 Spark 적재분을 그대로 조회**하는 것까지 실증([flink.md](flink.md)).
+- **S3 경로가 둘이고 역할이 다르다**(혼동 주의):
+  - **Iceberg `S3FileIO`**(AWS SDK v2, `iceberg-aws-bundle`) — **테이블 데이터 I/O** 전담. 현재 적재 경로가 이것.
+  - **S3A**(`hadoop-aws` + `aws-java-sdk-bundle`) — `s3a://`로 **원본 파일**(csv.gz)을 읽을 때 필요(Phase 2).
+    2026-08-18까지 러너 이미지에 **없었다**(Iceberg만 쓰는 잡은 돌아서 부재를 눈치채기 어려움).
+  - 둘 다 SeaweedFS라 **path-style 강제**(`s3.path-style-access` / `fs.s3a.path.style.access`).
+  - ⚠️ **S3A 직접 쓰기(`df.write.parquet("s3a://…")`)는 실패한다** — 기본 committer가 rename에 의존.
+    본 설계는 쓰기를 전부 Iceberg(S3FileIO)로 보내므로 영향 없음([../conventions/k8s.md](../conventions/k8s.md) §9).
+- **상시 SQL 엔드포인트 — Spark Connect**(Phase 1): `SparkApplication`은 잡이 끝나면 사라져 dbt가 붙을 수 없다.
+  그래서 **Spark Connect 서버**를 Deployment로 상주시키고 dbt-spark가 `spark.remote`로 접속한다
+  (`k8s/spark/spark-connect-server.yaml`). Thrift(HiveServer2) 대비 클라이언트가 가볍고 어댑터 변경이 없다.
+  **상주 자원을 쓰므로** 쓰지 않을 때는 `kubectl scale deploy/spark-connect --replicas=0`
+  (시분할 규칙 [../resource-sizing.md](../resource-sizing.md)).
+- **러너 이미지 버전(실측 고정)**: Spark **3.5.9** / Iceberg **1.6.1** / hadoop-aws **3.3.4** ↔ aws-java-sdk-bundle **1.12.262**.
+  `hadoop-aws`는 베이스 이미지의 `hadoop-client-*`와 **정확히 같은 버전**이어야 한다.
 - executor 메모리·셔플 파티션 튜닝이 성능 핵심.
 
 ## 심화: Iceberg 파일 컴팩션 (Spark vs Trino) — 이 프로젝트 관점

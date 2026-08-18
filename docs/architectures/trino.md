@@ -1,3 +1,7 @@
+> **이행 상태(2026-08-18)**: 대체 경로가 **동작 확인**됨 — `dbt-spark`가 Spark Connect 서버를 통해
+> Iceberg를 조회하는 것까지 검증([../redesign.md](../redesign.md) Phase 1). 다만 22모델의 **실행 단계
+> 방언 교정**과 bronze 데이터 이관이 남아 있어 compose의 `trino` 서비스는 아직 유지한다.
+
 # Trino (아키텍처 · 프로젝트 관점)
 
 ## 개요

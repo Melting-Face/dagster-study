@@ -1,6 +1,7 @@
 # dbt 코딩 규칙
 
-어댑터: **`dbt-trino`** (Trino → Iceberg/SeaweedFS 레이크하우스).
+어댑터: **`dbt-trino`**(현행) → **`dbt-spark`**(이행중, [../redesign.md](../redesign.md) Phase 1).
+두 어댑터를 **동시 설치**해 타깃만 바꿔가며 대조한다(Iceberg/SeaweedFS 레이크하우스는 공통).
 프로젝트: `dagster/dockerfile.d/src/dbt_pipelines/`.
 
 ## 포매팅 / 린팅
@@ -150,7 +151,6 @@ S3 → Iceberg 적재 테이블(`<dataset>/`)은 **dbt가 만들지 않으므로
 version: 2
 sources:
   - name: eicu
-    database: iceberg # Trino 카탈로그 (= profiles.yml database)
     schema: eicu # Iceberg 네임스페이스 = Trino 스키마 (eicu NAMESPACE)
     tables:
       - name: patient
@@ -194,7 +194,25 @@ models:
               min_value: 0
 ```
 
+## dbt-spark 타깃 (Phase 1 이행)
+
+- 타깃 2종: **`spark_session`**(호스트 로컬 Spark — 상시 서비스 없이 방언 검증용) /
+  **`spark_connect`**(클러스터 Spark Connect 서버 — 컴퓨트=K8s). 차이는 `spark.remote` 하나뿐이다.
+- **Iceberg 설정은 `server_side_parameters`에 둔다.** dbt-spark는 이 값들을 **세션 생성 시
+  `builder.config()`로 적용**하므로 카탈로그·S3 설정이 정상 반영되고, `{{ env_var(...) }}`를 쓸 수 있어
+  **비밀정보를 참조로 유지**할 수 있다(하드코딩 금지 원칙 충족).
+- **S3 키는 `server_side_parameters`에도 적지 않는다** — AWS 표준 env(`AWS_ACCESS_KEY_ID`/`SECRET`)로
+  S3FileIO의 기본 자격증명 체인이 집어간다.
+- ⚠️ **`source.yml`에 `database:`를 쓰지 않는다.** dbt-spark는 relation에 database 설정을 금지해
+  `Cannot set database in spark!`로 죽는다. 카탈로그는 타깃이 정한다(trino=프로파일 `database`,
+  spark=`spark.sql.defaultCatalog`).
+- **방언 차이(실측 스캔)**: `INTERVAL '1' HOUR`(Trino) → `INTERVAL 1 HOUR`(Spark) **8파일**,
+  `date_diff('unit',a,b)` **3파일**, `CROSS JOIN UNNEST(sequence(...))` → `explode(sequence(...))` **1파일**.
+  `dbt compile`은 22모델 전부 통과하므로 **실행 단계에서 드러난다** — 컴파일 통과를 이행 완료로 읽지 말 것.
+
 ## Trino / Iceberg 주의사항
+
+> Trino는 재설계로 **제거 예정**이다([../architectures/trino.md](../architectures/trino.md)). 아래는 현행 기준.
 
 - `profiles.yml`의 `database`(= `iceberg`)는 Trino 카탈로그명과 일치해야 한다.
   ([architectures/overview.md](../architectures/overview.md) 참고)

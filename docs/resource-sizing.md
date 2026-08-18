@@ -41,7 +41,8 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 | | Flink Operator | 200m | 512Mi | 500m | 1Gi |
 | | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
 | | Catalog Postgres(Iceberg JDBC) | 250m | 384Mi | 500m | 512Mi |
-| | **상주 소계** | **~1.35** | **~3.4Gi** | | |
+| | **Spark Connect 서버**(Phase 1, dbt 접속용) | 500m | 1.5Gi | 1 | 2Gi |
+| | **상주 소계** | **~1.85** | **~4.9Gi** | | |
 | **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
 | | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
 | | **BATCH 피크(상주+Spark)** | **~4.35** | **~8.4Gi** | | ✅ 6/16 내 |
@@ -52,10 +53,22 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 
 ### (C) 운영 다이얼 (초과 시 조절 순서)
 
+0. **★★★★★ Spark Connect 서버 스케일 0** — dbt를 돌리지 않을 때 `kubectl scale deploy/spark-connect --replicas=0`.
+   유일하게 **상주하는 컴퓨트**라 시분할 원칙의 예외다. 켜둔 채 잊으면 예산을 계속 갉아먹는다.
 1. **★★★★★ 엔진 시분할** — BATCH(Spark)·STREAM(Flink)을 **번갈아** 실행. 대기 엔진 파드는 0으로.
 2. **★★★★☆ Spark executor 수/크기** — 기본 `2 × (1core/2Gi)`. 대용량 인제스트 시 조절.
 3. **★★★★☆ Flink TaskManager slot/개수** — 스트리밍 병렬도. 기본 TM 1개(2 slot).
 4. **★★★☆☆ Redpanda dev 모드 메모리** — `--memory`/`--smp`로 축소, 데모 후 스케일 0.
+
+### (C-2) 실측 (2026-08-18, kind `lakehouse` 단일 노드)
+
+| 구성 | Requests CPU | Requests Mem |
+| --- | --- | --- |
+| 상주만(오퍼레이터 2종 + SeaweedFS + 카탈로그 PG + cert-manager) | 3500m (43%) | 5538Mi (24%) |
+| + Flink 세션 클러스터(JM 1 + TM 1) | 4500m (56%) | 7586Mi (34%) |
+
+> podman machine 실제 할당은 **8 CPU / 22GiB**로, 문서 목표치(6/16)보다 여유가 있다.
+> 목표 예산으로 좁힐 경우 위 수치가 상한에 근접하므로 시분할이 다시 필수가 된다.
 
 ### (D) 참고 수치 근거
 

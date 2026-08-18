@@ -2,9 +2,14 @@
 
 ## 개요
 
-`dagster-study`는 **Dagster로 오케스트레이션하고, Trino로 쿼리하며, Iceberg 테이블 포맷을
-SeaweedFS(S3 호환) 위에 적재하는** 로컬 레이크하우스 학습 프로젝트다.
-전체 스택은 `compose.yml`로 컨테이너 오케스트레이션한다.
+`dagster-study`는 **Dagster로 오케스트레이션하고, Iceberg 테이블 포맷을 SeaweedFS(S3 호환) 위에
+적재하는** 로컬 레이크하우스 학습 프로젝트다.
+
+> ⚠️ **이 문서는 `compose.yml` 기준의 "현행 스택"이다.** 재설계로 컴퓨트·스토리지는
+> **로컬 Kubernetes로 이전 중**이고 Dagster는 호스트로 나갔다. 목표 토폴로지와 진행 단계는
+> [../redesign.md](../redesign.md), 클러스터 규칙은 [../conventions/k8s.md](../conventions/k8s.md).
+> **2026-08-18 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
+> kind 클러스터(Spark Operator·Flink Operator·Spark Connect·SeaweedFS·카탈로그 Postgres).
 
 ## 구성 요소
 

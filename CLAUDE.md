@@ -125,6 +125,10 @@
   로컬 레지스트리 `localhost:5001`. 기동은 `scripts/k8s-up.sh` → `k8s-operators.sh` → `k8s-poc-storage.sh`
   (설정 단일 출처 `scripts/k8s-env.sh`). Dagster는 **호스트 유지**, 컴퓨트·스토리지만 클러스터에 둔다.
   규칙 [`docs/conventions/k8s.md`](docs/conventions/k8s.md), 예산·배분 [`docs/resource-sizing.md`](docs/resource-sizing.md).
+  클러스터에는 **Spark Operator**(배치)·**Flink Operator**(스트림)·**Spark Connect**(dbt-spark 접속용 상주)가 있고,
+  Spark·Flink가 **같은 Iceberg JDBC 카탈로그**를 공유한다. 버전은 **엔진 최신이 아니라 Iceberg가 지원하는 짝**으로
+  고정한다(예: `iceberg-flink-runtime`이 2.1까지라 Flink는 2.1). Spark Connect는 유일한 상주 컴퓨트라
+  미사용 시 `--replicas=0`으로 내린다.
 - **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
   **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,
   부트스트랩은 **cloud-init 선언형**. 첫 스택 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s)는

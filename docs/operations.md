@@ -39,9 +39,7 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 
 **절차**:
 
-1. **`.env.example`에 키와 형식 예시를 추가**한다(값은 비움).
-   > 현재 이 레포에는 `.env.example`이 없다. 신규 참여자 온보딩·전파 누락 방지를 위해
-   > `.env`의 **키만** 담은 `.env.example`을 두는 것을 권장한다.
+1. **`.env.example`에 키와 형식 예시를 추가**한다(값은 비움 — 커밋 대상).
 2. `compose.yml`에서 그 값을 **사용하는 서비스**에 `- KEY=${KEY}`가 있는지 확인하고 없으면 추가한다.
    - 공용 앵커 **`x-dagster-common`**(`&dagster-common`)을 상속하는 서비스(webserver·daemon)는
      **앵커에 한 번만** 추가하면 둘 다 전파된다.
@@ -53,6 +51,26 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 
 > 예) `AWS_*`·`ENDPOINT_URL`은 `x-dagster-common` 앵커에 있어 webserver·daemon에 전파되고,
 > `trino` 서비스는 앵커를 안 쓰므로 `environment:`에 `AWS_*`를 **별도로** 나열한다(현재 구현).
+
+### 1-2. 호스트 실행과 컨테이너 실행의 값이 다른 키
+
+재설계 토폴로지에서 Dagster는 **호스트**(`uv run dg dev`)에서 돌고 메타 Postgres는 **compose**에 있다
+([conventions/k8s.md](conventions/k8s.md) §8). 같은 키라도 **누가 읽느냐에 따라 값이 달라진다**.
+
+| 키 | 컨테이너(compose) | 호스트(`dg dev`) |
+| --- | --- | --- |
+| `POSTGRES_HOST` | `postgres`(서비스명) — `compose.yml`이 **리터럴로 고정** | `localhost` — `.env` 값 사용 |
+
+- `dagster.yaml`의 `hostname`은 **하드코딩하지 않고** `env: POSTGRES_HOST`로 참조한다.
+  하드코딩하면 호스트 실행 시 이름 해석이 안 돼 `too many retries for DB connection`으로 죽는다(2026-08-18 실측).
+- compose `postgres`는 호스트가 붙을 수 있도록 **`127.0.0.1:${POSTGRES_PORT}:5432`** 로 퍼블리시한다
+  (루프백 바인딩 — 외부 노출 금지, [security.md](security.md)).
+- 호스트 실행 시 **`DAGSTER_HOME`을 `dagster.yaml`이 있는 디렉터리**(`dagster/dockerfile.d/src`)로 지정한다.
+  지정하지 않으면 임시 sqlite 인스턴스가 쓰여 **UI에 런이 안 남는다**.
+- **dbt-spark 타깃 키**(`ICEBERG_*`·`SPARK_REMOTE`)도 같은 성격이다. 호스트에서 dbt를 돌리면
+  in-cluster 서비스(카탈로그 Postgres·SeaweedFS·Spark Connect)에 **port-forward가 필요**하므로
+  `.env` 기본값은 `localhost:<로컬포트>`를 가리킨다. 클러스터 안에서 도는 워크로드는
+  매니페스트가 서비스명(`catalog-postgres`·`seaweedfs`)을 직접 주입한다.
 
 ## 2. 운영 정책 (보존·만료)
 

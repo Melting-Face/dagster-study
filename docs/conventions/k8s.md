@@ -56,6 +56,9 @@ resources:
 
 ## 8. Dagster 배치 — 본 프로젝트는 호스트 유지
 
+- **실행 전제**(2026-08-18 배선 완료): 호스트 실행 시 `DAGSTER_HOME=dagster/dockerfile.d/src`(=`dagster.yaml` 위치),
+  `POSTGRES_HOST=localhost`(`.env`), compose `postgres`는 `127.0.0.1:${POSTGRES_PORT}:5432`로 퍼블리시.
+  값이 컨테이너/호스트에서 갈리는 이유는 [../operations.md](../operations.md) §1-2.
 - **원칙**: Dagster(webserver·daemon)는 **호스트 PC**에서 `uv run dg dev`로 실행하고, 클러스터는
   kubeconfig로 접근하는 **원격 컴퓨트**로 다룬다. run은 호스트에서 돌고, 무거운 작업만 K8s로 위임한다.
 - **`K8sRunLauncher`는 쓰지 않는다**(현 토폴로지 기준). 이는 Dagster를 **클러스터 내부에 배포**해
@@ -135,6 +138,39 @@ resources:
 
 - **오퍼레이터**: Apache **Flink Kubernetes Operator**를 Helm으로 설치하고, 스트리밍 잡은 **`FlinkDeployment`(CRD)** 로 선언한다.
   JobManager/TaskManager 자원(`memory`·`cpu`)을 명시한다(§2, 수치는 [../resource-sizing.md](../resource-sizing.md)).
+  CRD는 `flink.apache.org/**v1beta1**` 단일(2026-08-18 실측, operator 1.15.0).
+- **차트 버전은 설치 시점에 반드시 확인**한다 — `downloads.apache.org/flink/`는 **현행 릴리스만** 보관해
+  구버전 차트 URL이 **404**가 된다(2026-08-18: 핀돼 있던 `1.10.0`이 사라져 설치 불가 → `1.15.0`으로 갱신).
+  `curl -s https://downloads.apache.org/flink/ | grep flink-kubernetes-operator`로 대조 후 `k8s-env.sh`에 핀한다.
+- **버전 짝은 엔진이 아니라 Iceberg가 정한다**: `iceberg-flink-runtime-<flinkMinor>` 아티팩트는
+  **2.1까지만 존재**한다(`-2.2`는 Maven Central 404, 2026-08-18). 오퍼레이터 CRD가 `v2_2`를 받아줘도
+  Iceberg가 없으면 무의미하므로 **Flink는 2.1 계열로 고정**한다(현재 `flink:2.1.3-java17` + Iceberg `1.11.0`).
+- **`watchNamespaces={<잡 ns>}`를 반드시 준다** — 비우면 잡 SA(`flink`)와 Role이 **오퍼레이터 ns에만** 생겨
+  잡 ns에서 파드가 못 뜬다(Spark 차트의 `workloadResources.namespaces`와 같은 함정).
+  단, 지정하면 RBAC이 네임스페이스로 좁아지면서 **두 구멍**이 생긴다 → 아래 보완 매니페스트로 메운다.
+  - `k8s/flink/flink-operator-webhook-rbac.yaml` — mutating webhook이 `flinkdeployments`를
+    **클러스터 스코프로 list**한다. 없으면 `FlinkSessionJob` 생성 자체가 403으로 거부된다.
+  - `k8s/flink/flink-workload-rbac.yaml` — JM 파드 **안에서** 잡을 제출하면 `<name>-rest` **Service를 조회**한다.
+    없으면 **DDL·SHOW는 되는데 쿼리 실행만** `services ... is forbidden`으로 실패해 원인을 헷갈리게 한다.
+- **`jarURI: local://`은 application 모드 전용**이다. `FlinkSessionJob`은 **오퍼레이터가 jar를 받아** JM에
+  업로드하므로 Flink FileSystem 스킴(`https://` 등)이 필요하고, `local://`은
+  `UnsupportedFileSystemSchemeException`으로 죽는다. (webhook 허용목록
+  `kubernetes.operator.user.artifacts.allowed-schemes`를 통과시켜도 **아티팩트 단계에서 별도로** 막힌다 — 층이 다르다.)
+  이미지에 구운 jar를 쓰려면 **application 모드**(`FlinkDeployment.spec.job`)로 선언한다.
+- **Hadoop 클래스는 Flink 이미지에 없다**(Spark 이미지와 다른 지점). Iceberg의 `FlinkCatalogFactory`가
+  `org.apache.hadoop.conf.Configuration`을 로드하므로 `CREATE CATALOG`에서 `ClassNotFoundException`이 난다.
+  레거시 `flink-shaded-hadoop-2-uber` 대신 Spark 러너와 **같은 계열의 shaded 클라이언트**
+  (`hadoop-client-api`·`hadoop-client-runtime` 3.3.4)를 `/opt/flink/lib`에 넣는다.
+- **크리덴셜은 SQL DDL에 쓰지 않는다** — `sql-client`가 실행문을 **그대로 echo**해 터미널·로그에 평문이 남는다
+  (2026-08-18 실측). S3 키는 표준 env(`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`)로 넣어 **S3FileIO의 기본
+  자격증명 체인**이 집어가게 하고 DDL에서 뺀다. Secret→env 주입은 `podTemplate`으로 한다(§4).
+- **Web UI**: 오퍼레이터가 `<name>-rest`(8081) Service를 만든다. 호스트에서는
+  `kubectl port-forward svc/<name>-rest 8081:8081`(§10). **세션 클러스터는 잡이 없어도 JM이 상주**해
+  UI가 계속 살아 있다(Spark의 driver UI가 잡 종료와 함께 사라지는 것과 대비 —
+  [../architectures/flink.md](../architectures/flink.md)). TaskManager는 잡 제출 시 온디맨드로 뜬다.
+- **검증 상태**(2026-08-18): 세션 클러스터(`k8s/flink/flinkdeployment-session.yaml`)에서
+  **Spark가 쓴 Iceberg 테이블을 Flink가 읽는 것까지 확인** — `SHOW DATABASES`→`poc`,
+  `SELECT * FROM poc.sample`→3행(alice/bob/carol). 카탈로그·S3는 Spark와 **동일한 JDBC 카탈로그 + SeaweedFS**.
 - **소스·싱크·상태**: 소스=**Redpanda**(Kafka API), 싱크=Iceberg(§11 공유 카탈로그), 체크포인트=SeaweedFS(S3, path-style),
   상태 백엔드=RocksDB. 러너 이미지는 `iceberg-flink-runtime`+S3A 의존을 포함해 로컬 레지스트리에 push한다(§10 이름 규칙).
 - **역할 경계**: **배치는 Spark, 스트림은 Flink**로 분리한다(엔진 중복 금지). ad-hoc SQL은 Spark SQL로 대체(Trino 제거).

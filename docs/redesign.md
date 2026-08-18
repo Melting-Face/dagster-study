@@ -87,7 +87,7 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 > 원칙: **커스텀 글루(Dagster↔Spark Operator)의 실현성을 PoC로 먼저 확인**해 리스크를 가장 크게 줄인 뒤 이행한다.
 > 각 Phase는 **성공 게이트**를 통과해야 다음으로 넘어간다.
 
-### Phase 0 — PoC (실현성 검증) 🚧 최우선
+### Phase 0 — PoC (실현성 검증) ✅ 게이트 통과 (2026-08-18)
 
 - **Plan**: kind(on Podman) 클러스터 + Spark Operator(Helm) 위에, 최소 SparkApplication을 **Dagster 자산이
   `PipesK8sClient`로 제출**하고 Iceberg 테이블에 write까지 성공시킨다.
@@ -97,13 +97,41 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **Check(성공 게이트)**: Iceberg 테이블 1개가 Spark로 append되고 **Spark SQL로 조회**되며, Dagster UI에
   로그·materialization이 회수된다.
 - **Act**: 검증된 최소 골격을 리소스(`SparkOperatorResource`)·러너 이미지 규격으로 확정.
+- **검증 결과(2026-08-18)**: 호스트 Dagster 자산 → `SparkApplication`(Apache CRD `spark.apache.org/v1`) 제출·폴링 →
+  Iceberg `jdbccat.poc.sample` write + Spark SQL read-back → driver 로그 회수 → materialization 메타
+  `rows=3` 기록, webserver GraphQL 노출 확인. 러너 이미지 `localhost:5001/spark-runner:0.2.0`(S3A 포함).
+- **이 과정에서 고친 잠복 결함 3건**(모두 조용히 실패하던 것):
+  ① Apache 이전이 `k8s/`·`scripts/`에만 적용되고 **Dagster 글루(`defs/poc/`)는 Kubeflow 스펙**으로 남아 있었다.
+  ② `assets.py`에 `@dg.definitions`가 같이 있어 **자산이 자동발견에서 누락**됐다([conventions/dagster.md](conventions/dagster.md)).
+  ③ driver 파드 이름을 `<app>-driver`로 조립했으나 Apache는 `<app>-<attempt>-driver`라 **로그 회수가 빈 문자열**이었다.
 
-### Phase 1 — 데이터 서비스 K8s 이전 + dbt 엔진 전환
+### Phase 1 — 데이터 서비스 K8s 이전 + dbt 엔진 전환 🚧 진행중 (2026-08-18 착수)
 
 - **Plan/Do**: SeaweedFS·카탈로그 Postgres를 **Helm/매니페스트**로 K8s에 배포([conventions/k8s.md](conventions/k8s.md) 규칙 준수).
   dbt 어댑터를 **`dbt-trino`→`dbt-spark`** 로 교체하고 Spark SQL 엔드포인트(Thrift/Connect)에 연결.
 - **Check**: 22모델이 dbt-spark로 `dbt build` 통과(SQL 방언 차이 교정), 스키마테스트 유지.
 - **Act**: compose에서 Trino 제거·env 전파 체인 재확인([operations.md](operations.md)).
+- **진행 상황(2026-08-18)**
+  - 데이터 서비스는 **이미 K8s에 있음**(SeaweedFS·카탈로그 Postgres, PoC 단계에서 선행).
+  - `dbt-spark 1.11.0` 설치. **pyspark는 3.5 계열로 핀**(클러스터 러너 Spark 3.5.9와 맞춤).
+  - 프로파일 2종 추가 — **`spark_session`**(호스트 로컬 Spark, 상시 서비스 0) /
+    **`spark_connect`**(클러스터 **Spark Connect 서버**, 컴퓨트=K8s). 둘 다 **연결 확인 완료**.
+    dbt-spark의 `server_side_parameters`가 세션 생성 시 `builder.config()`로 적용되므로
+    Iceberg 설정 전체를 프로파일에 두면서 **비밀정보는 `env_var()` 참조**로 유지한다.
+  - `dbt show --target spark_connect`로 **Iceberg 테이블 조회 성공**(dbt→Connect→Iceberg 전 구간).
+  - **`dbt compile` 22모델 전부 통과**. 단, 그 전에 `source.yml`의 `database: iceberg`를 제거해야 했다
+    (dbt-spark는 relation에 database 설정을 금지 — `Cannot set database in spark!`).
+- **남은 리스크(실행 단계 방언, 정적 스캔 결과)**
+
+  | 구문 | 파일 수 | Trino → Spark |
+  | --- | --- | --- |
+  | `INTERVAL '1' HOUR` 리터럴 | **8** | Spark는 `INTERVAL 1 HOUR`(따옴표 없음) — **최다 위험** |
+  | `date_diff('unit', a, b)` | 3 | Spark는 `datediff`/`months_between`/`unix_timestamp` 조합 |
+  | `date_trunc('unit', ts)` | 2 | 인자 순서 동일 — 대체로 호환 |
+  | `CROSS JOIN UNNEST(sequence(...))` | 1 | Spark는 `explode(sequence(...))` |
+
+- **선행 조건(로드맵에 없던 발견)**: bronze 테이블이 **K8s 카탈로그에 없다**(compose 쪽 카탈로그에만 존재).
+  실행 단계 검증은 **Phase 2(대용량 적재 Spark 이전)와 순서가 얽힌다** — 데이터 이관이 먼저다.
 
 ### Phase 2 — 대용량 bronze 인제스트 Spark 전환
 

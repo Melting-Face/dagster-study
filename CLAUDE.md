@@ -91,6 +91,11 @@
   상세 [`docs/conventions/dbt.md`](docs/conventions/dbt.md).
 - **`@dbt_assets` 셀렉터는 `select="fqn:<dataset>"`** 를 쓴다(`project=dbt_project` 동반).
   `path:models/<dataset>`는 cwd 글롭이라 정의 로드 시 모델이 수집되지 않는다(잠복 버그).
+- **어댑터 방언은 매크로로 흡수**한다(`dbt-trino`↔`dbt-spark` 이행 대비) — 엔진 리터럴을 직접 쓰지 않는다.
+  **의미론이 같으면 dbt 내장**(`{{ dbt.dateadd(...) }}`), **갈리거나 내장이 없으면 프로젝트 dispatch 매크로**
+  (`macros/cross_engine.sql`의 `elapsed`·`unnest_array`, `default__`에 `raise_compiler_error`).
+  🔴 **`dbt.datediff`는 쓰지 않는다** — Spark는 경과시간 `ceil`, Trino는 경계 교차라 임계값 비교에서 값이 갈린다.
+  기준은 "도는 것"이 아니라 **"같은 값"**. `dbt compile`은 이를 못 잡으므로 **컴파일 통과를 이행 완료로 읽지 않는다**.
 - **데이터셋 원천 스키마·피처(SOFA→Sepsis-3)** 는 [`docs/dataset_schema.md`](docs/dataset_schema.md) 참고.
 - 자세한 흐름·사용법은 [`docs/architectures/overview.md`](docs/architectures/overview.md) 참고.
 
@@ -132,6 +137,9 @@
   **Iceberg 카탈로그 이름은 전 엔진 `iceberg`로 통일**한다 — JDBC 카탈로그는 `catalog_name`으로 레지스트리를
   분할해, 이름이 다르면 같은 DB를 봐도 서로의 테이블이 안 보인다. 또 **SeaweedFS는 AWS SDK의 aws-chunked
   체크섬을 못 풀어** 객체가 조용히 손상되므로 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`를 유지한다.
+  **노출은 HTTP UI만 Ingress**(ingress-nginx, `*.localtest.me:8080`)로 내고 gRPC·JDBC·S3는 `port-forward`를 쓴다 —
+  kind는 **공개 포트를 클러스터 생성 시점에만** 정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
+  컴퓨트 **러너 이미지는 로컬 레지스트리에 직접 push**하고(`kind load` 불필요) **태그와 매니페스트를 함께 올린다**.
 - **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
   **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,
   부트스트랩은 **cloud-init 선언형**. 첫 스택 [`terraform/oci-k3s/`](terraform/oci-k3s/README.md)(OCI A1+k3s)는

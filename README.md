@@ -22,12 +22,13 @@ SOFA → Sepsis-3 실버 피처를 만드는 학습·포트폴리오 프로젝�
 | 계층 | 현재 위치 | 비고 |
 | --- | --- | --- |
 | 오케스트레이션 | **호스트** — Dagster webserver·daemon | 메타 스토리지는 compose `postgres` |
-| 배치 컴퓨트 | **K8s** — Apache Spark Operator → `SparkApplication` | 러너 이미지 `spark-runner`(Iceberg·S3A·Spark Connect 포함) |
+| 배치 컴퓨트 | **K8s** — Apache Spark Operator → `SparkApplication` | 러너 이미지 `spark-runner:0.4.0`(Iceberg·S3A·Spark Connect) |
 | SQL 엔드포인트 | **K8s** — Spark Connect 서버 | dbt-spark가 `spark.remote`로 접속(Phase 1) |
-| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` | 러너 이미지 `flink-runner`(Iceberg 포함) |
-| 테이블 포맷 | Iceberg (JDBC 카탈로그 = `catalog-postgres`) | Spark·Flink가 **동일 카탈로그 공유** |
+| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` | 러너 이미지 `flink-runner:0.2.0`(Iceberg) |
+| 테이블 포맷 | Iceberg (JDBC 카탈로그 = `catalog-postgres`) | Spark·Flink가 **동일 카탈로그 공유**(카탈로그명 `iceberg`로 통일) |
 | 오브젝트 스토어 | SeaweedFS (S3 호환, path-style) | Iceberg 웨어하우스 |
-| 변환 | dbt — `dbt-trino`(현행) → `dbt-spark`(이행 중) | 모델 22개(`models/mimic_iv/`) |
+| UI 진입점 | **K8s** — ingress-nginx (`*.localtest.me:8080`) | HTTP UI만 Ingress, 데이터 접속은 `port-forward`(§2-1) |
+| 변환 | dbt — `dbt-trino`(현행) → `dbt-spark`(이행 중) | 모델 22개(`models/mimic_iv/`), 방언은 내장·dispatch 매크로로 흡수(`macros/cross_engine.sql`) |
 
 ## 실행방법
 
@@ -70,6 +71,23 @@ kubectl port-forward svc/seaweedfs        18333:8333   # S3 API
 kubectl port-forward svc/spark-connect    15002:15002  # dbt(spark_connect 타깃)
 ```
 
+### 2-2. 컴퓨트 러너 이미지 빌드 (최초 1회 / Dockerfile 변경 시)
+
+Spark·Flink 워크로드는 Iceberg·S3A 의존을 구운 **전용 이미지**로 돈다. 로컬 레지스트리에 직접 push하면
+클러스터가 같은 이름으로 받는다(`kind load` 불필요). 태그·매니페스트 갱신 규칙은
+[`docs/conventions/k8s.md`](docs/conventions/k8s.md) §10.
+
+```shell
+podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.4.0 k8s/spark
+podman push --tls-verify=false localhost:5001/spark-runner:0.4.0
+
+podman build -f k8s/flink/Dockerfile.flink-runner -t localhost:5001/flink-runner:0.2.0 k8s/flink
+podman push --tls-verify=false localhost:5001/flink-runner:0.2.0
+```
+
+> 태그를 올렸으면 이를 참조하는 매니페스트(`k8s/spark/*.yaml`·`k8s/flink/*.yaml`)도 **함께** 올린다.
+> 한쪽만 올리면 구 이미지가 계속 돈다.
+
 ### 3. Dagster (호스트)
 
 Dagster는 **클러스터 밖 호스트**에서 돌며 K8s를 원격 컴퓨트로 트리거한다
@@ -94,25 +112,31 @@ dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동
 
 ## REF
 
-### dagster
+규칙·설계가 근거로 삼는 외부 표준의 인덱스는 [`docs/references.md`](docs/references.md)에 있다.
+아래는 이 저장소가 실제로 쓰는 스택의 1차 문서다.
 
-https://docs.dagster.io/deployment/oss/deployment-options/docker
-https://docs.dagster.io/deployment/oss/dagster-yaml
-https://docs.dagster.io/guides/build/projects/workspaces/workspace-yaml
+### Dagster
+
+- 배포 옵션(Kubernetes): https://docs.dagster.io/deployment/oss/deployment-options/kubernetes
+- `dagster.yaml`(인스턴스 설정): https://docs.dagster.io/deployment/oss/dagster-yaml
+- `workspace.yaml`(코드 로케이션): https://docs.dagster.io/guides/build/projects/workspaces/workspace-yaml
+- Dagster Pipes / `PipesK8sClient`: https://docs.dagster.io/api/python-api/libraries/dagster-k8s
 
 ### dbt
 
-https://github.com/duckdb/dbt-duckdb
+- dbt-trino(현행): https://github.com/starburstdata/dbt-trino
+- dbt-spark(이행 대상): https://docs.getdbt.com/docs/core/connect-data-platform/spark-setup
+- 크로스 데이터베이스 매크로: https://docs.getdbt.com/reference/dbt-jinja-functions/cross-database-macros
 
-### dlthub
+### 레이크하우스 / 컴퓨트
 
-https://dlthub.com/docs
+- Apache Iceberg: https://iceberg.apache.org/docs/latest/
+- Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/
+- Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
+- SeaweedFS(S3 API): https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API
 
-### gemini
+### 로컬 K8s
 
-https://aistudio.google.com/app/api-keys
-
-### dockerhub
-
-https://hub.docker.com/r/minio/minio
-https://hub.docker.com/_/postgres
+- kind(Podman provider): https://kind.sigs.k8s.io/
+- kind 로컬 레지스트리: https://kind.sigs.k8s.io/docs/user/local-registry/
+- ingress-nginx: https://kubernetes.github.io/ingress-nginx/

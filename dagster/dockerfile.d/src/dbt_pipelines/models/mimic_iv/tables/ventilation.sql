@@ -174,13 +174,15 @@ vd1 as (
         charttime_lead,
         ventilation_status,
         -- 직전 이벤트로부터의 경과 시간(시간 단위). 정수 나눗셈 회피 위해 double 캐스트
-        cast(date_diff('minute', charttime_lag, charttime) as double) / 60 as ventduration,
+        cast(
+            {{ elapsed('minute', 'charttime_lag', 'charttime') }} as double
+        ) / 60 as ventduration,
         -- 현재 상태가 새 이벤트인지 직전 이벤트의 연속인지 판정
         case
             -- lag가 null이면 환자의 첫 이벤트
             when ventilation_status_lag is null then 1
             -- 14시간 이상 공백은 항상 새 이벤트
-            when date_diff('hour', charttime_lag, charttime) >= 14 then 1
+            when {{ elapsed('hour', 'charttime_lag', 'charttime') }} >= 14 then 1
             -- 직전 행과 상태가 다르면 새 이벤트
             when ventilation_status_lag != ventilation_status then 1
             else 0
@@ -212,7 +214,7 @@ select
         case
             when
                 charttime_lead is null
-                or date_diff('hour', charttime, charttime_lead) >= 14
+                or {{ elapsed('hour', 'charttime', 'charttime_lead') }} >= 14
                 then charttime
             else charttime_lead
         end

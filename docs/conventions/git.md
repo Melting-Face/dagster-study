@@ -39,6 +39,10 @@
   - `.gitignore`로 강제하고, 예시는 `*.example`만 커밋한다.
   - **`.claude/settings.local.json`** — 세션 중 승인한 `allow` 누적(개인 설정).
 - **커밋 대상**(재현성): 락 파일 — `.terraform.lock.hcl`·`skills-lock.json`.
+  - ⚠️ **`uv.lock`은 예외로 커밋하지 않는다.** 락 파일을 커밋하는 이유는 **재현성**인데,
+    이 저장소에서 `uv.lock`은 그 값을 주지 않는다 — 이미지 빌드가 `pip install -e`를 쓰고 락을
+    참조하지 않으며, 루트 `pyproject.toml`은 `[project]`가 없는 **도구 설정 전용**이라 루트 락에는
+    잠기는 의존성이 0개다. "락 파일이니 커밋" 규칙을 기계적으로 적용하지 않는다.
   - **`.claude/settings.json`** — 프로젝트 공유 권한 게이트·hook 배선
     ([agents.md §권한 게이트](agents.md#권한-게이트-permissions--유일한-기계-강제)). 같은 `.claude/` 아래여도
     `settings.local.json`과 정책이 **반대**이므로 글롭으로 묶지 않는다.

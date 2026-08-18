@@ -99,7 +99,8 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **Act**: 검증된 최소 골격을 리소스(`SparkOperatorResource`)·러너 이미지 규격으로 확정.
 - **검증 결과(2026-08-18)**: 호스트 Dagster 자산 → `SparkApplication`(Apache CRD `spark.apache.org/v1`) 제출·폴링 →
   Iceberg `iceberg.poc.sample` write + Spark SQL read-back → driver 로그 회수 → materialization 메타
-  `rows=3` 기록, webserver GraphQL 노출 확인. 러너 이미지 `localhost:5001/spark-runner:0.2.0`(S3A 포함).
+  `rows=3` 기록, webserver GraphQL 노출 확인. 당시 러너 이미지 `localhost:5001/spark-runner:0.2.0`(S3A 포함)
+  — **현행은 `0.4.0`**(Spark Connect 추가, 빌드·push 절차는 [conventions/k8s.md](conventions/k8s.md) §10).
 - **이 과정에서 고친 잠복 결함 3건**(모두 조용히 실패하던 것):
   ① Apache 이전이 `k8s/`·`scripts/`에만 적용되고 **Dagster 글루(`defs/poc/`)는 Kubeflow 스펙**으로 남아 있었다.
   ② `assets.py`에 `@dg.definitions`가 같이 있어 **자산이 자동발견에서 누락**됐다([conventions/dagster.md](conventions/dagster.md)).
@@ -121,14 +122,19 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
   - `dbt show --target spark_connect`로 **Iceberg 테이블 조회 성공**(dbt→Connect→Iceberg 전 구간).
   - **`dbt compile` 22모델 전부 통과**. 단, 그 전에 `source.yml`의 `database: iceberg`를 제거해야 했다
     (dbt-spark는 relation에 database 설정을 금지 — `Cannot set database in spark!`).
-- **남은 리스크(실행 단계 방언, 정적 스캔 결과)**
+- **SQL 방언(정적 스캔) — 전부 해소** / 정본·규칙은 [conventions/dbt.md](conventions/dbt.md) "방언 차이는 크로스 어댑터 매크로로 흡수한다"
 
-  | 구문 | 파일 수 | Trino → Spark |
-  | --- | --- | --- |
-  | `INTERVAL '1' HOUR` 리터럴 | **8** | Spark는 `INTERVAL 1 HOUR`(따옴표 없음) — **최다 위험** |
-  | `date_diff('unit', a, b)` | 3 | Spark는 `datediff`/`months_between`/`unix_timestamp` 조합 |
-  | `date_trunc('unit', ts)` | 2 | 인자 순서 동일 — 대체로 호환 |
-  | `CROSS JOIN UNNEST(sequence(...))` | 1 | Spark는 `explode(sequence(...))` |
+  | 구문 | 파일 수 | 상태 | Trino → Spark |
+  | --- | --- | --- | --- |
+  | `INTERVAL '1' HOUR` 리터럴 | 8 → **0** | ✅ 해소(`52e7cde`) | `{{ dbt.dateadd(...) }}` **내장** 매크로 |
+  | `date_diff('unit', a, b)` | 3 → **0** | ✅ 해소(`589bd5a`) | `{{ elapsed(...) }}` **프로젝트 dispatch** 매크로 |
+  | `CROSS JOIN UNNEST(...)` | 1 → **0** | ✅ 해소(`589bd5a`) | `{{ unnest_array(...) }}` **프로젝트 dispatch** 매크로 |
+  | `sequence(...)`·`date_trunc(...)` | 3 | ✅ 무조치 | 양쪽 엔진에 동일 의미로 존재 |
+
+  > 🔴 **`dbt.datediff`는 일부러 쓰지 않았다** — `spark__datediff`는 경과시간 `ceil`, Trino 네이티브는
+  > **경계 교차**라 임계값 비교(`ventilation >= 14`·`urine_output_rate <= 5`)에서 silver 피처 값이 갈린다.
+  > Trino를 정본으로 두고 Spark에 같은 수식을 재현했다. **"도는 것"이 아니라 "같은 값"이 이행 기준이다.**
+  > 두 타깃 compile·렌더 대조는 통과했고 **실행 검증만 원천 데이터 부재로 보류**다.
 
 - **선행 조건(로드맵에 없던 발견)**: bronze 테이블이 **K8s 카탈로그에 없다**(compose 쪽 카탈로그에만 존재).
   실행 단계 검증은 **Phase 2(대용량 적재 Spark 이전)와 순서가 얽힌다** — 데이터 이관이 먼저다.

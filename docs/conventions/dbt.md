@@ -206,9 +206,68 @@ models:
 - ⚠️ **`source.yml`에 `database:`를 쓰지 않는다.** dbt-spark는 relation에 database 설정을 금지해
   `Cannot set database in spark!`로 죽는다. 카탈로그는 타깃이 정한다(trino=프로파일 `database`,
   spark=`spark.sql.defaultCatalog`).
-- **방언 차이(실측 스캔)**: `INTERVAL '1' HOUR`(Trino) → `INTERVAL 1 HOUR`(Spark) **8파일**,
-  `date_diff('unit',a,b)` **3파일**, `CROSS JOIN UNNEST(sequence(...))` → `explode(sequence(...))` **1파일**.
-  `dbt compile`은 22모델 전부 통과하므로 **실행 단계에서 드러난다** — 컴파일 통과를 이행 완료로 읽지 말 것.
+
+### 방언 차이는 크로스 어댑터 매크로로 흡수한다 (규칙)
+
+- 어댑터마다 문법이 갈리는 날짜·시간 연산은 **엔진 리터럴을 직접 쓰지 않고 dbt 내장
+  크로스 데이터베이스 매크로**(`dbt.dateadd`·`dbt.datediff`·`dbt.date_trunc` 등)로 쓴다.
+  어댑터가 자기 방언으로 디스패치하므로 **`dbt-trino`·`dbt-spark` 양쪽에서 같은 모델이 돈다**.
+
+  ```sql
+  -- Good — 어댑터가 방언을 결정한다
+  {{ dbt.dateadd('hour', -1, 'ih.endtime') }}
+
+  -- Bad — Trino 전용 리터럴 (Spark는 따옴표 없는 INTERVAL 1 HOUR)
+  ih.endtime - INTERVAL '1' HOUR
+  ```
+
+- 이 매크로는 **dbt-core 전역 프로젝트**에 있어 `dbt_utils` 설치와 무관하게 `dbt.` 접두어로 호출된다
+  (`dbt_utils.dateadd`는 구 경로 — 신규 코드는 `dbt.`를 쓴다).
+
+#### 🔴 내장 매크로를 쓰기 전에 **의미론이 같은지** 확인한다
+
+**"돌아가는 것"이 아니라 "같은 값이 나오는 것"이 이행의 목표다.** 내장 크로스 어댑터 매크로는
+어댑터별 구현이 **다른 의미**일 수 있고, 그러면 조용히 결과가 갈린다.
+
+- 실측 반례(2026-08-19, 설치본 소스 확인) — **`dbt.datediff`는 쓰지 않는다**:
+
+  | 구현 | `'hour'` 의미 |
+  | --- | --- |
+  | Trino 네이티브 `date_diff('hour', a, b)` | **경계 교차 횟수**(Joda field difference) |
+  | `trino__datediff(..., 'hour')` | `day*24 + hour(b) - hour(a)` → 네이티브와 동일 |
+  | `spark__datediff(..., 'hour')` | `ceil((unix(b)-unix(a))/3600)` → **경과시간 올림** |
+
+  `11:00 → 12:59`가 경계교차는 **1**, ceil은 **2**다. `ventilation`의 `>= 14`,
+  `urine_output_rate`의 `<= 5`처럼 **임계값 비교**에 쓰이므로 값이 갈리면 silver 피처가 달라진다.
+
+- **판단 기준**
+
+  | 상황 | 쓸 것 |
+  | --- | --- |
+  | 어댑터 간 의미론이 같다(날짜 산술 등) | **dbt 내장** — `dbt.dateadd`·`dbt.date_trunc` |
+  | 의미론이 갈린다 | **프로젝트 dispatch 매크로** — Trino 네이티브를 **정본**으로 두고 Spark에 같은 수식을 재현 |
+  | 내장 매크로가 아예 없다(배열 펼치기 등) | **프로젝트 dispatch 매크로** |
+
+- 프로젝트 dispatch 매크로는 **`macros/cross_engine.sql`** 한 곳에 모은다. `adapter.dispatch`를 쓰고,
+  **`default__` 구현에 `raise_compiler_error`를 둬** 새 어댑터에서 **조용히 틀리지 않고 즉시 실패**하게 한다.
+
+  | 매크로 | Trino | Spark |
+  | --- | --- | --- |
+  | `elapsed(part, from, to)` | `date_diff(...)` 네이티브 | 경계교차 수식 재현(`hour`·`minute`만) |
+  | `unnest_array(arr, alias, col)` | `cross join unnest(...)` | `lateral view explode(...)` |
+
+- **이행 현황(2026-08-19)** — 정적 스캔 기준 방언 차이 **전부 해소**
+
+  | 구문 | 상태 | 조치 |
+  | --- | --- | --- |
+  | `INTERVAL '1' HOUR` 리터럴 (8파일) | ✅ 해소 | `{{ dbt.dateadd(...) }}` 내장 매크로 (`52e7cde`) |
+  | `date_diff('unit', a, b)` (3파일) | ✅ 해소 | `{{ elapsed(...) }}` dispatch 매크로 (`589bd5a`) |
+  | `CROSS JOIN UNNEST(...)` (1파일) | ✅ 해소 | `{{ unnest_array(...) }}` dispatch 매크로 (`589bd5a`) |
+  | `sequence(start, stop)`·`date_trunc(fmt, ts)` | ✅ 무조치 | 양쪽 엔진에 동일 의미로 존재 |
+
+- ⚠️ **`dbt compile` 통과를 이행 완료로 읽지 말 것.** 현재 `spark_session`·`dev`(trino) 두 타깃 모두
+  22모델 compile 통과·렌더 결과 대조까지 됐지만, **실행 검증은 원천 데이터 부재로 보류** 상태다
+  ([../redesign.md](../redesign.md) Phase 2).
 
 ## Trino / Iceberg 주의사항
 

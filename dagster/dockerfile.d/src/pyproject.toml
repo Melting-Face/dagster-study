@@ -14,7 +14,16 @@ dependencies = [
   "dagster-postgres==0.28.12",
   "dagster-dbt==0.28.12",
   # DuckDB 대체: Trino 어댑터 (버전은 dbt-core 1.10 호환성 빌드 시 재확인 필요)
+  # Phase 1 이행 중: dbt-spark로 옮기는 동안 두 어댑터를 **동시 설치**해 타깃만 바꿔가며 대조한다.
+  # 이행 완료 시 제거한다(docs/redesign.md Phase 1).
   "dbt-trino>=1.8,<2.0",
+  # Spark 어댑터 — `session` extra는 pyspark를 동반해 로컬 SparkSession으로 붙는다.
+  # (상시 Thrift/Connect 엔드포인트 없이 방언 검증을 먼저 하기 위한 선택. 실행 엔진 최종안은 미확정)
+  "dbt-spark[session]>=1.11,<2.0",
+  # pyspark는 **클러스터 러너 이미지와 같은 계열로 고정**한다(현재 Spark 3.5.9).
+  # 기본 해석은 4.x를 끌어오는데, Iceberg 런타임 jar(1.6.1 = Spark 3.5용)와 방언이 어긋난다.
+  # `connect` extra(gRPC 클라이언트)까지 받아야 dbt-spark가 `spark.remote`로 붙는다.
+  "pyspark[connect]>=3.5,<4.0",
   # Trino 파이썬 클라이언트 — Iceberg 유지보수 프로시저 실행(common/trino.py)에 직접 사용.
   # dbt-trino 전이 의존이나, 직접 import하므로 명시 선언(explicit dependencies).
   "trino>=0.330",

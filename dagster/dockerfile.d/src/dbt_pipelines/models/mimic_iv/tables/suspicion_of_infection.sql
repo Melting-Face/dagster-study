@@ -74,13 +74,13 @@ me_then_ab as (
                     -- charttime이 있으면 charttime 사용
                     me72.charttime is not null
                     and ab_tbl.antibiotic_time > me72.charttime
-                    and ab_tbl.antibiotic_time <= me72.charttime + interval '72' hour
+                    and ab_tbl.antibiotic_time <= {{ dbt.dateadd('hour', 72, 'me72.charttime') }}
                 )
                 or (
                     -- charttime이 없으면 chartdate 사용
                     me72.charttime is null
                     and ab_tbl.antibiotic_date >= me72.chartdate
-                    and ab_tbl.antibiotic_date <= me72.chartdate + interval '3' day
+                    and ab_tbl.antibiotic_date <= {{ dbt.dateadd('day', 3, 'me72.chartdate') }}
                 )
             )
 ),
@@ -109,13 +109,13 @@ ab_then_me as (
                 (
                     -- charttime이 있으면 charttime 사용
                     me24.charttime is not null
-                    and ab_tbl.antibiotic_time >= me24.charttime - interval '24' hour
+                    and ab_tbl.antibiotic_time >= {{ dbt.dateadd('hour', -24, 'me24.charttime') }}
                     and ab_tbl.antibiotic_time < me24.charttime
                 )
                 or (
                     -- charttime이 없으면 chartdate 사용
                     me24.charttime is null
-                    and ab_tbl.antibiotic_date >= me24.chartdate - interval '1' day
+                    and ab_tbl.antibiotic_date >= {{ dbt.dateadd('day', -1, 'me24.chartdate') }}
                     and ab_tbl.antibiotic_date <= me24.chartdate
                 )
             )

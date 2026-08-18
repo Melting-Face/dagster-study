@@ -57,8 +57,8 @@ s1 as (
         on
             soi.stay_id = sofa.stay_id
             -- 감염 의심 시각 기준 -48시간 ~ +24시간 윈도우 안의 SOFA 행과 결합
-            and sofa.endtime >= soi.suspected_infection_time - interval '48' hour
-            and sofa.endtime <= soi.suspected_infection_time + interval '24' hour
+            and sofa.endtime >= {{ dbt.dateadd('hour', -48, 'soi.suspected_infection_time') }}
+            and sofa.endtime <= {{ dbt.dateadd('hour', 24, 'soi.suspected_infection_time') }}
     where soi.stay_id is not null
 )
 

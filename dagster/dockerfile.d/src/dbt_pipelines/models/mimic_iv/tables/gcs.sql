@@ -65,7 +65,7 @@ gcs as (
             b.stay_id = b2.stay_id
             and b.rn = b2.rn + 1
             -- 직전 측정이 6시간 이내일 때만 보간에 사용
-            and b2.charttime > b.charttime - interval '6' hour
+            and b2.charttime > {{ dbt.dateadd('hour', -6, 'b.charttime') }}
 ),
 
 gcs_stg as (

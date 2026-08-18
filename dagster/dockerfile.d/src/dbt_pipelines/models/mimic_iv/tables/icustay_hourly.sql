@@ -14,7 +14,7 @@ with all_hours as (
         case
             when date_trunc('hour', it.intime_hr) = it.intime_hr
                 then it.intime_hr
-            else date_trunc('hour', it.intime_hr) + interval '1' hour
+            else {{ dbt.dateadd('hour', 1, "date_trunc('hour', it.intime_hr)") }}
         end as endtime,
 
         -- 입실 24시간 전(-24)부터 퇴실까지 시간 오프셋 정수 배열
@@ -28,6 +28,6 @@ with all_hours as (
 select
     all_hours.stay_id,
     cast(t.hr_unnested as integer) as hr,
-    all_hours.endtime + (t.hr_unnested * interval '1' hour) as endtime
+    {{ dbt.dateadd('hour', 't.hr_unnested', 'all_hours.endtime') }} as endtime
 from all_hours
 cross join unnest(all_hours.hrs) as t (hr_unnested)

@@ -21,7 +21,7 @@ with co as (
         ih.hr,
         -- start/endtime으로 해당 시간 구간 내 값을 필터링
         ih.endtime,
-        ih.endtime - interval '1' hour as starttime
+        {{ dbt.dateadd('hour', -1, 'ih.endtime') }} as starttime
     from {{ ref('icustay_hourly') }} as ih
     inner join {{ source('mimiciv', 'icustays') }} as ie
         on ih.stay_id = ie.stay_id

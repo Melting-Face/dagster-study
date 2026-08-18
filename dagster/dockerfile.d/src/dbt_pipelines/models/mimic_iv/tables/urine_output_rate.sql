@@ -17,8 +17,8 @@ with tm as (
         on
             ie.stay_id = ce.stay_id
             and ce.itemid = 220045
-            and ce.charttime > ie.intime - interval '1' month
-            and ce.charttime < ie.outtime + interval '1' month
+            and ce.charttime > {{ dbt.dateadd('month', -1, 'ie.intime') }}
+            and ce.charttime < {{ dbt.dateadd('month', 1, 'ie.outtime') }}
     group by ie.stay_id
 ),
 
@@ -88,7 +88,7 @@ ur_stg as (
         on
             io_cur.stay_id = iosum.stay_id
             and io_cur.charttime >= iosum.charttime
-            and io_cur.charttime <= iosum.charttime + interval '23' hour
+            and io_cur.charttime <= {{ dbt.dateadd('hour', 23, 'iosum.charttime') }}
     group by io_cur.stay_id, io_cur.charttime
 )
 

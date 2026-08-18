@@ -50,7 +50,7 @@ wt_stg2 as (
         wt_stg1.weight,
         case
             when wt_stg1.weight_type = 'admit' and wt_stg1.rn = 1
-                then ie.intime - interval '2' hour
+                then {{ dbt.dateadd('hour', -2, 'ie.intime') }}
             else wt_stg1.charttime
         end as starttime
     from wt_stg1
@@ -71,7 +71,7 @@ wt_stg3 as (
                 partition by stay_id
                 order by starttime
             ),
-            outtime + interval '2' hour
+            {{ dbt.dateadd('hour', 2, 'outtime') }}
         ) as endtime
     from wt_stg2
 ),
@@ -90,7 +90,7 @@ wt1 as (
                 partition by stay_id
                 order by starttime
             ),
-            outtime + interval '2' hour
+            {{ dbt.dateadd('hour', 2, 'outtime') }}
         ) as endtime
     from wt_stg3
 ),
@@ -118,7 +118,7 @@ wt_fix as (
         wt.starttime as endtime,
         wt.weight,
         wt.weight_type,
-        ie.intime - interval '2' hour as starttime
+        {{ dbt.dateadd('hour', -2, 'ie.intime') }} as starttime
     from {{ source('mimiciv', 'icustays') }} as ie
     inner join wt_first as wt
         on

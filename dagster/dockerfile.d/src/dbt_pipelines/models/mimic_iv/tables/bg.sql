@@ -147,7 +147,7 @@ stg2 as (
         on
             bg.subject_id = s1.subject_id
             and s1.charttime
-            between bg.charttime - interval '2' hour
+            between {{ dbt.dateadd('hour', -2, 'bg.charttime') }}
             and bg.charttime
     where bg.po2 is not null
 ),
@@ -165,7 +165,7 @@ stg3 as (
         -- fio2가 혈액가스 채취 4시간 이내(이전)에 측정된 경우
         on
             bg.subject_id = s2.subject_id
-            and s2.charttime >= bg.charttime - interval '4' hour
+            and s2.charttime >= {{ dbt.dateadd('hour', -4, 'bg.charttime') }}
             and bg.charttime >= s2.charttime
             and s2.fio2_chartevents > 0
     -- spo2가 가장 최근인 행만 (spo2 없으면 lastrowspo2 = 1)

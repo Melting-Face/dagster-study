@@ -56,6 +56,9 @@
   → 에셋 이름으로 바로 검색/점프(탐색성), per-asset 커스터마이징(deps·partition·description·automation)이 자연스럽다.
 - 공통 처리 로직은 일반 함수(`common.helper`)로 분리해 재사용하되(DRY), **에셋 정의 자체는 분리·명시**한다.
 - 에셋은 **데이터셋별 서브프로젝트 단위로 분리 관리**한다(`defs/<dataset>/assets.py`).
+- **`@dg.definitions`는 `@asset`이 있는 모듈에 두지 않는다** — 같이 두면 그 반환값이 모듈 정의를 대체해
+  **모듈 스코프 `@asset`이 조용히 누락**된다. 리소스 등록은 `resources.py`처럼 자산 없는 모듈에 두고,
+  정의 추가 후 `dg check defs`로 자산 수를 확인한다. 상세 [`docs/conventions/dagster.md`](docs/conventions/dagster.md).
 
 ## 프로젝트 구조 컨벤션
 
@@ -132,7 +135,7 @@
 - **Claude Code 스킬**: 프로젝트가 쓰는 Agent Skills와 사용 규칙(**프로젝트 컨벤션 우선**)은
   [`docs/skills.md`](docs/skills.md), 단일 출처는 [`skills-lock.json`](skills-lock.json).
 - **에이전트 오케스트레이션·기록관**: AI 세션을 **3계층(supervisor→director→subagent)** 으로 나눈다(**director는 우선 1명**,
-  도메인 무관). subagent 실행은 director **승인 게이트**를 거치고, 미션 저널은 **supervisor 단독 기록**(경합 방지). "누가 무엇을 왜
+  도메인 무관). **director는 업무 성격에 따라 워커를 배정·감독**하고, **권한 밖(비가역·비용·규약변경·범위 밖)이나 특이사항(드리프트·결과충돌·반복실패·비승인변경)은 supervisor에 에스컬레이션**해 **진행 여부를 supervisor가 결정**한다. subagent 실행은 director **승인 게이트**를 거친다. **`security`·`archivist`는 director 관할 밖**(supervisor가 직접 배정)이며, **director의 실행·채택 결정은 `security` 최종 컨펌 후 진행**한다(동일 결정 재컨펌 2회 초과 시 에스컬레이션). 미션 저널의 **기록 주체는 `archivist`** — supervisor가 **체크포인트마다** 이벤트를 전달해 기록시키고(경합 방지 single-writer 유지), 호출 실패·세션 급종료 시에만 supervisor가 **폴백**으로 직접 쓴다. "누가 무엇을 왜
   했는가"와 **계층 간 상호작용(배정·보고·질의·반려·승인)**·실행 `agent`/`model`을 **기록관 저널**로 남긴다. 저널은 개인 Obsidian 볼트
   **`$OBSIDIAN_VAULT`(기본 `~/obsidian`, 환경마다 다를 수 있음)** 의 `agents/<YYYY-MM-DD>/<NN>-<mission>.md`(NN=그날 착수 순번)
   (작업일자별·미션당 1파일, 계층 섹션 누적)에 쌓으며 **저장소 커밋 대상 아님**.
@@ -146,6 +149,11 @@
   파괴적 변경)은 계획만 반환한다. `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성) 관점 분리.
   서브에이전트를 호출하면 **실행 메타**(`subagent_type`·`agent`/`model`·허용 도구·도구 호출 수·토큰·소요·승인 결과)와
   **경계 준수 여부**를 저널에 남긴다(수치 없으면 `미측정` — 추정치 금지).
+  저널 **`NN` 넘버링은 hook이 강제**한다(`scripts/journal_guard.py` + `.claude/settings.json`) — `SessionStart`가 다음 번호·열린 미션을 주입하고, `PreToolUse(Write)`가 중복·규약 위반 생성을 차단하며, `Stop`이 저널 누락을 경고한다. 착수 순번의 판정 기준은 **본문 상호작용 로그의 첫 이벤트**.
+  **워커 경계의 실효 강제는 `permissions` 규칙**이다(프론트매터 `tools`·경계 지시문은 난이도·규율일 뿐).
+  `deny` > `ask` > `allow` 순으로 **auto 모드 분류기보다 먼저** 평가되고 **서브에이전트에도 동일 적용**된다 —
+  비가역 작업(git 커밋·푸시, `terraform/kubectl apply`, `compose down -v`, `dbt --full-refresh`, `DROP`/`TRUNCATE`,
+  `.env`·`tfstate` 수정, 외부 발신)은 `ask`로 못 박는다. `allow`에 비가역 명령을 넣지 않는다.
   상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).

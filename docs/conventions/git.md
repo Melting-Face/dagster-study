@@ -37,7 +37,11 @@
   - Terraform `*.tfstate`·`terraform.tfvars`·API 개인키·`kubeconfig-oci`([terraform.md](terraform.md)),
   - 원천 진료 데이터([../security.md](../security.md)).
   - `.gitignore`로 강제하고, 예시는 `*.example`만 커밋한다.
+  - **`.claude/settings.local.json`** — 세션 중 승인한 `allow` 누적(개인 설정).
 - **커밋 대상**(재현성): 락 파일 — `.terraform.lock.hcl`·`skills-lock.json`.
+  - **`.claude/settings.json`** — 프로젝트 공유 권한 게이트·hook 배선
+    ([agents.md §권한 게이트](agents.md#권한-게이트-permissions--유일한-기계-강제)). 같은 `.claude/` 아래여도
+    `settings.local.json`과 정책이 **반대**이므로 글롭으로 묶지 않는다.
 
 ## 6. AI 보조 세션에서의 git (Claude Code)
 

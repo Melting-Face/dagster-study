@@ -1,0 +1,32 @@
+# Flink workload SA 보완 RBAC — 클러스터 **내부**에서 잡을 제출할 때 필요한 Service 조회 권한
+#
+# 배경: 차트가 만드는 잡 ns의 `flink` Role은 `pods`·`configmaps`·`deployments`만 준다.
+#   그런데 JobManager 파드 안에서 `sql-client.sh`로 잡을 제출하면 Flink의 Kubernetes 클라이언트가
+#   REST 서비스(`<name>-rest`)를 조회해 접속 주소를 찾는다 → 권한이 없으면
+#   `services "flink-session-rest" is forbidden`으로 **DDL은 되는데 쿼리 실행만 실패**한다(2026-08-18 실측).
+#   메타데이터 조회(SHOW DATABASES/TABLES)는 JM 내부에서 끝나 통과하므로 증상이 헷갈린다.
+#
+# 최소권한 원칙(conventions/k8s.md §5)에 따라 **읽기(get/list)** 만, **services 한정**으로 보완한다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+    name: flink-workload-service-read
+    namespace: default
+rules:
+    - apiGroups: [""]
+      resources: ["services"]
+      verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+    name: flink-workload-service-read
+    namespace: default
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: flink-workload-service-read
+subjects:
+    - kind: ServiceAccount
+      name: flink
+      namespace: default

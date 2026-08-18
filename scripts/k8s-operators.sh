@@ -55,8 +55,22 @@ if [ "${INSTALL_FLINK}" = "true" ]; then
     helm repo add flink-operator-repo \
         "https://downloads.apache.org/flink/flink-kubernetes-operator-${FLINK_OPERATOR_CHART_VERSION}/" >/dev/null 2>&1 || true
     helm repo update >/dev/null
+    # watchNamespaces를 반드시 지정한다 — 비우면 감시는 전 네임스페이스로 열리지만
+    # 잡 SA(`flink`)와 Role/RoleBinding이 **오퍼레이터 ns에만** 생겨 잡 ns에서 파드가 못 뜬다
+    # (Spark 차트의 workloadResources.namespaces와 같은 함정, 2026-08-18 실측).
     helm upgrade --install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-operator \
-        --namespace "${FLINK_OPERATOR_NS}" --create-namespace --wait
+        --namespace "${FLINK_OPERATOR_NS}" --create-namespace \
+        --set "watchNamespaces={${FLINK_JOB_NS}}" \
+        --values "${REPO_ROOT}/k8s/flink/operator-values.yaml" \
+        --version "${FLINK_OPERATOR_CHART_VERSION}" --wait
+
+    # 2-2) 웹훅 보완 RBAC — watchNamespaces 지정 시 클러스터 스코프 조회 권한이 사라진다
+    log "Flink Operator webhook 보완 RBAC 적용"
+    kubectl apply -f "${REPO_ROOT}/k8s/flink/flink-operator-webhook-rbac.yaml"
+
+    # 2-3) workload SA 보완 RBAC — 클러스터 내부 잡 제출 시 <name>-rest 서비스 조회가 필요하다
+    log "Flink workload 보완 RBAC 적용 (ns=${FLINK_JOB_NS})"
+    kubectl apply -f "${REPO_ROOT}/k8s/flink/flink-workload-rbac.yaml"
 else
     log "Flink Operator 건너뜀 (INSTALL_FLINK=true 로 활성화 — Phase 3)"
 fi

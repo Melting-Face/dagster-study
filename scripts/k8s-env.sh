@@ -33,8 +33,15 @@ SPARK_JOB_SA="${SPARK_JOB_SA:-spark}"
 
 INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-manager 의존)
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"
-FLINK_OPERATOR_CHART_VERSION="${FLINK_OPERATOR_CHART_VERSION:-1.10.0}"
-CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.16.2}"
+FLINK_JOB_NS="${FLINK_JOB_NS:-default}"                # FlinkDeployment가 뜨는 ns(=SA·RBAC 생성 대상)
+# Flink Operator는 차트 버전 = appVersion(Spark 오퍼레이터처럼 어긋나지 않는다).
+# downloads.apache.org는 **현행 릴리스만** 보관한다 — 구버전은 404가 되어 설치가 깨진다
+# (2026-08-18 실측: 1.10.0 → 404. 당시 제공분 1.12.1·1.13.0·1.14.0·1.15.0).
+# 설치 전 `curl -s https://downloads.apache.org/flink/ | grep flink-kubernetes-operator`로 확인한다.
+FLINK_OPERATOR_CHART_VERSION="${FLINK_OPERATOR_CHART_VERSION:-1.15.0}"
+# cert-manager는 Flink Operator 웹훅 의존. k8s 버전과의 호환 때문에 최신 계열을 쓴다
+# (클러스터가 k8s v1.36이라 2024년대 1.16.x는 검증 범위 밖).
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.21.1}"
 
 # kind Podman provider(experimental) — rootful 머신 필요
 export KIND_EXPERIMENTAL_PROVIDER=podman

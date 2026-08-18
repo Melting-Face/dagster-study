@@ -1,0 +1,34 @@
+# Flink + Iceberg 러너 이미지 (Spark 러너와 같은 Iceberg 카탈로그를 공유)
+# 빌드: podman build -f k8s/flink/Dockerfile.flink-runner -t localhost:5001/flink-runner:0.2.0 k8s/flink
+#
+# 버전 짝맞춤(추측 금지 — 2026-08-18 Maven Central 실측):
+#   - `iceberg-flink-runtime-<flinkMinor>` 아티팩트는 **2.1까지만 존재**한다(2.2는 404).
+#     그래서 Flink는 **2.1.3**으로 내린다. 오퍼레이터 CRD enum의 `v2_2`를 쓸 수 있어도
+#     **Iceberg가 못 따라오면 의미가 없다** — 엔진 최신판이 아니라 짝이 맞는 조합을 고른다.
+#   - Iceberg는 **1.11.0**(iceberg-flink-runtime-2.1의 유일한 버전).
+#   - S3 접근은 Spark와 동일하게 **Iceberg S3FileIO(AWS SDK v2 = iceberg-aws-bundle)** 를 쓴다.
+#     체크포인트를 S3에 두려면 별도로 `flink-s3-fs-hadoop` **플러그인**이 필요하다(Phase 3).
+FROM flink:2.1.3-java17
+
+ARG ICEBERG_VERSION=1.11.0
+ARG FLINK_MINOR=2.1
+ARG POSTGRES_JDBC_VERSION=42.7.4
+# Flink 이미지에는 Hadoop 클래스가 **없다**(Spark 이미지와 다른 지점).
+# Iceberg의 FlinkCatalogFactory.clusterHadoopConf()가 org.apache.hadoop.conf.Configuration을
+# 로드하므로 CREATE CATALOG 단계에서 ClassNotFoundException으로 죽는다(2026-08-18 실측).
+# 레거시 flink-shaded-hadoop-2-uber(2.8.3) 대신, Spark 러너와 **같은 계열의 shaded 클라이언트**를 쓴다.
+ARG HADOOP_VERSION=3.3.4
+
+USER root
+
+# Iceberg Flink 런타임 + AWS 번들(S3FileIO) + Postgres JDBC(JDBC 카탈로그 접속)
+RUN set -eux; \
+    cd /opt/flink/lib; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-${FLINK_MINOR}/${ICEBERG_VERSION}/iceberg-flink-runtime-${FLINK_MINOR}-${ICEBERG_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-api/${HADOOP_VERSION}/hadoop-client-api-${HADOOP_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-runtime/${HADOOP_VERSION}/hadoop-client-runtime-${HADOOP_VERSION}.jar"; \
+    chown -R flink:flink /opt/flink/lib
+
+USER flink

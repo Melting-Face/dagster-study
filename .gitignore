@@ -42,3 +42,8 @@ kubeconfig-oci
 **/*.key
 **/id_rsa
 **/id_ed25519
+
+# Claude Code 개인 설정 — 세션 중 승인한 allow 누적(머신·사용자별).
+# 같은 .claude/ 아래여도 settings.json은 **커밋 대상**(공유 권한 게이트·hook 배선)이라 글롭으로 묶지 않는다.
+# 근거: docs/conventions/git.md §5
+.claude/settings.local.json

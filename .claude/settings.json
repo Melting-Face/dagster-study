@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(docker compose down * -v*)",
+      "Bash(docker compose down -v*)",
+      "Bash(docker compose down * --volumes*)",
+      "Bash(podman compose down * -v*)",
+      "Bash(podman compose down -v*)",
+      "Bash(docker-compose down * -v*)",
+      "Bash(scripts/k8s-down.sh*)",
+      "Bash(./scripts/k8s-down.sh*)",
+      "Bash(bash scripts/k8s-down.sh*)",
+      "Bash(*dbt* --full-refresh*)",
+      "Bash(*dbt* run-operation*)",
+      "Bash(*dbt* build --full-refresh*)",
+      "Bash(*dbt* seed*)",
+      "Bash(*dg asset wipe*)",
+      "Bash(*trino*DROP*)",
+      "Bash(*trino*TRUNCATE*)",
+      "Bash(*trino*DELETE*)",
+      "Bash(*psql*DROP*)",
+      "Bash(*psql*TRUNCATE*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Edit(terraform/**/*.tfstate*)",
+      "Write(terraform/**/*.tfstate*)",
+      "Edit(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Bash(*psql*DELETE*)",
+      "Write(.claude/settings.json)",
+      "Write(.claude/settings.local.json)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/journal_guard.py session-start",
+            "statusMessage": "저널 번호·열린 미션 확인",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/journal_guard.py pre-write",
+            "statusMessage": "저널 넘버링 규약 검사",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/journal_guard.py stop",
+            "statusMessage": "저널 기록 누락 점검",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

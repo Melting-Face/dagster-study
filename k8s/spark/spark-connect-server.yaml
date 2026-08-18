@@ -1,0 +1,86 @@
+# Spark Connect 서버 — dbt-spark가 붙는 **상시 SQL 엔드포인트**(Phase 1)
+#
+# 왜 이게 필요한가: 기존 컴퓨트는 `SparkApplication`(job-per-application)이라 잡이 끝나면 사라진다.
+#   dbt는 세션에 계속 붙어 SQL을 날려야 하므로 붙을 대상이 없다. Thrift(HiveServer2) 대신
+#   **Spark Connect**를 쓴다 — gRPC 기반이라 클라이언트가 가볍고(pyspark[connect]),
+#   dbt-spark의 `method: session`에 `spark.remote`만 주면 그대로 원격이 된다(어댑터 변경 불필요).
+#
+# ⚠️ 자원 규칙과의 관계: 이 서버는 **상주**한다. conventions/k8s.md §9-3의 시분할(BATCH/STREAM 교대)과
+#   달리 항상 CPU/메모리를 점유하므로, 쓰지 않을 때는 `kubectl scale deploy/spark-connect --replicas=0`.
+#
+# 크리덴셜은 Secret→env로 주입하고 셸에서 확장한다(매니페스트 평문 금지, §4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: spark-connect
+    namespace: default
+spec:
+    replicas: 1
+    selector:
+        matchLabels: {app: spark-connect}
+    template:
+        metadata:
+            labels: {app: spark-connect}
+        spec:
+            serviceAccountName: spark
+            containers:
+                - name: spark-connect
+                  image: localhost:5001/spark-runner:0.3.0
+                  imagePullPolicy: Always
+                  command: ["/bin/bash", "-c"]
+                  args:
+                      - |
+                        exec /opt/spark/bin/spark-submit \
+                          --class org.apache.spark.sql.connect.service.SparkConnectServer \
+                          --master "local[2]" \
+                          --conf spark.connect.grpc.binding.port=15002 \
+                          --conf spark.sql.extensions="$ICEBERG_EXTENSIONS" \
+                          --conf spark.sql.catalog.jdbccat=org.apache.iceberg.spark.SparkCatalog \
+                          --conf spark.sql.catalog.jdbccat.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
+                          --conf spark.sql.catalog.jdbccat.uri="$ICEBERG_JDBC_URI" \
+                          --conf spark.sql.catalog.jdbccat.jdbc.user="$PG_USER" \
+                          --conf spark.sql.catalog.jdbccat.jdbc.password="$PG_PASSWORD" \
+                          --conf spark.sql.catalog.jdbccat.warehouse="$ICEBERG_WAREHOUSE" \
+                          --conf spark.sql.catalog.jdbccat.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
+                          --conf spark.sql.catalog.jdbccat.s3.endpoint="$S3_ENDPOINT" \
+                          --conf spark.sql.catalog.jdbccat.s3.path-style-access=true \
+                          --conf spark.sql.defaultCatalog=jdbccat \
+                          spark-internal
+                  ports:
+                      - {name: grpc, containerPort: 15002}
+                      - {name: ui, containerPort: 4040}
+                  env:
+                      - {name: ICEBERG_JDBC_URI, value: "jdbc:postgresql://catalog-postgres:5432/iceberg"}
+                      - {name: ICEBERG_WAREHOUSE, value: "s3://warehouse"}
+                      # 줄 길이 제한(yamllint 120) 회피 겸 재사용 — Iceberg SQL 확장 FQCN
+                      - name: ICEBERG_EXTENSIONS
+                        value: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+                      - {name: S3_ENDPOINT, value: "http://seaweedfs:8333"}
+                      - {name: AWS_REGION, value: "us-east-1"}
+                      - name: PG_USER
+                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: pg-user}}
+                      - name: PG_PASSWORD
+                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: pg-password}}
+                      # S3 키는 AWS 표준 자격증명 체인으로 넘긴다(--conf에 안 적는다)
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: s3-access-key}}
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: s3-secret-key}}
+                  readinessProbe:
+                      tcpSocket: {port: 15002}
+                      initialDelaySeconds: 20
+                      periodSeconds: 10
+                  resources:
+                      requests: {cpu: "500m", memory: "1536Mi"}
+                      limits: {cpu: "1", memory: "2Gi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: spark-connect
+    namespace: default
+spec:
+    selector: {app: spark-connect}
+    ports:
+        - {name: grpc, port: 15002, targetPort: 15002}
+        - {name: ui, port: 4040, targetPort: 4040}

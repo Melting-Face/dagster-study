@@ -1,5 +1,5 @@
 # PySpark + Iceberg + S3(SeaweedFS) 러너 이미지 (PoC Phase 0)
-# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.2.0 k8s/spark
+# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.3.0 k8s/spark
 # 태그는 구체 버전 고정(가변 채널 태그 금지, docs/conventions/docker.md). 0.1.0 = 구 `:poc`.
 FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
 
@@ -13,6 +13,9 @@ ARG HADOOP_VERSION=3.3.4
 # hadoop-aws 3.3.4가 요구하는 AWS SDK v1 번들 버전(정본: hadoop-project 3.3.4 pom의
 # <aws-java-sdk.version>). Iceberg가 쓰는 AWS SDK v2와는 패키지가 달라 공존한다.
 ARG AWS_SDK_VERSION=1.12.262
+# Spark Connect 서버 jar — dbt-spark가 `spark.remote`로 붙는 상시 SQL 엔드포인트용.
+# 베이스 이미지에는 없다. 런타임 `--packages`로 받으면 파드 기동마다 네트워크에 의존하므로 굽는다.
+ARG SPARK_VERSION=3.5.9
 
 USER root
 
@@ -25,7 +28,8 @@ RUN set -eux; \
     curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar"; \
     curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"; \
     curl -fLO "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar"; \
-    curl -fLO "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar"
+    curl -fLO "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/spark/spark-connect_${SCALA_BINARY}/${SPARK_VERSION}/spark-connect_${SCALA_BINARY}-${SPARK_VERSION}.jar"
 
 # 잡 스크립트 배치
 # 주의: driver의 CWD(=이미지 WORKDIR `/opt/spark/work-dir`)에 두면 안 된다.

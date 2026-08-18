@@ -27,22 +27,14 @@ uo_tm as (
         tm.stay_id,
         uo.charttime,
         uo.urineoutput,
+        -- 직전 배뇨 시각(윈도우식)이 세 번 반복되므로 한 번만 정의해 재사용한다
+        {%- set prev_uo_charttime -%}
+            lag(uo.charttime) over (partition by tm.stay_id order by uo.charttime)
+        {%- endset %}
         case
-            when
-                lag(uo.charttime) over (
-                    partition by tm.stay_id
-                    order by uo.charttime
-                ) is null
-                then date_diff('minute', tm.intime_hr, uo.charttime)
-            else
-                date_diff(
-                    'minute',
-                    lag(uo.charttime) over (
-                        partition by tm.stay_id
-                        order by uo.charttime
-                    ),
-                    uo.charttime
-                )
+            when {{ prev_uo_charttime }} is null
+                then {{ elapsed('minute', 'tm.intime_hr', 'uo.charttime') }}
+            else {{ elapsed('minute', prev_uo_charttime, 'uo.charttime') }}
         end as tm_since_last_uo
     from tm
     inner join {{ ref('urine_output') }} as uo
@@ -58,25 +50,25 @@ ur_stg as (
         -- charttime 기록이 1시간 UO에 대응한다고 가정, 5/11시간으로 구간 제한
         sum(
             case
-                when date_diff('hour', iosum.charttime, io_cur.charttime) <= 5
+                when {{ elapsed('hour', 'iosum.charttime', 'io_cur.charttime') }} <= 5
                     then iosum.urineoutput
             end
         ) as urineoutput_6hr,
         sum(
             case
-                when date_diff('hour', iosum.charttime, io_cur.charttime) <= 5
+                when {{ elapsed('hour', 'iosum.charttime', 'io_cur.charttime') }} <= 5
                     then iosum.tm_since_last_uo
             end
         ) / 60.0 as uo_tm_6hr,
         sum(
             case
-                when date_diff('hour', iosum.charttime, io_cur.charttime) <= 11
+                when {{ elapsed('hour', 'iosum.charttime', 'io_cur.charttime') }} <= 11
                     then iosum.urineoutput
             end
         ) as urineoutput_12hr,
         sum(
             case
-                when date_diff('hour', iosum.charttime, io_cur.charttime) <= 11
+                when {{ elapsed('hour', 'iosum.charttime', 'io_cur.charttime') }} <= 11
                     then iosum.tm_since_last_uo
             end
         ) / 60.0 as uo_tm_12hr,

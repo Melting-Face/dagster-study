@@ -20,7 +20,7 @@ with all_hours as (
         -- 입실 24시간 전(-24)부터 퇴실까지 시간 오프셋 정수 배열
         sequence(
             -24,
-            cast(date_diff('hour', it.intime_hr, it.outtime_hr) as integer)
+            cast({{ elapsed('hour', 'it.intime_hr', 'it.outtime_hr') }} as integer)
         ) as hrs
     from {{ ref('icustay_times') }} as it
 )
@@ -30,4 +30,4 @@ select
     cast(t.hr_unnested as integer) as hr,
     {{ dbt.dateadd('hour', 't.hr_unnested', 'all_hours.endtime') }} as endtime
 from all_hours
-cross join unnest(all_hours.hrs) as t (hr_unnested)
+{{ unnest_array('all_hours.hrs', 't', 'hr_unnested') }}

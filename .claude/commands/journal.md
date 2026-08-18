@@ -1,10 +1,14 @@
 ---
 description: 현재 세션을 기록관 저널(Obsidian 볼트)에 기록·갱신한다
 argument-hint: [mission-slug] (생략 시 현재 작업에서 유추)
-allowed-tools: Read, Write, Edit, Glob, Bash(date:*), Bash(ls:*), Bash(mkdir:*)
+allowed-tools: Read, Write, Edit, Glob, Bash(date:*), Bash(ls:*), Bash(mkdir:*), Bash(scripts/journal_guard.py:*)
 ---
 
 현재 세션의 작업을 **기록관 저널**에 기록·갱신한다. 규약 정본은 @docs/conventions/agents.md 다.
+
+> 평시 기록 주체는 **`archivist`**(§기록 주체)다. 이 커맨드는 **누락 보정·수동 기록**용이며,
+> archivist를 태우기 애매한 소규모 보정이나 폴백 상황에서 쓴다.
+> 시각은 **반드시 `date`로 실측**해 적는다 — 추정 시각은 기록 신뢰도를 통째로 무너뜨린다.
 
 ## 절차
 
@@ -12,11 +16,15 @@ allowed-tools: Read, Write, Edit, Glob, Bash(date:*), Bash(ls:*), Bash(mkdir:*)
 2. **KST 날짜·시각 확인** — `TZ=Asia/Seoul date '+%Y-%m-%d %H:%M'`. 폴더는 이 날짜를 쓴다.
 3. **미션 슬러그 결정** — 인자 `$1`이 있으면 그것을, 없으면 이번 세션의 주 작업에서 영문 kebab-case로 유추한다.
 4. **대상 파일** — `<볼트>/agents/<YYYY-MM-DD>/<NN>-<mission-slug>.md`
+   - **`NN` 발급**: `scripts/journal_guard.py session-start`로 **다음 번호를 조회**한다(직접 `ls`로 세지 마라 —
+     병렬 세션과 경합해 중복이 난다). 신규 생성은 `PreToolUse` hook이 중복·건너뜀을 차단한다.
+   - **`NN` 판정 기준**은 **본문 상호작용 로그의 첫 이벤트 시각**(대개 사용자 요청 수령)이다.
+     프론트매터 `started`는 파일 생성 시각이라 동시 착수 시 변별력이 없다.
    - **있으면**: 읽고 **누락분만 append**한다(기존 내용 보존, 중복 금지). `updated`·`status` 갱신.
    - **없으면**: `<볼트>/agents/_TEMPLATE.md`를 읽어 그 구조대로 새로 만든다.
 5. **채울 내용** — 이번 세션에서 **실제로 있었던 일만**:
    - `## 🧭 supervisor` — 사용자 요청 원문 요약·성공조건·**결정 로그(왜)**
-   - `## 🔀 상호작용 로그` — 계층 간 주고받음을 KST 시간순 한 줄씩. 유형 태그 `[배정]`·`[보고]`·`[질의]`·`[반려]`·`[승인]`, 방향은 `보낸 주체 → 받는 주체`
+   - `## 🔀 상호작용 로그` — 계층 간 주고받음을 KST 시간순 한 줄씩. 유형 태그는 **오간 것**(`[배정]`·`[보고]`·`[질의]`·`[반려]`·`[승인]`)과 **관측된 것**(`[결정]`·`[조치]`·`[확인]`·`[반증]`·`[특이사항]`·`[사고]`·`[복구]`), 방향은 `보낸 주체 → 받는 주체`
    - `## 🏷 director:` / `#### 🔧 subagent:` — 위임이 **있었을 때만**. 서브에이전트마다 **실행 메타 표**
      (`type`·`agent·model`·`tools`·도구 호출 수·토큰·소요·`[승인]`/`[반려]`)를 먼저 두고, 입력·Do·Check(경계 준수 포함)·산출물·Act를 잇는다.
      수치가 없으면 `미측정`으로 남기고 **추정치를 사실처럼 쓰지 않는다**

@@ -34,6 +34,14 @@ SPARK_JOB_SA="${SPARK_JOB_SA:-spark}"
 INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-manager 의존)
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"
 FLINK_JOB_NS="${FLINK_JOB_NS:-default}"                # FlinkDeployment가 뜨는 ns(=SA·RBAC 생성 대상)
+
+# ingress-nginx — UI를 고정 URL로 노출(port-forward 대체).
+# kind provider 매니페스트를 쓴다(hostPort 80/443 사용). v1.15.1부터는 `ingress-ready` 노드 라벨을
+# 요구하지 않는다(구버전 문서와 다르니 릴리스별로 확인할 것).
+INSTALL_INGRESS="${INSTALL_INGRESS:-true}"
+INGRESS_NGINX_VERSION="${INGRESS_NGINX_VERSION:-v1.15.1}"
+# kind-cluster.yaml의 extraPortMappings와 **반드시 일치**해야 한다(안내 출력용).
+INGRESS_HTTP_PORT="${INGRESS_HTTP_PORT:-8080}"
 # Flink Operator는 차트 버전 = appVersion(Spark 오퍼레이터처럼 어긋나지 않는다).
 # downloads.apache.org는 **현행 릴리스만** 보관한다 — 구버전은 404가 되어 설치가 깨진다
 # (2026-08-18 실측: 1.10.0 → 404. 당시 제공분 1.12.1·1.13.0·1.14.0·1.15.0).

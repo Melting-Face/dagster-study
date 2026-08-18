@@ -98,5 +98,19 @@ data:
         help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
 EOF
 
+# 7) ingress-nginx (선택) — UI 고정 URL 노출. 노드의 hostPort 80/443을 쓰므로
+#    kind-cluster.yaml의 extraPortMappings가 있어야 호스트까지 닿는다.
+if [ "${INSTALL_INGRESS}" = "true" ]; then
+    log "ingress-nginx 설치 (${INGRESS_NGINX_VERSION}, kind provider)"
+    kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml"
+    log "ingress-nginx 준비 대기"
+    # `wait --for=condition=ready pod`는 파드가 아직 생성 전이면 "no matching resources found"로
+    # 즉시 실패한다(2026-08-19 실측). Deployment의 rollout을 기다리면 생성 전 상태도 포함된다.
+    kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=300s
+else
+    log "ingress-nginx 건너뜀 (INSTALL_INGRESS=true 로 활성화)"
+fi
+
 log "완료. 다음: ./scripts/k8s-operators.sh"
+[ "${INSTALL_INGRESS}" = "true" ] && log "Ingress 진입점: http://<host>.localtest.me:${INGRESS_HTTP_PORT}"
 log "확인: kubectl cluster-info --context kind-${CLUSTER_NAME}"

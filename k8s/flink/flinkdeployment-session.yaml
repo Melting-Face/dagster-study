@@ -20,6 +20,13 @@ spec:
     imagePullPolicy: Always
     flinkVersion: v2_1
     serviceAccount: flink
+    # Web UI를 고정 URL로 노출한다(port-forward 대체). 오퍼레이터가 Ingress를 직접 만든다.
+    # `localtest.me`는 공개 DNS가 127.0.0.1로 응답하므로 /etc/hosts 수정이 필요 없다.
+    # 호스트 포트는 kind extraPortMappings에 따라 8080 → http://flink.localtest.me:8080
+    ingress:
+        template: "flink.localtest.me"
+        className: "nginx"
+
     flinkConfiguration:
         # TM 1개 × 2슬롯 (docs/resource-sizing.md "STREAM(일시)" 배분)
         taskmanager.numberOfTaskSlots: "2"

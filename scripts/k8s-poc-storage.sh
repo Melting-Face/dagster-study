@@ -41,8 +41,17 @@ kubectl -n default rollout status statefulset/seaweedfs --timeout=180s
 kubectl -n default rollout status deploy/catalog-postgres --timeout=120s
 
 # 3) warehouse 버킷 생성(멱등) — weed shell은 filer 자동발견 실패가 있어 -filer 명시
+#    파드가 Ready여도 filer의 gRPC(포트+10000)는 아직 안 열려 있을 수 있다
+#    (2026-08-19 실측: `dial tcp [::1]:18888 connect: connection refused`) → 재시도한다.
 log "warehouse 버킷 생성"
-kubectl -n default exec statefulset/seaweedfs -- \
-    sh -c 'echo "s3.bucket.create -name warehouse" | weed shell -master localhost:9333 -filer localhost:8888' || true
+for attempt in $(seq 1 12); do
+    if kubectl -n default exec statefulset/seaweedfs -- \
+        sh -c 'echo "s3.bucket.create -name warehouse" | weed shell -master localhost:9333 -filer localhost:8888' \
+        >/dev/null 2>&1; then
+        log "warehouse 버킷 준비 완료 (시도 ${attempt})"
+        break
+    fi
+    sleep 5
+done
 
 log "완료. 다음: 이미지 빌드·push → kubectl apply -f k8s/spark/sparkapplication-poc.yaml"

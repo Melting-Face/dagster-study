@@ -84,3 +84,25 @@ spec:
     ports:
         - {name: grpc, port: 15002, targetPort: 15002}
         - {name: ui, port: 4040, targetPort: 4040}
+---
+# Spark Web UI 고정 URL — http://spark.localtest.me:8080 (kind extraPortMappings 8080→80)
+# gRPC(15002)는 Ingress로 내보내지 않는다. nginx ingress의 gRPC 백엔드는 별도 설정(TLS 등)이
+# 필요하고, dbt는 port-forward나 in-cluster 주소로 붙으면 충분하다(YAGNI).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: spark-connect-ui
+    namespace: default
+spec:
+    ingressClassName: nginx
+    rules:
+        - host: spark.localtest.me
+          http:
+              paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: spark-connect
+                            port:
+                                number: 4040

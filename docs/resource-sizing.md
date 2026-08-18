@@ -42,14 +42,18 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 | | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
 | | Catalog Postgres(Iceberg JDBC) | 250m | 384Mi | 500m | 512Mi |
 | | **Spark Connect 서버**(Phase 1, dbt 접속용) | 500m | 1.5Gi | 1 | 2Gi |
-| | **상주 소계** | **~1.85** | **~4.9Gi** | | |
+| | **ingress-nginx 컨트롤러**(UI 고정 URL) | 100m | 90Mi | — | — |
+| | **상주 소계** | **~1.95** | **~5.0Gi** | | |
 | **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
 | | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
-| | **BATCH 피크(상주+Spark)** | **~4.35** | **~8.4Gi** | | ✅ 6/16 내 |
+| | **BATCH 피크(상주+Spark)** | **~4.45** | **~8.5Gi** | | ✅ 6/16 내 |
 | **STREAM(일시)** | Redpanda(dev, 1 broker) | 500m | 1.5Gi | 1 | 2Gi |
 | | Flink JobManager | 1 | 1.5Gi | 1 | 2Gi |
 | | Flink TaskManager × 1(2 slot) | 1 | 2Gi | 1 | 2.5Gi |
-| | **STREAM 피크(상주+Flink)** | **~3.85** | **~8.4Gi** | | ✅ 6/16 내 |
+| | **STREAM 피크(상주+Flink)** | **~3.95** | **~8.5Gi** | | ✅ 6/16 내 |
+
+> ingress-nginx는 **`limits`가 없는 유일한 워크로드**다(외부 매니페스트 그대로, [conventions/k8s.md](conventions/k8s.md) §2 예외).
+> 상주 부하가 작아 예산에는 영향이 미미하지만, 상한이 없다는 점은 인지하고 쓴다.
 
 ### (C) 운영 다이얼 (초과 시 조절 순서)
 

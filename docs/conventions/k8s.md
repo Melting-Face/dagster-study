@@ -25,6 +25,9 @@ resources:
 ```
 
 - 수치의 단일 출처는 [../resource-sizing.md](../resource-sizing.md). `limits.memory` 합 ≤ 노드 할당가능 메모리.
+- **예외는 외부 매니페스트를 그대로 적용하는 경우뿐**이고, 그때는 예외임을 기록한다.
+  현재 유일한 예외는 **ingress-nginx**(kind provider `deploy.yaml`) — `requests` 100m/90Mi만 있고
+  **`limits`가 없다**(2026-08-19 실측). 상주 부하가 작아 수용하되, 자체 오버레이로 값을 얹는 것은 후속 과제로 둔다.
 
 ## 3. 헬스체크는 probe로 (compose healthcheck 매핑)
 
@@ -191,6 +194,18 @@ resources:
 - **로컬 레지스트리**: kind 공식 local-registry 방식을 쓴다 — containerd `config_path` 설정으로 **`localhost:5001`이
   호스트·클러스터 내부 공통**으로 동작한다. `spark.kubernetes.container.image` 등 매니페스트도 `localhost:5001/...` 로 참조한다.
   (참고: k3d는 내부/외부 이름이 달라 매니페스트에 내부 이름을 써야 하는 함정이 있으나, kind는 공통 이름으로 회피된다.)
+- **러너 이미지 빌드·배포**: 레지스트리에 **직접 push**한다(`kind load` 불필요 — 위 배선 덕분).
+  빌드 컨텍스트는 각 러너 디렉터리이고, 태그는 **구체 버전 고정**(§9)이다.
+
+  ```shell
+  podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.4.0 k8s/spark
+  podman push --tls-verify=false localhost:5001/spark-runner:0.4.0
+  ```
+
+  **태그를 올렸으면 그 태그를 참조하는 매니페스트를 함께 올린다** — 한쪽만 올리면 구 이미지가 계속 돈다.
+  참조처: `k8s/spark/spark-connect-server.yaml`·`k8s/spark/sparkapplication-poc.yaml`(Spark),
+  `k8s/flink/flinkdeployment-session.yaml`(Flink).
+  현행 태그는 **`spark-runner:0.4.0`**(Iceberg·S3A·Spark Connect) / **`flink-runner:0.2.0`**(Iceberg·shaded hadoop).
 - **서비스 접근**: **웹 UI는 Ingress**(고정 URL), **데이터 접속은 `port-forward`** 를 기본으로 한다.
   Dagster 리소스(SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
 - 🔴 **kind는 공개 포트를 클러스터 생성 시점에만 정할 수 있다.** 노드가 컨테이너라 사후에 포트를 추가할 수 없어,

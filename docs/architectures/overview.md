@@ -8,8 +8,10 @@
 > ⚠️ **이 문서는 `compose.yml` 기준의 "현행 스택"이다.** 재설계로 컴퓨트·스토리지는
 > **로컬 Kubernetes로 이전 중**이고 Dagster는 호스트로 나갔다. 목표 토폴로지와 진행 단계는
 > [../redesign.md](../redesign.md), 클러스터 규칙은 [../conventions/k8s.md](../conventions/k8s.md).
-> **2026-08-18 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
-> kind 클러스터(Spark Operator·Flink Operator·Spark Connect·SeaweedFS·카탈로그 Postgres).
+> **2026-08-19 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
+> kind 클러스터(Spark Operator·Flink Operator·Spark Connect·SeaweedFS·카탈로그 Postgres·ingress-nginx).
+> 클러스터 UI는 `*.localtest.me:8080` 고정 URL, 데이터 접속은 `port-forward`
+> ([../conventions/k8s.md](../conventions/k8s.md) §10).
 
 ## 구성 요소
 

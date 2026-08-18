@@ -1,20 +1,31 @@
 # PySpark + Iceberg + S3(SeaweedFS) 러너 이미지 (PoC Phase 0)
-# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:poc k8s/spark
+# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.2.0 k8s/spark
+# 태그는 구체 버전 고정(가변 채널 태그 금지, docs/conventions/docker.md). 0.1.0 = 구 `:poc`.
 FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
 
 # 버전 핀(빌드 인자로 override 가능)
 ARG ICEBERG_VERSION=1.6.1
 ARG SCALA_BINARY=2.12
 ARG POSTGRES_JDBC_VERSION=42.7.4
+# hadoop-aws는 베이스 이미지의 hadoop-client와 **정확히 같은 버전**이어야 한다
+# (spark 3.5.9 → hadoop-client-api/runtime 3.3.4, 이미지에서 실측).
+ARG HADOOP_VERSION=3.3.4
+# hadoop-aws 3.3.4가 요구하는 AWS SDK v1 번들 버전(정본: hadoop-project 3.3.4 pom의
+# <aws-java-sdk.version>). Iceberg가 쓰는 AWS SDK v2와는 패키지가 달라 공존한다.
+ARG AWS_SDK_VERSION=1.12.262
 
 USER root
 
 # Iceberg Spark 런타임 + AWS 번들(S3FileIO용 AWS SDK v2 포함) + Postgres JDBC(카탈로그 접속)
+# + S3A 파일시스템(hadoop-aws): Iceberg의 S3FileIO는 카탈로그 테이블 I/O만 담당하고,
+#   `s3a://` 스킴으로 **원본 파일**(csv.gz)을 읽거나 이벤트로그를 쓰려면 별도로 필요하다.
 RUN set -eux; \
     cd /opt/spark/jars; \
     curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_${SCALA_BINARY}/${ICEBERG_VERSION}/iceberg-spark-runtime-3.5_${SCALA_BINARY}-${ICEBERG_VERSION}.jar"; \
     curl -fLO "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/${ICEBERG_VERSION}/iceberg-aws-bundle-${ICEBERG_VERSION}.jar"; \
-    curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"
+    curl -fLO "https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar"; \
+    curl -fLO "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar"
 
 # 잡 스크립트 배치
 # 주의: driver의 CWD(=이미지 WORKDIR `/opt/spark/work-dir`)에 두면 안 된다.

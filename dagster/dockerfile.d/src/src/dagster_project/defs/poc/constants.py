@@ -7,9 +7,11 @@
 import os
 from pathlib import Path
 
-# Kubeflow Spark Operator CRD 좌표
-CRD_GROUP = "sparkoperator.k8s.io"
-CRD_VERSION = "v1beta2"
+# Apache Spark K8s Operator CRD 좌표 (Kubeflow `sparkoperator.k8s.io/v1beta2` 아님).
+# 버전은 실측 기준 `v1` — CRD가 v1beta1(served)·v1(served+storage)을 함께 내고
+# storedVersions=["v1"]이라 정본이 v1이다. 규칙: docs/conventions/k8s.md §9.
+CRD_GROUP = "spark.apache.org"
+CRD_VERSION = "v1"
 CRD_PLURAL = "sparkapplications"
 
 # 호스트 → kind 접속 컨텍스트·네임스페이스

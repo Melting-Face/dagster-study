@@ -4,13 +4,14 @@
 # 크리덴셜은 Secret(lakehouse-creds)에서 env로 주입(CRD 평문 노출 금지) — spark.kubernetes.*.secretKeyRef 사용.
 #
 # CRD·공식 예제 실측(chart 1.8.0 = appVersion 1.0.0 GA):
-#   - 이 차트가 제공하는 CRD 버전은 **v1beta1 단일**이다(상류 main 예제는 v1이나 여기선 미제공 — apply 실패).
+#   - 이 차트의 CRD는 **v1beta1(served) + v1(served·storage) 2버전**이다. storedVersions=["v1"]이고
+#     제출된 오브젝트의 .apiVersion도 v1로 보이므로 **v1을 정본으로 쓴다**(2026-08-18 라이브 실측).
 #   - PySpark 진입점은 spec 직속 **pyFiles**(type: string). `mainApplicationFile` 필드는 없다.
 #     근거: examples/pi-python.yaml 이 pyFiles로 pi.py를 지정한다.
 #   - driver SA는 차트 workloadResources.serviceAccount.name 기본값 **spark**(잡 네임스페이스에 생성).
 #   - 진입점은 **driver CWD(/opt/spark/work-dir) 밖**에 둔다 — 같으면 복사 전 삭제 로직에 소스가 지워진다
 #     (Dockerfile.spark-runner 주석 참고). 공식 예제도 /opt/spark/examples/... 를 쓴다.
-apiVersion: spark.apache.org/v1beta1
+apiVersion: spark.apache.org/v1
 kind: SparkApplication
 metadata:
     name: poc-ingest
@@ -21,10 +22,14 @@ spec:
     # 파이썬 메인 파일 (spec 직속 pyFiles — CRD·공식 예제로 확정)
     pyFiles: "local:///opt/spark/app/poc_ingest.py"
     applicationTolerations:
-        resourceRetainPolicy: OnFailure
+        # 호스트 Dagster가 종료 후 driver 로그를 회수해야 하므로 성공 시에도 리소스를 남긴다.
+        # OnFailure면 성공 즉시 driver 파드가 지워져 로그·행 수 메타를 못 남긴다(2026-08-17 실측).
+        # 무기한 보존(-1 기본값)은 피하고 10분 뒤 오퍼레이터가 정리하게 한다. v1 전용 필드다.
+        resourceRetainPolicy: Always
+        resourceRetainDurationMillis: 600000
     sparkConf:
         # 러너 이미지(로컬 레지스트리, 호스트·클러스터 공통 이름)
-        spark.kubernetes.container.image: "localhost:5001/spark-runner:poc"
+        spark.kubernetes.container.image: "localhost:5001/spark-runner:0.2.0"
         spark.kubernetes.container.image.pullPolicy: "Always"
         spark.kubernetes.authenticate.driver.serviceAccountName: "spark"
         # driver/executor 자원 (수치 근거: docs/resource-sizing.md)

@@ -123,6 +123,13 @@ src/dagster_project/
 - **정의는 모두 `defs/` 하위**에 두고 `load_defs`가 재귀 자동발견해 단일 `Definitions`로 합친다.
   - `@asset`·`@dbt_assets`·잡·스케줄 등 **모듈 스코프 정의 객체**는 자동 수집된다.
   - **리소스는 `@dg.definitions`** 로 감싼 함수가 `Definitions(resources=...)`를 반환하면 수집·merge된다.
+  - ⚠️ **`@dg.definitions`는 `@asset`이 있는 모듈에 같이 두지 않는다.** 한 모듈에 `@dg.definitions`가 있으면
+    **그 함수의 반환값이 모듈의 정의 전체를 대체**해, 같은 파일의 모듈 스코프 `@asset`이 **조용히 수집되지 않는다**
+    (에러도 경고도 없다 — 2026-08-18 실측: `defs/poc/assets.py`가 이 형태라 `poc_spark_ingest`가 UI에 뜬 적이 없었다).
+    리소스 등록은 `defs/resources.py`(공유) 또는 `defs/<dataset>/resources.py`(서브프로젝트 전용)처럼
+    **자산이 없는 모듈**에 둔다.
+    - 자동발견 누락은 조용해서 놓치기 쉽다 → 정의 추가 후 **`dg check defs`** 또는
+      `load_defs(...).resolve_asset_graph().get_all_asset_keys()`로 **자산 수를 확인**한다.
 - **공통 로직은 `common/`**(defs 밖)에 두고 데이터셋 모듈이 import해 재사용한다(DRY).
 - 코드 로케이션 모듈(`definitions.py`)은 **모듈 스코프에 `Definitions` 1개(`defs`)** 만 둔다(autodiscovery 제약).
 

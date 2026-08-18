@@ -15,11 +15,7 @@ from pathlib import Path
 import yaml
 
 import dagster as dg
-from dagster_project.defs.poc.constants import (
-    KUBE_CONTEXT,
-    NAMESPACE,
-    SPARKAPP_MANIFEST,
-)
+from dagster_project.defs.poc.constants import SPARKAPP_MANIFEST
 from dagster_project.defs.poc.resources import SparkOperatorResource
 
 GROUP_NAME = "poc"
@@ -38,31 +34,20 @@ def poc_spark_ingest(
         f"SparkApplication 제출: {name} (context={spark_operator.kube_context})"
     )
 
-    state, logs = spark_operator.submit_and_wait(manifest)
-    context.log.info(logs)
+    run = spark_operator.submit_and_wait(manifest)
+    context.log.info(run.logs)
 
-    if state != "COMPLETED":
-        raise dg.Failure(description=f"SparkApplication 실패: {name} state={state}")
+    # 성공·실패 모두 같은 최종 상태로 수렴한다 → 상태 대신 성공 플래그로 판정.
+    if not run.succeeded:
+        raise dg.Failure(description=f"SparkApplication 실패: {name} state={run.state}")
 
-    match = _ROW_RE.search(logs)
+    match = _ROW_RE.search(run.logs)
     rows = int(match.group(1)) if match else None
     return dg.MaterializeResult(
         metadata={
-            "state": state,
+            "state": run.state,
             "rows": rows if rows is not None else "unknown",
             "table": "jdbccat.poc.sample",
-            "driver_pod": f"{name}-driver",
-        }
-    )
-
-
-@dg.definitions
-def poc_resources() -> dg.Definitions:
-    """PoC 전용 리소스(Spark Operator 트리거)를 등록한다(load_defs가 수집)."""
-    return dg.Definitions(
-        resources={
-            "spark_operator": SparkOperatorResource(
-                kube_context=KUBE_CONTEXT, namespace=NAMESPACE
-            ),
+            "driver_pod": run.driver_pod,
         }
     )

@@ -71,10 +71,12 @@ resources:
 - **차트 버전 ≠ appVersion**(설치 시 최다 실수): GA **appVersion 1.0.0**은 **chart 1.8.0**이다.
   `--version 1.0.0`을 주면 **appVersion 0.2.0**이 깔린다. `helm search repo spark/spark-kubernetes-operator --versions`로
   대조하고 `scripts/k8s-env.sh`의 `SPARK_OPERATOR_CHART_VERSION`에 **chart 버전**을 핀한다.
-- **CRD**: `apiVersion: spark.apache.org/**v1beta1**`, `kind: SparkApplication`
-  (chart 1.8.0이 제공하는 버전은 v1beta1 **단일**이다. 상류 main 예제의 `v1`을 그대로 쓰면 apply가 실패한다 —
-  설치한 차트의 `crds/`로 확인한다). Kubeflow(`sparkoperator.k8s.io/v1beta2`)와
-  **스펙이 다르다** — Apache는 **`spec.sparkConf` 중심**(spark-submit 설정 기반)이다.
+- **CRD**: `apiVersion: spark.apache.org/**v1**`, `kind: SparkApplication`.
+  chart 1.8.0의 CRD는 **`v1beta1`(served) + `v1`(served·**storage**) 2버전**이고 `storedVersions=["v1"]`이라
+  **`v1`이 정본**이다(2026-08-18 라이브 실측 — `kubectl get crd sparkapplications.spark.apache.org -o json`).
+  `v1beta1`도 served라 apply 자체는 되지만, 저장 시 `v1`로 변환되고 **`v1` 전용 필드
+  (`resourceRetainDurationMillis`·`ttlAfterStopMillis`)를 못 쓴다**. 버전은 추측하지 말고 클러스터에서 읽는다.
+  Kubeflow(`sparkoperator.k8s.io/v1beta2`)와 **스펙이 다르다** — Apache는 **`spec.sparkConf` 중심**(spark-submit 설정 기반)이다.
   - **PySpark 진입점**: `spec.pyFiles`(문자열). `mainApplicationFile` 필드는 **없다**
     (근거: 공식 예제 `examples/pi-python.yaml`).
   - 이미지: `spark.kubernetes.container.image`
@@ -84,8 +86,24 @@ resources:
   - **Secret→env**: `spark.kubernetes.{driver,executor}.secretKeyRef.<ENV>=<secret>:<key>`(§4 비밀 참조, 평문 금지)
 - **버전 고정**: 오퍼레이터 차트/이미지와 Spark 런타임 태그는 **구체 버전으로 고정**한다(`latest` 금지, §4).
   최신 릴리스는 설치 시점에 [releases](https://github.com/apache/spark-kubernetes-operator/releases)에서 확인해 핀한다.
-- **러너 이미지**: PySpark + `iceberg-spark-runtime` + S3A(하둡 aws) 의존을 포함한 **전용 이미지**를 빌드해
-  로컬 레지스트리에 push하고, `spark.kubernetes.container.image`가 이를 참조한다(§10 이름 규칙 주의).
+- **러너 이미지**: PySpark + `iceberg-spark-runtime`/`iceberg-aws-bundle` + `postgresql`(JDBC 카탈로그)
+  + **`hadoop-aws`/`aws-java-sdk-bundle`(S3A)** 를 포함한 **전용 이미지**를 빌드해 로컬 레지스트리에 push하고,
+  `spark.kubernetes.container.image`가 이를 참조한다(§10 이름 규칙 주의).
+  태그는 **구체 버전 고정**(`:0.2.0` 등) — `:poc` 같은 가변 채널 태그는 `pullPolicy: Always`와 만나면
+  같은 태그가 다른 내용을 가리키는 드리프트를 만든다(§4 `latest` 금지와 같은 이유).
+  - **S3 접근 경로가 둘이고 역할이 다르다**(혼동 주의):
+    **Iceberg `S3FileIO`**(AWS SDK v2, `iceberg-aws-bundle`)는 **테이블 데이터 I/O** 전담이고,
+    **S3A**(`hadoop-aws`, AWS SDK v1)는 `s3a://` 스킴으로 **원본 파일**(csv.gz)을 읽거나 이벤트로그를 쓸 때 쓴다.
+    Iceberg만 쓰는 잡은 S3A가 없어도 돌기 때문에 **부재를 알아차리기 어렵다**(2026-08-18까지 이미지에 없었다).
+  - **`hadoop-aws` 버전은 베이스 이미지의 `hadoop-client-*`와 정확히 일치**시킨다
+    (Spark 3.5.9 → **3.3.4**). SDK 번들 버전은 추측하지 말고 `hadoop-project` pom의
+    `<aws-java-sdk.version>`을 본다(3.3.4 → **1.12.262**).
+  - **S3A로 직접 쓰기(`df.write.parquet("s3a://...")`)는 SeaweedFS에서 실패한다** — 기본
+    `FileOutputCommitter`가 `_temporary` **rename**에 의존하는데 오브젝트 스토어에는 rename이 없다
+    (2026-08-18 실측: `Could not rename ... _temporary/...`). 필요해지면 S3A committer(magic)와
+    `spark-hadoop-cloud` 의존을 추가해야 한다.
+    **다만 본 설계는 영향받지 않는다** — 쓰기는 전부 Iceberg 테이블(=S3FileIO, rename 미사용)로 나가고
+    S3A는 **읽기 전용**으로만 쓴다. 검증: `s3a://` csv.gz 4행 read → Iceberg 테이블 write 4행 (2026-08-18).
   - **진입점 스크립트는 driver CWD 밖에 둔다** — 이미지 WORKDIR(`/opt/spark/work-dir`)에 두면
     `spark-submit`이 `local://` 진입점을 CWD로 복사하며 **대상을 먼저 삭제**해 소스가 사라지고
     `NoSuchFileException`으로 죽는다(2026-08-17 실측). 이 레포는 `/opt/spark/app/`을 쓴다.
@@ -96,9 +114,22 @@ resources:
   **`deletecollection`이 빠져 있다**(values로 조정 불가). driver는 종료 시 라벨 셀렉터로 일괄 삭제를 호출하므로,
   없으면 잡이 성공해도 `*-driver-svc`·PVC가 남고 ERROR가 찍힌다. 최소권한(§5)에 맞춰 **잡 네임스페이스 한정 Role**로
   `deletecollection`만 보완한다 → `k8s/spark/spark-workload-cleanup-rbac.yaml`.
+- **로그 회수를 위한 retain 정책**: 호스트 Dagster가 **종료 후** driver 로그를 읽어 materialization 메타
+  (행 수 등)를 남기므로 `applicationTolerations.resourceRetainPolicy: **Always**` + `resourceRetainDurationMillis`
+  (예: `600000`=10분)를 준다. `OnFailure`면 **성공 즉시 driver 파드가 삭제**돼 로그가 사라진다.
+  기본값 `-1`(무기한)은 파드가 계속 쌓이므로 쓰지 않는다.
 - **정기 실행**은 원칙적으로 **Dagster(호스트)** 가 주기적으로 `SparkApplication`을 제출한다(단일 오케스트레이션).
-- **검증 상태**: PoC 잡(`k8s/spark/sparkapplication-poc.yaml`)이 Apache 오퍼레이터에서 **동작 확인됨**
+- **Dagster 쪽 상태 판정**(`defs/poc/resources.py`): Apache는 **`status.currentState.currentStateSummary`** 를 쓴다
+  (Kubeflow의 `status.applicationState.state`가 아니다). **성공·실패 모두 최종 `ResourceReleased`로 수렴**하므로
+  최종 상태만으로는 결과를 구분할 수 없다 → **`status.stateTransitionHistory`에 `Succeeded`가 있었는지**로 판정한다.
+  오퍼레이터를 갈아끼울 때는 매니페스트·스크립트뿐 아니라 **이 글루 코드까지 함께** 옮긴다
+  (2026-08-17 이전 시 누락돼 자산이 죽어 있었다).
+- **검증 상태**: PoC **잡**(`k8s/spark/sparkapplication-poc.yaml`)은 Apache 오퍼레이터에서 **동작 확인됨**
   (2026-08-17 — Iceberg write+read-back `rows=3`, exitCode 0, 정리 오류 0건).
+  PoC **자산**(`defs/poc/`, 호스트 Dagster 제출 경로)도 2026-08-18 Apache 스펙 이전 후 **라이브 검증 통과**:
+  호스트 `dagster asset materialize` → CRD 제출·폴링 → driver 로그 회수 → materialization 메타
+  `rows=3`·`driver_pod=poc-ingest-0-driver` 기록, webserver GraphQL로 노출 확인.
+  → [redesign.md](../redesign.md) **Phase 0 게이트 통과**.
 
 ## 9-2. Flink Operator·FlinkDeployment 규칙 (스트리밍)
 

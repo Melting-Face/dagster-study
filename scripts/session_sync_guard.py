@@ -281,29 +281,44 @@ def identity(payload: dict) -> dict[str, str]:
     session_id = payload.get("session_id") or os.environ.get(
         "CLAUDE_CODE_SESSION_ID", ""
     )
+    worktree, branch = git_context(payload.get("cwd") or os.getcwd())
     return {
         "session_ref": session_ref(session_id),
         "session_id": session_id,
         "tmux_pane": os.environ.get("TMUX_PANE", ""),
         "pid": os.environ.get("CLAUDE_PID", ""),
         "socket": os.environ.get("CLAUDE_CODE_MESSAGING_SOCKET", ""),
-        "branch": current_branch(payload.get("cwd") or os.getcwd()),
+        "worktree": worktree,
+        "branch": branch,
     }
 
 
-def current_branch(cwd: str) -> str:
-    """현재 체크아웃된 브랜치명. git이 없거나 저장소가 아니면 빈 문자열."""
+def git_context(cwd: str) -> tuple[str, str]:
+    """`(워킹트리 루트, 브랜치명)`. git이 없거나 저장소가 아니면 `("", "")`.
+
+    둘을 **한 번의 프로세스 기동으로** 받는다 — 이 hook은 모든 도구 호출마다 돈다.
+
+    루트를 함께 받는 이유: `git worktree`로 분리하면 **트리마다 루트가 다르고**,
+    그것이 "같은 워킹트리인가"의 판정 키가 된다. `cwd`는 하위 디렉터리일 수 있어
+    쓸 수 없다(같은 트리인데 다르게 보인다).
+    """
     git_bin = shutil.which("git")
     if git_bin is None:
-        return ""
+        return "", ""
     probe = subprocess.run(  # noqa: S603
-        [git_bin, "-C", cwd, "branch", "--show-current"],
+        [git_bin, "-C", cwd, "rev-parse", "--show-toplevel", "--abbrev-ref", "HEAD"],
         capture_output=True,
         text=True,
         timeout=5,
         check=False,
     )
-    return probe.stdout.strip() if probe.returncode == 0 else ""
+    if probe.returncode != 0:
+        return "", ""
+    lines = probe.stdout.strip().splitlines()
+    root = lines[0].strip() if lines else ""
+    branch = lines[1].strip() if len(lines) > 1 else ""
+    # detached HEAD는 `HEAD`를 돌려준다 — 브랜치명이 아니므로 빈 값으로 본다.
+    return root, ("" if branch == "HEAD" else branch)
 
 
 def touch_session(payload: dict) -> dict[str, str]:
@@ -327,13 +342,33 @@ def touch_session(payload: dict) -> dict[str, str]:
     return mine
 
 
-def live_sessions(me: str) -> list[dict]:
-    """나를 뺀, 살아 있는 세션들. 만료분은 sweep이 걷어낸다."""
-    return [
+def live_sessions(me: str, worktree: str | None = None) -> list[dict]:
+    """나를 뺀, 살아 있는 세션들. 만료분은 sweep이 걷어낸다.
+
+    `worktree`를 주면 **같은 워킹트리의 세션만** 남긴다.
+
+    🔴 축마다 필터가 다르다 — 레지스트리를 공유하는 것과 위험을 공유하는 것은 별개다:
+
+      · **공유 인프라**(kubectl·helm·compose) → 필터 **없음**. 클러스터·컨테이너는
+        worktree로 격리되지 않아, 다른 트리의 세션도 똑같이 죽는다.
+      · **워킹트리 전역 git**(switch·stash·reset) → 필터 **있음**. 다른 트리에서
+        브랜치를 갈아타도 내 HEAD는 안 움직인다. 거르지 않으면 **worktree 도입으로
+        해소된 바로 그 위험**을 계속 경고해 오탐이 된다(2026-08-19 발견).
+
+    오탐은 소음에 그치지 않는다 — **항상 뜨면 무시하는 법을 배운다.** 같은 채널로
+    나가는 인프라 축 진짜 경고의 신호 대 잡음비를 깎는다(원칙 7의 역방향).
+
+    `worktree` 키가 없는 옛 claim은 `cwd`로 대조한다(하위 디렉터리에서 연 세션은
+    못 맞히지만, 세션 TTL이 90분이라 곧 사라진다).
+    """
+    records = [
         record
         for _, record in sweep(CLAIM_ROOT / "sessions")
         if record.get("session_ref") != me
     ]
+    if worktree is None:
+        return records
+    return [r for r in records if (r.get("worktree") or r.get("cwd") or "") == worktree]
 
 
 def describe_peer(record: dict) -> str:
@@ -665,11 +700,19 @@ def handle_session_end(payload: dict) -> None:
 
 
 def handle_bash_pre(payload: dict) -> None:
-    """전역 git 명령 직전 — 이 워킹트리에 다른 세션이 있으면 확인을 올린다.
+    """전역 git 명령·공유 인프라 명령 직전 — 영향권에 다른 세션이 있으면 확인을 올린다.
 
     파일 리스와 달리 **사후 감지가 무의미**하다. 브랜치는 한 번에 전역이 바뀌므로,
     바뀐 뒤에 알려줘야 되돌릴 것이 이미 남의 HEAD까지 옮겨간 뒤다. 그래서 여기서만
-    막는다. 근본 해법은 `git worktree` 분리이고, 이 경고는 그때까지의 완충재다.
+    막는다.
+
+    🔴 **두 축의 영향권이 다르다**(`live_sessions` 참고):
+
+      · git 축 → **같은 워킹트리**만. `git worktree`로 나뉘면 서로 안 건드린다.
+      · 인프라 축 → **전부**. 클러스터·컨테이너는 worktree로 격리되지 않는다.
+
+    git 축이 조용한 것은 **정상**일 수 있다(트리가 나뉘었다는 뜻). 인프라 축이
+    조용한 것은 정말로 나 혼자일 때뿐이다 — 같은 침묵이라도 의미가 다르다.
     """
     command = (payload.get("tool_input") or {}).get("command") or ""
     is_git = bool(command) and bool(GLOBAL_GIT_RE.search(command))
@@ -677,11 +720,38 @@ def handle_bash_pre(payload: dict) -> None:
     if not is_git and not is_infra:
         sys.exit(0)
 
-    others = live_sessions(identity(payload)["session_ref"])
+    mine = identity(payload)
+    # 인프라 축은 **필터 없이** 전부 본다 — 클러스터는 worktree로 안 나뉜다.
+    others = live_sessions(mine["session_ref"])
     if not others:
         sys.exit(0)  # 나 혼자면 전역 명령도 안전하다
 
-    if is_infra and not is_git:
+    # git 축은 **같은 워킹트리만** 본다 — 다른 트리의 브랜치 전환은
+    # 내 HEAD를 안 건드린다.
+    same_tree = live_sessions(mine["session_ref"], mine["worktree"]) if is_git else []
+
+    if is_git and same_tree:
+        lines = [
+            "⚠️ 워킹트리 전역 변경 — **같은 워킹트리**를 쓰는 다른 세션이 "
+            f"{len(same_tree)}개 살아 있다.",
+            f"  워킹트리: {mine['worktree'] or '(git 저장소 아님)'}",
+            f"  실행하려는 명령: {command.strip()[:200]}",
+        ]
+        for peer in same_tree:
+            branch = peer.get("branch") or "?"
+            lines.append(f"  · {describe_peer(peer)} — 브랜치 `{branch}`")
+        lines.append(
+            "브랜치 전환·stash·reset은 **파일 단위가 아니라 워킹트리 전역**이라, "
+            "상대의 HEAD와 미커밋 작업까지 함께 움직인다(2026-08-19 실측: 양방향으로 "
+            "서로를 덮쳤고 사전 통지가 상태 변화 속도를 못 따라갔다). "
+            "승인 전에 `SendMessage`로 알리고 동의를 받아라. "
+            "근본 해법은 `git worktree` 분리다(docs/conventions/git.md §7) — "
+            "`scripts/worktree-new.sh`로 트리를 나누면 이 축의 경고 자체가 사라진다."
+        )
+        lines.append(PANE_CAVEAT)
+        escalate("PreToolUse", "\n".join(lines))
+
+    if is_infra:
         infra_lines = [
             "⚠️ 공유 인프라 변경 — 같은 클러스터·컨테이너를 쓰는 다른 세션이 "
             f"{len(others)}개 살아 있다.",
@@ -702,22 +772,9 @@ def handle_bash_pre(payload: dict) -> None:
         infra_lines.append(PANE_CAVEAT)
         escalate("PreToolUse", "\n".join(infra_lines))
 
-    lines = [
-        "⚠️ 워킹트리 전역 변경 — 이 워킹트리를 쓰는 다른 세션이 "
-        f"{len(others)}개 살아 있다.",
-        f"  실행하려는 명령: {command.strip()[:200]}",
-    ]
-    for peer in others:
-        branch = peer.get("branch") or "?"
-        lines.append(f"  · {describe_peer(peer)} — 브랜치 `{branch}`")
-    lines.append(
-        "브랜치 전환·stash·reset은 **파일 단위가 아니라 워킹트리 전역**이라, "
-        "상대의 HEAD와 미커밋 작업까지 함께 움직인다(2026-08-19 실측: 양방향으로 "
-        "서로를 덮쳤고 사전 통지가 상태 변화 속도를 못 따라갔다). "
-        "승인 전에 `SendMessage`로 알리고 동의를 받아라. "
-        "근본 해법은 `git worktree` 분리다(docs/conventions/git.md §7)."
-    )
-    escalate("PreToolUse", "\n".join(lines))
+    # git 축인데 같은 트리에 아무도 없으면 여기로 온다 — worktree가 격리했다는 뜻이라
+    # 경고하지 않는다. 이 조용함이 **정상**이고, 예전엔 여기서 오탐이 났다.
+    sys.exit(0)
 
 
 HANDLERS = {

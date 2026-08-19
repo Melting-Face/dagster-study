@@ -47,6 +47,10 @@ max-complexity = 10
 # scripts/: 절차형(단일 main·함수화 최소화) 스타일이라 순환 복잡도(C901)를 면제한다.
 # 근거·컨벤션은 docs/conventions/python.md '스크립트 스타일'.
 "scripts/**" = ["C901"]
+# notebooks/: 탐색용 노트북은 조회 대상(카탈로그·네임스페이스·테이블)을 변수로 바꿔가며 쓰는 게
+# 본질이라 f-string SQL 조립(S608)이 불가피하다. **외부 입력이 아니라 작성자가 직접 쓰는 리터럴**이라
+# 주입 경로가 없다. 실행 경로에 놓이는 코드(defs/·common/·scripts/)에는 면제하지 않는다.
+"notebooks/**" = ["S608"]
 
 [tool.ruff.format]
 indent-style = "space"

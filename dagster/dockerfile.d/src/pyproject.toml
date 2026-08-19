@@ -28,6 +28,11 @@ dependencies = [
   # dbt-trino 전이 의존이나, 직접 import하므로 명시 선언(explicit dependencies).
   "trino>=0.330",
   "dagster-dg-cli==1.12.12",
+  # Spark 리소스 — Iceberg 유지보수 프로시저를 Spark Connect로 실행(defs/maintenance.py).
+  # `LazyPySparkResource(spark_config={"spark.remote": ...})`로 Connect에 붙는다(2026-08-19 실측:
+  # 내부 `builder.config(k,v)`가 spark.remote를 받아 pyspark.sql.connect 세션을 만든다).
+  # 전이로 `dagster-spark`(spark-submit 래퍼)가 따라오지만 직접 쓰지 않는다 — 설정 스키마 제공용.
+  "dagster-pyspark==0.28.12",
   # S3(SeaweedFS)·Iceberg 리소스
   "dagster-aws==0.28.12",
   # dagster-iceberg(preview)가 pyiceberg[pyarrow]를 동반 설치 → pyarrow는 전이 의존으로 해결
@@ -45,6 +50,21 @@ dev = [
   "gitlint",
   "yamllint",
   "mypy",
+]
+# 호스트 탐색용 노트북(옵션). 런타임(`[project].dependencies`)은 건드리지 않는다 —
+# 이미지·daemon에는 들어가지 않고, 필요할 때만 `--group notebook`으로 켠다.
+#
+# 이 그룹을 **런타임과 같은 venv**에 두는 이유: Spark Connect(pyspark)·pyiceberg·pandas·pyarrow가
+# 전부 여기 이미 있어 커널 하나로 레이크하우스에 붙고, `dagster_project.common.*` 적재 헬퍼를
+# 노트북에서 그대로 import해 **에셋과 같은 코드로** 검증할 수 있다.
+#   uv run --group notebook jupyter lab --port 8889
+# (8888은 compose SeaweedFS filer UI가 게시하므로 피한다.)
+notebook = [
+  "jupyterlab>=4.2,<5",
+  # jupyterlab 전이 의존이나 커널을 직접 등록하므로 명시 선언
+  "ipykernel>=6.29,<7",
+  # pyspark/pyiceberg 전이로 이미 설치되나 노트북에서 직접 import하므로 명시 선언
+  "pandas>=2.2",
 ]
 
 [build-system]

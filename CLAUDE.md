@@ -169,6 +169,8 @@
   `deny` > `ask` > `allow` 순으로 **auto 모드 분류기보다 먼저** 평가되고 **서브에이전트에도 동일 적용**된다 —
   비가역 작업(git 커밋·푸시, `terraform/kubectl apply`, `compose down -v`, `dbt --full-refresh`, `DROP`/`TRUNCATE`,
   `.env`·`tfstate` 수정, 외부 발신)은 `ask`로 못 박는다. `allow`에 비가역 명령을 넣지 않는다.
+  **파일 경로 경계는 `Edit(<경로>)`로만 선언한다** — `Write(<경로>)`는 매칭기가 인식하지 않는 죽은 규칙이고,
+  `Edit(<경로>)` 하나가 `Write`·`Edit`·`NotebookEdit`을 모두 커버한다.
   상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).
 - **리소스 산정**: `max_concurrent_runs`↔daemon `memory` 결합(CoW OOM), Trino 3파일 메모리 제약.
   상세 [`docs/resource-sizing.md`](docs/resource-sizing.md).

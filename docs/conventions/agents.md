@@ -145,8 +145,19 @@ flowchart TB
 
 🔴 **선언한 `tools`가 전부 실재하지는 않는다**(2026-08-19 실측). `data-engineer`의 실제 도구는
 `Read`·`Write`·`Edit`·`Bash` 4개였고(선언은 `+Grep, Glob`), `data-qa`는 `Read`·`Bash` 2개였다
-(선언은 `Read, Grep, Glob, Bash`). **독립된 두 워커의 자기보고가 일치**하므로 이 세션 구성에는
-`Grep`·`Glob` 도구가 없다.
+(선언은 `Read, Grep, Glob, Bash`). 처음 근거는 **자기보고 2건**이었으나 — 자기보고는 **관측 경로가
+자기 자신**이라 "도구가 없다"와 "목록을 잘못 보고한다"를 못 가른다(피어 세션 지적, 원칙 7) —
+`data-qa`에게 **`Grep`·`Glob`을 실제로 호출시켜**(`Bash` 우회 금지) 런타임 응답으로 확정했다:
+
+```
+Error: No such tool available: Grep. Grep is not available in this session
+       — search file contents with `grep` via the Bash tool instead.
+Error: No such tool available: Glob. Glob is not available in this session
+       — find files with `find` via the Bash tool instead.
+```
+
+🔴 **판별법이 요점이다** — 도구 유무는 **물어보지 말고 쓰게 시킨다.** 도구 없이는 만들 수 없는
+산출물(매치된 줄 원문·파일 목록)을 요구하면 자기보고와 런타임이 갈리는 지점이 드러난다.
 - **선언은 그대로 둔다.** 공식 문서상 목록의 *일부*가 resolve되지 않는 것은 무해하고
   (**전부** 실패할 때만 launch 실패), 다른 세션 구성에서는 살아나므로 지우면 이식성만 잃는다.
 - 🔴 대신 **"없는 도구를 쓰라"는 지시문 규칙은 교정**한다 — `skill-matcher`의

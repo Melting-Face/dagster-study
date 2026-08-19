@@ -38,7 +38,20 @@
       "Edit(terraform/**/*.tfstate*)",
       "Edit(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
-      "Bash(*psql*DELETE*)"
+      "Bash(*psql*DELETE*)",
+      "Edit(skills-lock.json)",
+      "Edit(.claude/agents/**)",
+      "Edit(**/.claude/skills/**)",
+      "Edit(**/.agents/skills/**)",
+      "Bash(git clone*)",
+      "Bash(gh repo clone*)",
+      "Bash(npm install*)",
+      "Bash(npx *)",
+      "Bash(uvx *)",
+      "Bash(pip install*)",
+      "Bash(uv pip install*)",
+      "Bash(curl * -o *)",
+      "Bash(wget *)"
     ]
   },
   "hooks": {

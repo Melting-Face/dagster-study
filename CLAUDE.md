@@ -222,7 +222,13 @@
   🔴 **lock은 재현성의 정본이지만 현재 실효는 3/24다**(2026-08-19 실측) — 나머지 21개는 `~/.claude/skills/`에
   **설치돼 있으나 `computedHash` 무결성 고정 밖**이고, 스킬 CLI가 PATH에 없어 §관리 절차를 지금 실행할 수 없다.
   "런타임이 제공하는 것"이 아니라 **"설치했는데 lock에만 없는 것"** 이다(문서의 분류 자체가 틀렸었다).
-  개인 저장소 출처 2종(`kubernetes-specialist`·`spark-engineer`)이 인프라 워커에 물려 있어 `security` 재판정 대기.
+  🔴 **"신뢰 출처(`dagster-io/skills`)만" 조항은 폐기하고 출처 등급별 통제(A/B/C/D)로 개정**했다(2026-08-19) —
+  **24개 중 21개가 위반**하는 규칙은 규칙이 아니고, 개인 저장소 2종만 금지하는 것은 위험 감소 없이 형식만 맞춘다.
+  급소는 "출처가 개인이냐"가 아니라 **"고정되지 않아 조용히 바뀔 수 있느냐"** 다(에러 없이 최신을 쓴다 — 철학 원칙 7 계열).
+  **C·D 등급은 워커 지시문에 단서 문구가 없으면 등재하지 않고**, 실행 파일(`*.sh`) 포함 스킬은 **등급 무관 `security` 검토**다.
+  🔴 **설치 경로는 심볼릭 링크**(`~/.claude/skills/` → `~/.agents/skills/`)라 한쪽만 걸면 죽은 규칙이 된다 —
+  `permissions.ask`에 `Edit(**/.claude/skills/**)`·`Edit(**/.agents/skills/**)`·`Edit(skills-lock.json)`·
+  `Edit(.claude/agents/**)`를 넣고 **일부러 위반시켜 4종 전부 `escalate` 발동을 확인**했다(대조군 통과 확인).
   배선 감사 주체는 **`skill-matcher`**(계층 밖·읽기 전용).
 - **에이전트 오케스트레이션·기록관**: AI 세션을 **3계층(supervisor→director→subagent)** 으로 나눈다(**director는 우선 1명**,
   도메인 무관). **director는 업무 성격에 따라 워커를 배정·감독**하고, **권한 밖(비가역·비용·규약변경·범위 밖)이나 특이사항(드리프트·결과충돌·반복실패·비승인변경)은 supervisor에 에스컬레이션**해 **진행 여부를 supervisor가 결정**한다. subagent 실행은 director **승인 게이트**를 거친다. **`security`·`archivist`·`skill-matcher`는 director 관할 밖**(supervisor가 직접 배정)이며, **director의 실행·채택 결정은 `security` 최종 컨펌 후 진행**한다(동일 결정 재컨펌 2회 초과 시 에스컬레이션). 미션 저널의 **기록 주체는 `archivist`** — supervisor가 **체크포인트마다** 이벤트를 전달해 기록시키고(경합 방지 single-writer 유지), 호출 실패·세션 급종료 시에만 supervisor가 **폴백**으로 직접 쓴다. "누가 무엇을 왜

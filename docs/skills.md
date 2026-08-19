@@ -80,9 +80,9 @@
 | `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선** |
 | `data-verifier` | `sql-optimization` · `answering-natural-language-questions-with-dbt` · `duckdb` · `fetching-dbt-docs` | **읽기 질의만** — 모델 생성·대용량 전량 로드 금지 |
 | `data-qa` | `adding-dbt-unit-test`(핵심) · `using-dbt-for-analytics-engineering` · `fetching-dbt-docs` · `running-dbt-commands` · `troubleshooting-dbt-job-errors` | dbt CLI는 `parse`·`ls`·`compile`만(`build`/`run` 금지) |
-| `devops-engineer` | `docker-expert` · `kubernetes-specialist` · `helm-chart-scaffolding` · `github-actions-templates` · `shellcheck-configuration` | Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md) |
-| `devops-verifier` | `docker-expert` · `kubernetes-specialist` | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지 |
-| `devops-qa` | `docker-expert` · `kubernetes-specialist` · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙) |
+| `devops-engineer` | `docker-expert` · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding` · `github-actions-templates` · `shellcheck-configuration` | Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제) |
+| `devops-verifier` | `docker-expert` · `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**: 시크릿은 **존재·키 이름까지만**, 값을 뜨지 않는다 |
+| `devops-qa` | `docker-expert` · `kubernetes-specialist`**(C)** · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다 |
 | `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `dataviz` · `sql-optimization` · `spark-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만** |
 | `security` | **전용 스킬 없음** → [security.md](security.md)·[conventions/general.md](conventions/general.md) | 도메인 스킬은 설정 해석 목적의 **읽기 참조만** |
 | `skill-matcher` | `find-skills` · `auditing-skills` | **조회·평가까지만** — 설치·lock 편집·워커 정의 수정 금지. 외부 스킬 신뢰성 **최종 판정은 `security`** |
@@ -109,21 +109,61 @@
 
 - **추가/갱신**: 스킬 CLI로 설치하면 `skills-lock.json`에 source·`computedHash`가 기록된다(수동 편집 금지).
   ⚠️ **그 CLI가 현재 환경 PATH에 없다**(§실측) — 이 절차는 지금 실행 불가이며, 그래서 21/24가 lock 밖에 있다.
-- **감사**: 외부 스킬은 도입 전 내용을 검토한다(보안·품질). 신뢰 출처(`dagster-io/skills`)만 사용한다.
+- **감사**: 외부 스킬은 도입 전 내용을 검토한다(보안·품질). 판정은 아래 **§출처 등급별 통제**를 따른다.
 - **재현성**: `skills-lock.json`은 **커밋**해 팀·CI가 동일 스킬 버전을 쓰게 한다(락은 진실의 출처).
 - **배선 감사 주기**: 스킬 추가·제거 후, 워커 신설·개편 시 **[`skill-matcher`](../.claude/agents/skill-matcher.md)** 를 배정한다.
 
+### 출처 등급별 통제 (2026-08-19 개정)
+
+> **왜 바꿨나** — 이전 조항은 "신뢰 출처(`dagster-io/skills`)만 사용한다"였는데, 실측상
+> **24개 중 21개가 이 조항을 위반**하는 상태였다. 전원이 위반하는 규칙은 규칙이 아니다.
+> 개인 저장소 2종만 떼어내 금지하는 것도 **위험 감소 없이 형식만 맞추는 것**이라
+> `security` 판정([미션 13](../.claude/agents/skill-matcher.md))에서 **등급별 통제로의 개정**이 상신됐다.
+> 급소는 "출처가 개인이냐"가 아니라 **"고정되지 않아 조용히 바뀔 수 있느냐"** 다.
+
+| 등급 | 정의 | 통제 | 현재 |
+| --- | --- | --- | --- |
+| **A · 잠긴 출처** | `skills-lock.json` 등재 + `computedHash` 고정 | 제한 없이 사용 | `dagster-io/skills` 3 |
+| **B · 벤더 공식** | `metadata.author`가 해당 도구의 벤더 | 사용 가능. **lock 편입을 검토**하고, 실행 파일 포함 시 `security` 검토 | `dbt-labs` 10 |
+| **C · 개인·커뮤니티** | 개인 GitHub 계정·비벤더 조직 | 🔴 도입 전 **`security` 본문 검토 필수** + 워커 지시문에 **단서 문구 필수**. **실행 파일 포함 시 도입 금지** | `github.com/Jeffallan` 2 |
+| **D · 출처 미상** | `metadata.author` 없음 | 실행 파일 포함이면 **검토 전 사용 금지**, 문서 전용이면 **관찰**(다음 감사 대상) | 9 |
+
+**등급 무관 공통 조항**
+- 🔴 **실행 파일(`scripts/*.sh` 등)을 포함한 스킬은 등급과 무관하게 `security` 검토 대상**이다 —
+  마크다운은 제안이지만 스크립트는 **실행**이다. 현재 해당: `helm-chart-scaffolding`(D)·`fetching-dbt-docs`(B).
+- 🔴 **해시 미고정 스킬은 "오늘 안전"이 "내일 안전"을 보장하지 않는다.** lock 밖 스킬은 조용히 바뀌어도
+  탐지 수단이 없고, **에러 없이 그냥 최신을 쓴다**([philosophy.md](philosophy.md) 원칙 7 "성공 신호를 의심한다" 계열).
+  CLI 부재로 lock 편입이 막혀 있는 동안의 대안은 **§출처 실측 표에 해시를 기록하고 감사 시 재계산·대조**하는 것이다.
+- **C·D 등급 스킬을 워커에 등재할 때는 §③ 표의 제약 칸에 단서를 명시**한다(무해화 문구가 없으면 등재하지 않는다).
+
+**현행 C등급 2종의 단서**(`security` 실측 — 8,989행 스캔 결과 인젝션·반출·비밀노출 유도 **0건**, 단 아래 패턴 존재)
+
+| 스킬 | 위치 | 패턴 | 단서 |
+| --- | --- | --- | --- |
+| `kubernetes-specialist` | `references/troubleshooting.md:96` | 시크릿 평문 복호화(`base64 -d`)를 **표준 절차로 안내** | 🔴 **실행 금지** — 진단은 값이 아니라 **존재·키 이름까지만**. 값을 뜨면 트랜스크립트·저널에 박제된다 |
+| `kubernetes-specialist` | `references/multi-cluster.md:151` | `curl -Ls … \| bash` | 🔴 실행 금지 — 설치는 `security` 컨펌 + 사용자 승인 경로로만 |
+| `kubernetes-specialist` | `references/configuration.md:74,137,271` | 평문 비밀 예시(`db-password: "…"`) | philosophy #4 위반 패턴 — **예시를 그대로 옮기지 않는다** |
+| `kubernetes-specialist` | `references/helm-charts.md:453` | `image: curlimages/curl:latest` | [docker.md](conventions/docker.md) 태그 고정 규약이 이긴다 |
+| `spark-engineer` | — | 위험 패턴 **0건** | — |
+
 ### 출처 실측 (2026-08-19) — 24개 인벤토리
 
-| 출처 | 개수 | 무결성 고정 | 판정 |
-| --- | --- | --- | --- |
-| `dagster-io/skills` | 3 | ✅ `computedHash` | 신뢰 출처 — lock 등재분 |
-| `metadata.author: dbt-labs` | 10 | ❌ 없음 | 벤더 공식 — 신뢰 가능하나 **lock 미등재** |
-| **`metadata.author: https://github.com/Jeffallan`**(개인) | **2** | ❌ 없음 | 🔴 `kubernetes-specialist`·`spark-engineer` — **신뢰 출처 규약 위반**, `security` 판정 대상 |
-| 출처 메타 없음 | 9 | ❌ 없음 | ⚠️ `auditing-skills`·`docker-expert`·`duckdb`·`find-skills`·`github-actions-templates`·`helm-chart-scaffolding`·`shellcheck-configuration`·`spark-optimization`·`sql-optimization` — 출처 `미확인` |
+| 등급 | 출처 | 개수 | 무결성 고정 | 비고 |
+| --- | --- | --- | --- | --- |
+| **A** | `dagster-io/skills` | 3 | ✅ `computedHash` | lock 등재분 |
+| **B** | `metadata.author: dbt-labs` | 10 | ❌ 없음 | 벤더 공식 — **lock 편입 검토 대상** |
+| **C** | `metadata.author: https://github.com/Jeffallan` | **2** | ❌ 없음 | `kubernetes-specialist`·`spark-engineer` — **단서 필수**(위 표) |
+| **D** | 출처 메타 없음 | 9 | ❌ 없음 | `auditing-skills`·`docker-expert`·`duckdb`·`find-skills`·`github-actions-templates`·`helm-chart-scaffolding`·`shellcheck-configuration`·`spark-optimization`·`sql-optimization` |
 
-- 🔴 **`kubernetes-specialist`·`spark-engineer`는 `devops-engineer`·`devops-qa`·`devops-verifier`·`analyst`에 등재된 상태**다.
-  개인 저장소 출처가 무결성 검증 없이 인프라 워커에 물려 있다 — **도입 가부 재판정을 `security`에 올린다**.
+- 🔴 **설치 경로는 심볼릭 링크다** — `~/.claude/skills/<name>` → `~/.agents/skills/<name>`.
+  경로 규칙을 `~/.claude/skills/**`에만 걸면 **resolve 후 매칭 시 죽은 규칙**이 된다.
+  `.claude/settings.json`의 `ask`에는 **`Edit(**/.claude/skills/**)`·`Edit(**/.agents/skills/**)` 둘 다** 넣었고,
+  `protected_paths_guard.py`에 payload를 흘려 **4종 전부 `escalate` 발동을 확인**했다(대조군 `ls -la`는 통과).
+- **D등급 검토 우선순위**(`security` 권고 — 공격면 기준):
+  1. **즉시** `helm-chart-scaffolding`(`scripts/validate-chart.sh` 실행 파일) ·
+     `auditing-skills`·`find-skills`(설치 절차를 담고 **`skill-matcher`가 로드** — 순환 신뢰)
+  2. **다음 감사** `github-actions-templates`·`docker-expert`(크리덴셜을 다루는 산출물을 생성)
+  3. **관찰** `duckdb`·`sql-optimization`·`spark-optimization`·`shellcheck-configuration`(문서 전용)
 - **재채점 대상**(축1·4 의심, `skill-matcher` 첫 미션): `analyst`의 `spark-optimization`(읽기 질의 워커에 튜닝 스킬),
   `data-verifier`의 `duckdb`(조회 엔진은 Trino).
 

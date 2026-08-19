@@ -156,9 +156,15 @@
 | **D** | 출처 메타 없음 | 9 | ❌ 없음 | `auditing-skills`·`docker-expert`·`duckdb`·`find-skills`·`github-actions-templates`·`helm-chart-scaffolding`·`shellcheck-configuration`·`spark-optimization`·`sql-optimization` |
 
 - 🔴 **설치 경로는 심볼릭 링크다** — `~/.claude/skills/<name>` → `~/.agents/skills/<name>`.
-  경로 규칙을 `~/.claude/skills/**`에만 걸면 **resolve 후 매칭 시 죽은 규칙**이 된다.
-  `.claude/settings.json`의 `ask`에는 **`Edit(**/.claude/skills/**)`·`Edit(**/.agents/skills/**)` 둘 다** 넣었고,
-  `protected_paths_guard.py`에 payload를 흘려 **4종 전부 `escalate` 발동을 확인**했다(대조군 `ls -la`는 통과).
+  한쪽 형태에만 규칙을 걸면 **죽은 규칙**이 되므로 `.claude/settings.json`의 `ask`에
+  `**/…`·`~/…`·상대형 **3형태를 병기**했다(도구층 글롭 의미론이 `미확인`이라 하나를 고르지 않는다).
+- 🔴 **1차 검증은 편향돼 있었다(2026-08-19 `security` 반려).** 테스트 payload가 전부 `~`·절대경로여서
+  **상대경로를 한 건도 보지 않았고**, 그 결과 `protected_paths_guard.py`의 선두 `**/`가 후행 `/`를
+  리터럴로 남겨 `.claude/skills/x`를 **원리상 못 잡는 것**을 놓쳤다. 같은 버그로
+  `terraform/**/*.tfstate*`가 `terraform/foo.tfstate`를 놓치고 있었다.
+  **반려 원인은 코드가 아니라 테스트 집합의 편향**이었다 — [philosophy.md](philosophy.md) 원칙 7.
+  → 이후 **상대·절대·`~`·변수(`$HOME`)·디렉터리형 5형태**로 확장해 **위반 16종 전부 차단 /
+  대조군 7종 전부 통과**를 재확인했다. 경로 규칙을 바꾸면 **이 5형태 매트릭스를 다시 돌린다**.
 - **D등급 검토 우선순위**(`security` 권고 — 공격면 기준):
   1. **즉시** `helm-chart-scaffolding`(`scripts/validate-chart.sh` 실행 파일) ·
      `auditing-skills`·`find-skills`(설치 절차를 담고 **`skill-matcher`가 로드** — 순환 신뢰)

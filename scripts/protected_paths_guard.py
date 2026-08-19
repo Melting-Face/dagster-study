@@ -34,6 +34,9 @@ from pathlib import Path
 FILE_TOOL_RE = re.compile(r"^(?:Edit|Write|NotebookEdit)\((.+)\)$")
 
 # 쓰기로 간주하는 신호. 읽기 전용 명령(cat·grep·json.load)은 걸리지 않는다.
+# 🔴 여기 없는 신호는 경로 대조에 **도달조차 못 한다**(아래 조기 통과) — 파일을 만드는
+#    모든 경로를 열거해야 한다. 2026-08-19 security 재컨펌에서 `install`·`tar`·`rsync`·
+#    `ln`·`git checkout`류가 누락돼 절대경로인데도 통과하는 것이 실측됐다.
 WRITE_SIGNALS = (
     ">",
     ">>",
@@ -54,10 +57,43 @@ WRITE_SIGNALS = (
     "shutil.move",
     "unlink",
     "Path.write",
+    # 아카이브 전개·복사·링크 — 파일을 만들지만 리다이렉트가 없다
+    "install ",
+    "tar ",
+    "unzip ",
+    "rsync",
+    "ln ",
+    "touch ",
+    "patch ",
+    "chmod ",
+    # 네트워크에서 직접 파일로 받는 형태 (`curl * -o *` 규칙의 도구층 밖 보완)
+    "--output",
+    "-O ",
+    "wget ",
+    # 워킹트리를 덮어쓰는 git 명령
+    "git checkout",
+    "git restore",
+    "git apply",
+    "git stash pop",
+    "git clean",
 )
 
 # 글롭 조각을 정규식으로 옮길 때 쓰는 치환 (`**/*.tfstate*` 같은 규칙 대응)
-GLOB_TO_RE = ((".", r"\."), ("**", "\x00"), ("*", "[^/]*"), ("\x00", ".*"), ("?", "."))
+# 🔴 선두 `**/`는 **선택적 접두어**여야 한다 — 단순히 `**`→`.*`로 두면 뒤따르는 `/`가
+#    리터럴로 남아 `.*`가 빈 문자열일 때도 `/`를 요구한다. 그러면 절대경로·`~` 형태는
+#    잡히는데 **프로젝트 상대경로(`.claude/skills/x`)는 원리상 안 잡힌다**(실측).
+#    같은 이유로 `terraform/**/*.tfstate*`가 `terraform/foo.tfstate`를 놓치고 있었다.
+# 치환은 **순서가 의미를 가진다** — `?`→`.`를 먼저 끝내야 아래에서 넣는 `(?:.*/)?`의
+#    `?`가 다시 치환되지 않는다.
+GLOB_TO_RE = (
+    (".", r"\."),
+    ("?", "."),
+    ("**/", "\x01"),  # 선택적 디렉터리 접두어
+    ("**", "\x00"),  # 경로 구분자를 넘는 와일드카드
+    ("*", "[^/]*"),  # 한 세그먼트 안의 와일드카드
+    ("\x01", "(?:.*/)?"),
+    ("\x00", ".*"),
+)
 
 
 def load_protected_patterns() -> list[tuple[str, re.Pattern[str]]]:
@@ -101,8 +137,16 @@ def main() -> None:
     hits = []
     for raw, compiled in patterns:
         # 명령 문자열 안에 등장하는 경로 후보를 패턴과 대조한다.
+        # 후보를 4형태로 넓힌다 — 원형 / `./` 제거형 / 각각의 디렉터리형(`/` 부착).
+        # 🔴 디렉터리형이 필요한 이유: `tar -C <디렉터리>`처럼 **대상이 디렉터리
+        #    자체**면 `.../skills/**` 패턴의 뒷부분이 비어 매칭에 실패한다.
+        #    `/`를 붙이면 `.*`가 빈 문자열로 매칭돼 잡힌다(security 재컨펌 실측).
         for token in re.findall(r"[\w./*@~-]{3,}", command):
-            if compiled.fullmatch(token.lstrip("./")) or compiled.fullmatch(token):
+            stripped = token.lstrip("./")
+            if any(
+                compiled.fullmatch(c)
+                for c in (token, stripped, token + "/", stripped + "/")
+            ):
                 hits.append(raw)
                 break
     if not hits:

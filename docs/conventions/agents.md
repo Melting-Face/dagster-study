@@ -1110,6 +1110,55 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
   새는 것**이었다. `.ipynb` 셀 출력은 원천 데이터를 박제하므로([security.md](../security.md))
   이 축이 뚫려 있는 것은 DUA 관점에서도 가볍지 않다.
 
+#### 확장 축 실측 — 남은 불일치는 **0건**이고, 그게 우연이 아니다 (2026-08-20)
+
+위 건이 나온 뒤 **"경로 말고 다른 필드에도 같은 함정이 있는가"** 라는 확장 가설이 섰다
+(`Bash`의 `command`, `NotebookEdit`의 `new_source` 등). 근거가 추론뿐이라 문서에 안 적고
+넘겼고, **가드 5종이 읽는 키를 전수 열거해** 관측으로 판별했다. 결과는 **기각**이다.
+
+| 가드 | 배선 matcher | 읽는 `tool_input` 키 | 판정 |
+| --- | --- | --- | --- |
+| `protected_paths_guard` | `Bash` | `command` | ✅ |
+| `journal_guard` `pre-write` | `Write` | `file_path` | ✅ |
+| `session_sync_guard` `file-pre`/`file-post` | `Edit\|Write\|NotebookEdit` | `file_path`·`notebook_path`·`path` | ✅ (위 건에서 수정) |
+| `session_sync_guard` `bash-pre` | `Bash` | `command` | ✅ |
+| `session_sync_guard` `agent-pre`/`agent-post` | `Agent` | `subagent_type`·`prompt`·`description` | ✅ |
+| `worker_path_guard`·`analyst_path_guard` | 프론트매터 | `file_path`·`notebook_path`·`path` | ✅ |
+
+🔴 **함정의 성립 조건은 두 개이고, 둘 다 있어야 터진다.**
+
+1. matcher가 **여러 도구에 걸치고**,
+2. 그 도구들 사이에서 **이름이 갈리는 필드**를 읽는다.
+
+대조하면 깨끗하게 갈린다 — `protected_paths_guard`(Bash 단독)·`journal_guard`(Write 단독)·
+`agent-pre`(Agent 단독)는 **조건 1이 없어 애초에 터질 수 없다**. 조건 1·2를 동시에 만족한
+가드는 `file-pre`/`file-post` **하나뿐이었고, 그게 정확히 터진 그 하나**다. 즉 "0건"은
+운이 좋았던 게 아니라 **터질 자리가 하나였고 거기가 터진 것**이다.
+
+🔴 **단 이 기각에는 재개 조건이 있다 — 가드가 *내용*을 읽기 시작하면 되살아난다.**
+현재 어떤 가드도 쓰이는 내용을 검사하지 않고 **경로 아니면 명령 문자열로만 분기**해서
+조건 2를 만족할 필드를 아무도 안 읽을 뿐이다. 내용 필드는 실제로 셋 다 다르다
+(2026-08-20 라이브 도구 스키마 조회):
+
+| 도구 | 내용이 담기는 키 |
+| --- | --- |
+| `Write` | `content` |
+| `Edit` | `new_string` (+`old_string`) |
+| `NotebookEdit` | **`new_source`** |
+
+그래서 "쓰이는 내용에 크리덴셜·원천 데이터가 있나"를 보는 가드를 추가하는 날,
+`file-pre`가 밟은 함정을 **같은 모양으로** 밟는다. 새 가드를 걸 때는 먼저
+**matcher가 걸치는 도구 수 × 읽는 필드의 키 이름**을 표로 적고 시작한다.
+
+##### 부수 관측 — `journal_guard`의 matcher 비대칭 (미판정)
+
+`journal_guard`의 `pre-write` matcher는 **`Write` 단독**이다. 저널은 신규 생성이라
+`Write`가 맞지만, **기존 저널을 `Edit`로 고치면 `NN` 규약 검사를 거치지 않는다.**
+가드의 선언된 임무가 "중복 *생성* 차단"이라 설계 의도 내일 수 있어 **결함으로 단정하지
+않는다** — 다만 `session_sync_guard`가 같은 파일을 3도구로 보는 것과 비대칭이라 남긴다.
+판정하려면 저널 `Edit` 프로브가 필요하고, 그건 실제 볼트를 건드리므로 아직 안 쳤다.
+(이 축은 **키 불일치가 아니라 matcher 커버리지** 문제다 — 위 표와 섞지 않는다.)
+
 ### hook 결정값 — `escalate`는 존재하지 않는다 (2026-08-19 실측)
 
 `PreToolUse` hook이 돌려주는 `hookSpecificOutput.permissionDecision`의 **유효 값은 네 개뿐**이다.

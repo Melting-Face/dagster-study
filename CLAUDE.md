@@ -309,6 +309,12 @@
   **`NotebookEdit`은 `notebook_path`** 라, `file_path`만 읽던 `session_sync_guard`는
   **노트북 편집에 투명**했다(2026-08-20 대조 실측 후 수정). 가드가 여럿이라고
   **"하나가 막으니 다 막힌다"고 읽지 않는다** — 같은 배선인데 한 가드만 뚫려 있었다.
+  ✅ 가드 5종 전수 대조 결과 **남은 키 불일치는 0건**이고, 이유는 **함정의 성립 조건이 둘**이기
+  때문이다 — ① matcher가 **여러 도구에 걸치고** ② 그 도구들 사이에서 **이름이 갈리는 필드**를
+  읽는다. 나머지 가드는 matcher가 단일 도구(`Bash`·`Write`·`Agent`)라 ①이 없어 터질 자리가 아니었다.
+  🔴 **재개 조건이 있다** — 지금은 어떤 가드도 *내용*을 안 읽어서 조용할 뿐이고, 내용 키는
+  `Write`=`content` / `Edit`=`new_string` / `NotebookEdit`=`new_source`로 **셋 다 다르다**.
+  내용 검사 가드를 새로 걸 때는 **matcher가 걸치는 도구 수 × 읽는 필드의 키 이름**을 먼저 표로 적는다.
   🔴 **hook 결정값은 `allow`·`deny`·`ask`·`defer` 넷뿐이다** — 가드 4종
   (`protected_paths_guard`·`session_sync_guard`·`analyst_path_guard`·`worker_path_guard`)은
   2026-08-19까지 **존재하지 않는 `escalate`** 를 내보내 전부 무효였다. `hookSpecificOutput`은

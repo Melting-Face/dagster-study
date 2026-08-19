@@ -13,6 +13,8 @@
 - **한계**: 단일 노드 자원 상한(Trino 메모리 제약·[resource-sizing.md](resource-sizing.md)), 스케일아웃 경로 부재.
 - **목표 지향점**: **학습/포트폴리오**. 실제 프로덕션 패턴인 **오케스트레이터(컨트롤 플레인) ↔ 원격 컴퓨트 분리**를
   로컬에서 재현한다. Dagster는 **호스트 PC**에 두고, 컴퓨트는 **로컬 K8s의 Spark Operator**로 옮긴다.
+- **로드맵의 종착지는 인프라가 아니라 분석이다.** Phase 0~4는 수단을 세우고, **Phase 5에서 gold 마트·
+  리포트로 닫힌다**(§4). 인프라가 "도는 것"은 완료 조건이 아니다.
 
 ## 2. 목표 아키텍처 (토폴로지)
 
@@ -170,6 +172,30 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **Check**: `dg check defs`·스모크(`dbt build`) 통과([test.md](test.md)). 에셋 pytest는 실인프라 미접속 격리 유지.
 - **Act**: `CLAUDE.md`·`README.md`·`docs/`를 최종 동기화(단일 출처), 상태 마커 🚧→✅.
 - **후속 과제**: ① REST 카탈로그(급소②) ② ML/윈도우 피처 계층 ③ (선택) Dagster in-cluster 배포(`K8sRunLauncher`) 비교.
+
+### Phase 5 — 분석 계층 (로드맵의 종착지) ⏸ **원천 데이터 적재 이후**
+
+> Phase 0~4는 **수단**(컴퓨트·스토리지·오케스트레이션)을 세운다. 이 저장소의 **목적은 분석**이므로
+> 로드맵은 여기서 끝난다. 규칙 정본은 [conventions/analysis.md](conventions/analysis.md),
+> 소비 계층 그림은 [architectures/overview.md](architectures/overview.md).
+
+- **전제**: ① Phase 2(원천 적재)가 끝나 silver 22모델이 **실제 데이터로** 돌아야 한다.
+  ② **연구 질문이 먼저 정해져야 한다** — 질문 없이 만든 gold는 재사용되지 않는 집계일 뿐이다.
+- **Plan/Do**: ① 연구 질문 확정(예: Sepsis-3 발생률·SOFA 궤적·조기경보 지연) →
+  ② 질문별 **gold 마트** 정의(`tags=['gold']`, grain을 `schema.yml` description에 명시) →
+  ③ 노트북으로 탐색하고 반복되는 조회를 gold로 승격 → ④ 첫 리포트(`docs/analyses/01-*.md`) 작성.
+- **Check(성공 게이트)**:
+  - 리포트 1편이 **gold/dbt 모델만 인용**해 수치가 재현된다(노트북 임시 SQL 인용 0건).
+  - 해당 gold 모델의 **grain 유니크·범위 테스트 통과**([test.md](test.md) §1).
+  - 참조 노트북이 `nbconvert`로 **전 셀 실행 성공**([test.md](test.md) §6).
+  - 코호트 **attrition 표**와 **한계 섹션**이 리포트에 있다.
+- **Act**: 실사용에서 드러난 규칙의 빈틈을 `conventions/analysis.md`에 되먹인다.
+- **연계**: Phase 3(Flink 실시간 경보)의 산출과 배치(dbt-spark) 산출의 **동일 피처 정의 교차검증**이
+  여기서 리포트로 닫힌다. Phase 4 후속 과제의 **ML/윈도우 피처 계층**도 이 단계의 연장이다.
+
+> **현재 상태(2026-08-19)**: 규칙(`conventions/analysis.md`)과 실행 환경(호스트 Jupyter Lab +
+> Spark Connect)은 서 있고, **gold 0개 · 리포트 0편 · 연구 질문 미정**이다.
+> 이 셋 중 **연구 질문이 병목**이며 데이터 부재(Phase 2)와는 별개로 지금 정할 수 있다.
 
 ## 5. 리스크·트레이드오프 (정직한 기록)
 

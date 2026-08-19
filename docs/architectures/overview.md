@@ -55,6 +55,43 @@ flowchart LR
     DG -->|메타데이터| CAT
 ```
 
+## 소비 계층 (분석) — 흐름의 종착지
+
+위 흐름은 **저장까지**다. 이 저장소는 파이프라인이 목적이 아니라 **임상 질문에 답하기 위한 수단**이므로,
+lineage는 소비에서 끝난다. 규칙 정본은 [`../conventions/analysis.md`](../conventions/analysis.md).
+
+```mermaid
+flowchart LR
+    ICE[(Iceberg<br/>bronze · silver)]
+    GOLD[["gold 마트<br/>dbt tags=['gold']<br/>(현재 0개)"]]
+    SC[Spark Connect<br/>sc://localhost:15002]
+    NB[노트북<br/>notebooks/*.ipynb]
+    RPT[리포트<br/>docs/analyses/*.md]
+
+    ICE --> GOLD
+    ICE -.탐색.-> SC
+    GOLD --> SC
+    SC --> NB
+    GOLD --> RPT
+    NB -.반복되면 승격.-> GOLD
+
+    classDef todo stroke-dasharray: 4 3
+    class GOLD,RPT todo
+```
+
+| 계층 | 위치 | 검증 |
+| --- | --- | --- |
+| **gold 마트** | `models/<dataset>/`(`tags=['gold']`) | dbt 스키마 테스트([`../test.md`](../test.md) §1) |
+| **노트북** | `notebooks/` — 호스트 Jupyter Lab(:8889) | 실행 가능성([`../test.md`](../test.md) §6) |
+| **리포트** | `docs/analyses/<NN>-<slug>.md` | 인용 수치의 재현 경로 |
+
+- **SQL 엔진은 Spark Connect**다. 위 흐름도의 Trino는 compose 현행 구성이고, 재설계에서 제거 대상이라
+  ad-hoc 조회는 Spark SQL로 간다([trino.md](trino.md) · [../redesign.md](../redesign.md) §5).
+- **노트북 → gold 승격이 정방향**이다. 같은 조회가 3회 이상 반복되거나 리포트가 인용하면
+  노트북에 두지 않고 모델로 올린다(Rule of Three).
+- 점선 노드(gold·리포트)는 **아직 실물이 없다** — 규칙만 서 있고 첫 산출은 원천 데이터 적재
+  이후다([../redesign.md](../redesign.md) Phase 5).
+
 ## 컨테이너 구성도 (compose)
 
 `compose.yml`의 서비스 의존성과 포트 매핑.

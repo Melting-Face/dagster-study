@@ -127,7 +127,11 @@
 ## 테스트 컨벤션
 
 - 테스트는 **계층별 우선순위**로 채운다: dbt 스키마 테스트 → 통합·스모크(`dg check`·`dbt build`)
-  → dbt 단위 테스트 → Dagster 에셋 pytest → dbt singular. **비용 대비 회귀 방어가 큰 순서**.
+  → dbt 단위 테스트 → Dagster 에셋 pytest → dbt singular → **분석 재현성**(노트북 실행·리포트 수치 재현).
+  **비용 대비 회귀 방어가 큰 순서**.
+- **분석 재현성만 실인프라에 붙는다**(의도된 예외) — 접속·권한·데이터 존재가 검증 대상이라
+  상시 CI 게이트가 아닌 **분석 산출물 공유 직전의 수동 관문**으로 쓴다. 🔴 `nbconvert` 실행 산출물과
+  `.ipynb_checkpoints/`는 조회 결과를 박제하므로 **검증 직후 삭제**한다.
 - dbt 테스트는 모델 옆 `schema.yml`(`data_tests:`/`unit_tests:`), Dagster 테스트는 `src/tests/`(`pytest`).
   **단위 테스트는 실인프라(SeaweedFS·Trino) 미접속**(격리·재현). 상세·예시는 [`docs/test.md`](docs/test.md).
 

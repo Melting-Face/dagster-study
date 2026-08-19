@@ -30,13 +30,31 @@ log "Spark Operator(Apache) 설치 (ns=${SPARK_OPERATOR_NS}, chart=${SPARK_OPERA
 helm repo add "${SPARK_OPERATOR_REPO}" "${SPARK_OPERATOR_REPO_URL}" >/dev/null 2>&1 || true
 helm repo update >/dev/null
 # workloadResources.namespaces.data: 잡 네임스페이스(비우면 감시 대상·workload SA가 생기지 않는다)
-# 컨트롤러 자원 한도 근거: docs/resource-sizing.md (Spark Operator 100m/256Mi req · 250m/512Mi lim)
+#
+# 🔴 컨트롤러 자원은 **반드시 --set으로 명시**한다(docs/conventions/k8s.md §2).
+#    2026-08-19까지 이 블록에는 근거 주석만 있고 --set이 없어 차트 기본값 **1000m/2048Mi**가
+#    적용되고 있었다. 에러가 나지 않아 아무도 몰랐고, 노드 requests의 CPU 31%·메모리 38%를
+#    유휴 오퍼레이터가 점유했다(실사용은 196Mi — 10.7배 과예약).
+#
+# 🔴 값 근거 — 문서의 옛 `100m/256Mi`를 쓰면 **오퍼레이터가 죽는다.**
+#    그 수치는 **Kubeflow(Go) 오퍼레이터 시절** 것이고, 위 1)에서 이전한 Apache 오퍼레이터는
+#    **JVM**이다. 차트 jvmArgs가 `-XX:MaxRAMPercentage=80`이라 힙 상한이 컨테이너 한도에
+#    직접 연동돼, 한도 256Mi → 힙 205Mi인데 실측 anon이 이미 193MB라 즉시 OOMKill이다.
+#    아래 값은 **실측 196Mi 기준 한도 1Gi(힙 819Mi)로 약 4배 여유**를 두었고,
+#    `InitialRAMPercentage=80` 선점(AlwaysPreTouch)이 유효해지더라도 한도 안에 들어온다
+#    (= 선점 유효/무효 **어느 가설에서도 안전**한 값).
+#    키 경로는 `helm show values`로 확인했다 — helm은 **모르는 --set 키를 조용히 무시**하므로
+#    경로를 추측하면 "설정했다고 믿는" 같은 함정을 반복하게 된다.
 helm upgrade --install "${SPARK_OPERATOR_RELEASE}" "${SPARK_OPERATOR_REPO}/${SPARK_OPERATOR_CHART}" \
     --version "${SPARK_OPERATOR_CHART_VERSION}" \
     --namespace "${SPARK_OPERATOR_NS}" --create-namespace \
     --set "workloadResources.namespaces.data[0]=${SPARK_JOB_NS}" \
     --set "workloadResources.namespaces.create=false" \
     --set "workloadResources.serviceAccount.name=${SPARK_JOB_SA}" \
+    --set "operatorDeployment.operatorPod.operatorContainer.resources.requests.cpu=250m" \
+    --set "operatorDeployment.operatorPod.operatorContainer.resources.requests.memory=512Mi" \
+    --set "operatorDeployment.operatorPod.operatorContainer.resources.limits.cpu=500m" \
+    --set "operatorDeployment.operatorPod.operatorContainer.resources.limits.memory=1Gi" \
     --wait
 # values 전체 확인:
 #   helm show values "${SPARK_OPERATOR_REPO}/${SPARK_OPERATOR_CHART}" --version "${SPARK_OPERATOR_CHART_VERSION}"

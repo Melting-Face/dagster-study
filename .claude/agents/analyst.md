@@ -100,10 +100,14 @@ hooks:
 | gold 모델 SQL 초안·`ref()`/`source()` | `using-dbt-for-analytics-engineering` | ⚙️ (초안만 — 구현은 `data-engineer`) |
 | 로컬 파일 즉석 분석(소형 csv·parquet) | `duckdb` | ⚙️ 클러스터를 띄우기 아까울 때만 |
 | 차트·시각화 설계 | `dataviz` | ⚙️ 리포트 그림 |
-| 무거운 조회 SQL 튜닝 | `sql-optimization` · `spark-optimization` | ⚙️ |
+| 무거운 조회 SQL 튜닝 | `sql-optimization` | ⚙️ |
 
 - **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — URL을 여기에 복제하지 않는다.
 - 근거는 **정본 문서 경로**로 인용한다. 기억에 의존한 URL·버전을 적지 않는다.
+- **`spark-optimization`은 등재하지 않는다(★2, 2026-08-19 강등)** — 스킬이 다루는 executor·클러스터
+  설정 튜닝은 이 워커가 **금지된 인프라 조작** 영역이고(축2), `notebooks/` 1건·`docs/analyses/` 0건이라
+  호출 빈도 근거도 없다(축1·4). 무거운 Spark 튜닝이 필요하면 **`devops-engineer`에 배정**한다.
+  재등재 조건: 단서 문구("세션 내 DataFrame 튜닝까지만") + 실사용 **3회**(Rule of Three).
 
 ## 결과 반환 (기록관 저널용) — 단일 기록자 원칙
 

@@ -82,8 +82,11 @@ docs/resource-sizing.md           # 수치 정본 (선언과 대조)
 | manifest·RBAC·리소스 설정 감사 기준 | `kubernetes-specialist` | ⚙️ 보안 항목은 `security` 소관으로 넘긴다 |
 | CI 게이트 설계(테스트·`fmt -check`·`validate`) | `github-actions-templates` | ⚙️ **4순위 갭의 보강 계획 작성용** |
 | 쉘 스크립트 검사 게이트 | `shellcheck-configuration` | ⚙️ `scripts/*.sh` 대상 |
-| Helm 차트 구조 감사 | `helm-chart-scaffolding` | ⚙️ 도입 시 |
 | **Terraform** | **전용 스킬 없음** | → [`terraform.md`](../../docs/conventions/terraform.md) 조항을 직접 대조 |
+
+- **`helm-chart-scaffolding`은 등재하지 않는다(★2, 2026-08-19 강등)** — 저장소에 Helm 차트가
+  **없다**(`k8s/*.yaml`은 전부 raw manifest). 감사 대상이 존재하지 않아 축1·4가 0이다.
+  Helm을 실제로 도입하면 그때 재채점한다(§② 작업 영역 표에는 남아 있어 정보 손실 없음).
 
 - **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
   직접 관련: Docker Compose · Kubernetes · Helm(§처리·배포 기술). Terraform 링크는 [`terraform.md`](../../docs/conventions/terraform.md) §참고.

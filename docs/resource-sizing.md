@@ -37,24 +37,44 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 | 구분 | 워크로드 | req CPU | req Mem | lim CPU | lim Mem |
 | --- | --- | --- | --- | --- | --- |
 | **상주(baseline)** | kube-system(kind CP·CNI·coredns·local-path) | 0.5 | 1.5Gi | — | — |
-| | Spark Operator | 100m | 256Mi | 250m | 512Mi |
+| | Spark Operator(Apache, **JVM**) | 250m | 512Mi | 500m | 1Gi |
 | | Flink Operator | 200m | 512Mi | 500m | 1Gi |
 | | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
 | | **CloudNativePG 오퍼레이터**(컨트롤러) | 100m | 200Mi | 250m | 384Mi |
 | | Catalog Postgres(Iceberg JDBC, CNPG `Cluster` 1인스턴스) | 250m | 512Mi | 500m | 768Mi |
 | | **Spark Connect 서버**(Phase 1, dbt 접속용) | 500m | 1.5Gi | 1 | 2Gi |
 | | **ingress-nginx 컨트롤러**(UI 고정 URL) | 100m | 90Mi | — | — |
-| | **상주 소계** | **~2.05** | **~5.3Gi** | | |
+| | **상주 소계** | **~2.2** | **~5.5Gi** | | |
 | **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
 | | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
-| | **BATCH 피크(상주+Spark)** | **~4.55** | **~8.8Gi** | | ✅ 6/16 내 |
+| | **BATCH 피크(상주+Spark)** | **~4.7** | **~9.1Gi** | | ✅ 6/16 내 |
 | **STREAM(일시)** | Redpanda(dev, 1 broker) | 500m | 1.5Gi | 1 | 2Gi |
 | | Flink JobManager | 1 | 1.5Gi | 1 | 2Gi |
 | | Flink TaskManager × 1(2 slot) | 1 | 2Gi | 1 | 2.5Gi |
-| | **STREAM 피크(상주+Flink)** | **~4.05** | **~8.8Gi** | | ✅ 6/16 내 |
+| | **STREAM 피크(상주+Flink)** | **~4.2** | **~9.1Gi** | | ✅ 6/16 내 |
 
 > ingress-nginx는 **`limits`가 없는 유일한 워크로드**다(외부 매니페스트 그대로, [conventions/k8s.md](conventions/k8s.md) §2 예외).
 > 상주 부하가 작아 예산에는 영향이 미미하지만, 상한이 없다는 점은 인지하고 쓴다.
+
+> 🔴 **Spark Operator 행 정정 (2026-08-19)** — 종전 `100m/256Mi req · 250m/512Mi lim`은
+> **Kubeflow(Go) 오퍼레이터 시절 수치**였다. 프로젝트는 Apache 오퍼레이터(**JVM**)로 이전했는데
+> 이 표를 재검토하지 않아, 아래 두 가지가 동시에 성립하고 있었다.
+>
+> 1. **표가 거짓을 말했다** — `scripts/k8s-operators.sh`에 근거 주석만 있고 `--set`이 빠져
+>    실제로는 차트 기본값 **`1000m/2048Mi`** 가 적용됐다. helm은 값을 지정하지 않아도 에러를
+>    내지 않으므로 **선언과 실제가 4~8배 벌어진 채 조용히 유지**됐다(실사용은 196Mi — 10.7배 과예약).
+> 2. **표대로 집행했으면 오퍼레이터가 죽었다** — 차트 jvmArgs가 `-XX:MaxRAMPercentage=80`이라
+>    힙 상한이 컨테이너 한도에 직접 연동된다. 한도 `256Mi` → 힙 205Mi인데 실측 `RssAnon`이
+>    이미 193MB라 기동 즉시 OOMKill이다.
+>
+> 새 값(`250m/512Mi req · 500m/1Gi lim`)은 **실측 196Mi 기준 한도 1Gi(힙 819Mi)로 약 4배 여유**이며,
+> `InitialRAMPercentage=80`+`AlwaysPreTouch` 선점이 유효해지더라도 한도 안에 들어온다
+> (= **선점 유효/무효 어느 가설에서도 안전**). 측정은 `crictl stats`와 컨테이너 내부
+> `/proc/1/status`·`cgroup memory.current`를 병행했다(kind에 metrics-server가 없다).
+>
+> **교훈**: 이 표는 오래 "검증된 값"으로 인용됐지만 **아무도 실측과 대조하지 않았다.**
+> 오퍼레이터를 교체하면 언어 런타임이 바뀌고, 그러면 사이징 근거가 통째로 무효가 된다.
+> 엔진·오퍼레이터 교체 시 **이 표의 해당 행을 함께 재측정**한다([philosophy](philosophy.md) 원칙 7).
 
 ### (C) 운영 다이얼 (초과 시 조절 순서)
 
@@ -80,7 +100,20 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 > | --- | --- | --- |
 > | 상주(Spark Operator + **CNPG 오퍼레이터·`Cluster` 1인스턴스** + SeaweedFS + Spark Connect + ingress) | 3200m (40%) | 5444Mi (24%) |
 >
-> Flink Operator·cert-manager가 빠지고 CNPG 2종이 들어와 **CPU는 -300m**, 메모리는 거의 같다.
+> Flink Operator가 빠지고 CNPG 2종이 들어와 **CPU는 -300m**, 메모리는 거의 같다.
+>
+> 🔴 **위 재실측 값의 정정 (같은 날 후속 측정)** — `3200m/5444Mi`는 **합계는 맞지만 내역이 틀렸다.**
+> 이 숫자는 `describe node`의 결과를 그대로 옮긴 것이라, 그 안에 **Spark Operator 드리프트
+> (선언 없이 차트 기본값 `1000m/2048Mi`)가 통째로 포함**돼 있었다. 즉 재실측이 드리프트를
+> 교정한 게 아니라 **정상값으로 박제**했고, 그 결과 같은 문서의 (B) 표(당시 `100m/256Mi`)와
+> (C-2) 실측이 서로 모순인데도 실측 쪽만 갱신돼 **모순이 증거가 아니라 잡음처럼 보이게** 됐다.
+> 드리프트 교정 후 상주 예상치는 **약 2450m / 3908Mi**다(적용 후 재측정 필요).
+>
+> 🔴 **cert-manager는 빠지지 않았다** — 종전 서술은 사실과 다르다. cert-manager 3파드는 계속
+> 가동 중이며(현재는 Flink가 아니라 **CNPG barman-cloud 플러그인의 TLS** 발급자다),
+> `describe node` 합계에 안 잡힌 이유는 제거돼서가 아니라 **requests/limits 선언이 아예 없어서**다
+> (barman-cloud도 동일). 예산표에 안 보이는 워크로드가 실제로는 약 82MiB를 쓰고 있다 —
+> **"합계에 없다 = 없다"가 아니다.**
 >
 > podman machine 실제 할당은 **8 CPU / 22GiB**로, 문서 목표치(6/16)보다 여유가 있다.
 > 목표 예산으로 좁힐 경우 위 수치가 상한에 근접하므로 시분할이 다시 필수가 된다.

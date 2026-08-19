@@ -78,14 +78,14 @@
 | 워커 | 주 스킬 | 제약 |
 | --- | --- | --- |
 | `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선** |
-| `data-verifier` | `sql-optimization` · `answering-natural-language-questions-with-dbt` · `duckdb` · `fetching-dbt-docs` | **읽기 질의만** — 모델 생성·대용량 전량 로드 금지 |
+| `data-verifier` | `sql-optimization` · `answering-natural-language-questions-with-dbt` · `fetching-dbt-docs` | **읽기 질의만** — 모델 생성·대용량 전량 로드 금지. `duckdb` 강등(★2 — 조회 경로가 이미 Trino·`zcat`) |
 | `data-qa` | `adding-dbt-unit-test`(핵심) · `using-dbt-for-analytics-engineering` · `fetching-dbt-docs` · `running-dbt-commands` · `troubleshooting-dbt-job-errors` | dbt CLI는 `parse`·`ls`·`compile`만(`build`/`run` 금지) |
-| `devops-engineer` | `docker-expert` · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding` · `github-actions-templates` · `shellcheck-configuration` | Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제) |
+| `devops-engineer` | `docker-expert` · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding` · `github-actions-templates` · `shellcheck-configuration` · `spark-optimization` | Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제). `spark-optimization`★5(Spark는 🚧 채택·이행중 — `k8s/spark/*.yaml`이 실제 대상). `spark-engineer`는 미등재(★2 — 잡 코드는 `data-engineer` 소관) |
 | `devops-verifier` | `docker-expert` · `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**: 시크릿은 **존재·키 이름까지만**, 값을 뜨지 않는다 |
-| `devops-qa` | `docker-expert` · `kubernetes-specialist`**(C)** · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다 |
-| `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `dataviz` · `sql-optimization` · `spark-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만** |
+| `devops-qa` | `docker-expert` · `kubernetes-specialist`**(C)** · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다. `helm-chart-scaffolding` 강등(★2 — 저장소에 차트가 없어 **감사 대상이 부재**. `devops-engineer`는 첫 차트를 *만드는* 쪽이라 유지) |
+| `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `dataviz` · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**. `spark-optimization` 강등(★2 — executor·클러스터 튜닝은 **금지된 인프라 조작**) |
 | `security` | **전용 스킬 없음** → [security.md](security.md)·[conventions/general.md](conventions/general.md) | 도메인 스킬은 설정 해석 목적의 **읽기 참조만** |
-| `skill-matcher` | `find-skills` · `auditing-skills` | **조회·평가까지만** — 설치·lock 편집·워커 정의 수정 금지. 외부 스킬 신뢰성 **최종 판정은 `security`** |
+| `skill-matcher` | `find-skills` | **조회·평가까지만** — 설치·lock 편집·워커 정의 수정 금지. 외부 스킬 신뢰성 **최종 판정은 `security`**. 🔴 `find-skills`는 **D등급 미검토**라 `security` 판정 전에는 로드하지 않는다. `auditing-skills` 강등(★3 — 자기 채점, 외부 스캐너 호출 경로가 막혀 있음) |
 | `director` | 도메인별 — [.claude/agents/director.md](../.claude/agents/director.md) §도메인 지식 표 | 도메인 지식은 인라인하지 않고 참조 |
 | `archivist` | **없음(의도)** | 관측·기록만 하는 계층 밖 워커 — 도메인 스킬이 필요 없다 |
 

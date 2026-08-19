@@ -102,8 +102,12 @@ Tier-1 `source()` → 중간 `ref()` → 최종 `sofa`·`sepsis3`).
 | --- | --- | --- |
 | 검증 쿼리가 무겁거나 타임아웃 | `sql-optimization` | ⚙️ 런타임. **집계로 좁혀** 전량 스캔을 피한다 |
 | 애드혹 집계·분포 확인 | `answering-natural-language-questions-with-dbt` | ⚙️ **읽기 질의에만** — 모델을 만들지 않는다 |
-| 원천 `csv.gz` 표본을 로컬에서 대조 | `duckdb` | ⚙️ 인프로세스. **표본·건수만**(3GB급 전량 로드 금지) |
 | dbt 개념·키워드 확인 | `fetching-dbt-docs` | ⚙️ |
+
+- **`duckdb`는 등재하지 않는다(★2, 2026-08-19 강등)** — 이 워커의 조회 경로는 §조회 경로가
+  **Trino**로, 원천 파일 대조는 **`zcat … | head -1`·`wc -l`** 로 이미 지정돼 있다.
+  duckdb가 줄 것을 정본 절차가 이미 커버해 **대체 불가(축5)가 서지 않고**, 낄 자리가 구조적으로
+  좁아 호출 빈도(축4)도 없다. 필요해지면 정본 절차부터 바꾼다.
 
 - **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
   직접 관련: Trino(§플랫폼) · **MIMIC-IV** · **eICU-CRD** · **mimic-code concepts** · **Sepsis-3(JAMA 2016)**(§데이터셋·도메인).

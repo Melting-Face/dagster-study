@@ -126,7 +126,7 @@ flowchart TB
 | `model` | 아니오 | ✅ 전원 | **생략 시 기본값 `inherit`** → 전원이 최상위 모델로 돈다(아래) |
 | `permissionMode` | 아니오 | ❌ 미채택 | 🔴 **부모가 auto 모드면 무시**된다 — 이 저장소는 auto로 도는 세션이 있어 **실효 0**. 넣으면 "막았다고 믿는" 상태만 만든다 |
 | `maxTurns` | 아니오 | ❌ 미채택 | 폭주 실측 사례 없음(YAGNI). 관측되면 그때 |
-| `skills` | 아니오 | ❌ 미채택 | 컨벤션은 이미 지시문이 경로로 지시한다. 프리로드는 컨텍스트 비용만 늘린다 |
+| `skills` | 아니오 | 🟡 `data-engineer`만(`dagster-expert`) | 🔴 **작동한다**(2026-08-19 probe 실측 — 아래). 기동 시 **전체 본문이 주입**돼 토큰이 상시 붙고, **lock 미고정 스킬은 무결성 미검증 콘텐츠의 상시 주입**이 된다 → **`skills-lock.json` 등재분만** 프리로드한다 |
 | `hooks` | 아니오 | 🟡 `analyst`만 배선 유지 · **확대 보류** | **워커별 경로 강제의 유일한 수단**이나 **발동이 재현되지 않는다**(2회 발동 → 같은 조합 6회 미발동, 원인 미확정). 배선은 fail-open이라 두어도 무해하나 **강제로 치지 않는다**(§권한 게이트 4층) |
 | `mcpServers` | 아니오 | ❌ 미채택 | 워커 전용 MCP 서버 없음 |
 
@@ -142,6 +142,17 @@ flowchart TB
 | `skill-matcher` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 발견·별점·도입계획만 반환 — **스킬 설치·`skills-lock.json` 편집·워커 정의 수정 금지** |
 | `archivist` | `Read, Write, Edit, Grep, Glob, Bash` | — | `sonnet` | O(저널·MOC **한정**) | 없음 |
 | `general-purpose`(내장) | **`*` = All tools** (정의 파일 없음·런타임 제공) | — | 상속 | O | 제약을 **정의 파일로 못박을 수 없다** → 배정 프롬프트에 명시할 것 |
+
+🔴 **선언한 `tools`가 전부 실재하지는 않는다**(2026-08-19 실측). `data-engineer`의 실제 도구는
+`Read`·`Write`·`Edit`·`Bash` 4개였고(선언은 `+Grep, Glob`), `data-qa`는 `Read`·`Bash` 2개였다
+(선언은 `Read, Grep, Glob, Bash`). **독립된 두 워커의 자기보고가 일치**하므로 이 세션 구성에는
+`Grep`·`Glob` 도구가 없다.
+- **선언은 그대로 둔다.** 공식 문서상 목록의 *일부*가 resolve되지 않는 것은 무해하고
+  (**전부** 실패할 때만 launch 실패), 다른 세션 구성에서는 살아나므로 지우면 이식성만 잃는다.
+- 🔴 대신 **"없는 도구를 쓰라"는 지시문 규칙은 교정**한다 — `skill-matcher`의
+  "탐색은 `Grep`·`Glob`으로 하고 `Bash`를 쓰지 마라"가 그 예였다(지킬 수 없는 규칙 = 죽은 규칙).
+- 잔여 모순(`미확인`): `tools: Glob` 하나만 선언한 probe가 launch에 **성공**했다. 그 자기보고 "Glob"은
+  실제 스키마가 아니라 **프론트매터를 옮긴 것**일 가능성이 크다.
 
 - 🔴 **`director`의 `Agent(archivist)`·`Agent(skill-matcher)` 차단은 2026-08-19 실측에서 검증되지 않았다** — 서브에이전트에게는
   **`Agent` 도구 자체가 없어서**(`No such tool available: Agent. Agent is disabled for this session,
@@ -290,7 +301,7 @@ flowchart TB
   `Bash(python3 … write_text …)`·`sed -i`·`>` 리다이렉트로 같은 파일을 쓰면 걸리지 않는다
   (2026-08-18 실측 — 권한 게이트를 보강하는 작업 자체가 그 경로였다).
   → **보호 경로 가드**([`scripts/protected_paths_guard.py`](../../scripts/protected_paths_guard.py))가
-  `PreToolUse`(matcher `Bash`)에서 **보호 경로 + 쓰기 신호**를 함께 감지해 사용자 확인으로 올린다(`escalate`).
+  `PreToolUse`(matcher `Bash`)에서 **보호 경로 + 쓰기 신호**를 함께 감지해 사용자 확인으로 올린다(`ask`).
   보호 경로 목록은 **`ask` 규칙에서 자동 추출**한다 — 목록을 두 곳에 두면 어긋난다.
   (추출 정규식은 `Edit|Write|NotebookEdit` 3종을 받지만, 위 규칙대로 **정본은 `Edit(...)`** 이다.)
   차단이 아니라 **확인**이며, 문자열 휴리스틱이라 완전하지 않다(변수 치환·별칭으로 우회 가능).
@@ -985,8 +996,8 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `SessionStart`(`startup\|resume\|clear\|compact`) | `session-start` | 오늘의 **다음 `NN`**·기존 저널·최근 7일 **열린 미션**(`planned`·`in-progress`·`blocked`)을 stdout으로 **컨텍스트 주입** | 주입 없음(작업 계속) |
 | `PreToolUse`(matcher `Write`) | `pre-write` | 볼트 저널 **신규 생성**만 검사 — `NN` 중복·번호 건너뜀·파일명(`<NN>-<slug>.md`)·날짜 폴더(`YYYY-MM-DD`) 위반이면 **차단**하고 올바른 번호를 반환 | 통과(fail-open) |
 | `Stop` | `stop` | 오늘 저장소 변경(working tree 또는 당일 커밋)이 있는데 **오늘자 저널 부재** 또는 `updated` 미갱신이면 사용자에게 경고 | 경고 없음 |
-| `PreToolUse`(matcher `Bash`) | — | 보호 경로(`ask` 규칙에서 자동 추출) + 쓰기 신호 동시 감지 시 **사용자 확인으로 상신**(`escalate`) | 통과(fail-open) |
-| `PreToolUse`(matcher `Agent`) | `agent-pre` | 같은 `subagent_type`을 같은 대상으로 다른 세션이 **실행 중이면 `escalate`**, **완료했으면 결과 요약을 컨텍스트 주입**. 충돌 없으면 내 claim 기록 | 통과(fail-open) |
+| `PreToolUse`(matcher `Bash`) | — | 보호 경로(`ask` 규칙에서 자동 추출) + 쓰기 신호 동시 감지 시 **사용자 확인으로 상신**(`ask`) | 통과(fail-open) |
+| `PreToolUse`(matcher `Agent`) | `agent-pre` | 같은 `subagent_type`을 같은 대상으로 다른 세션이 **실행 중이면 `ask`**, **완료했으면 결과 요약을 컨텍스트 주입**. 충돌 없으면 내 claim 기록 | 통과(fail-open) |
 | `PostToolUse`(matcher `Agent`) | `agent-post` | 내 claim을 `done`으로 바꾸고 **결과 요약**(600자)을 남겨 다음 세션이 재사용하게 한다 | 기록 없음 |
 | `PreToolUse`(matcher `Edit\|Write\|NotebookEdit`) | `file-pre` | 다른 세션이 **최근 20분 내 고친 파일**이면 사용자 확인으로 상신 | 통과(fail-open) |
 | `PostToolUse`(matcher `Edit\|Write\|NotebookEdit`) | `file-post` | 파일 리스를 내 세션으로 **갱신·인계** | 리스 미갱신 |
@@ -1028,9 +1039,9 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 
 | 축 | 판정 키 | 충돌 시 |
 | --- | --- | --- |
-| **서브에이전트 중복** | `subagent_type` + **대상 지문**(프롬프트의 백틱·경로·파일명, 없으면 내용어) Jaccard ≥ 0.5 | 실행 중 → `escalate` / 완료 → **결과 요약 주입** |
-| **동일 파일 동시편집** | 파일 절대경로 | 다른 세션 리스가 20분 내면 `escalate` |
-| **워킹트리 전역 변경** | 전역 git 명령 + **살아 있는 다른 세션 유무** | 다른 세션이 있으면 `escalate` |
+| **서브에이전트 중복** | `subagent_type` + **대상 지문**(프롬프트의 백틱·경로·파일명, 없으면 내용어) Jaccard ≥ 0.5 | 실행 중 → `ask` / 완료 → **결과 요약 주입** |
+| **동일 파일 동시편집** | 파일 절대경로 | 다른 세션 리스가 20분 내면 `ask` |
+| **워킹트리 전역 변경** | 전역 git 명령 + **살아 있는 다른 세션 유무** | 다른 세션이 있으면 `ask` |
 
 세 번째 축만 판정 키가 다르다. 앞의 둘은 "무엇을 건드리는가"를 보지만, 전역 변경은 **대상이 전부**라
 비교할 게 없다 — 대신 **"지금 이 워킹트리에 나 말고 누가 있나"** 를 묻는다. 그래서 각 세션은 어떤 hook이
@@ -1038,12 +1049,56 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 생기는데, 전역 변경은 **아직 아무것도 안 한 세션에게도 피해를 주기** 때문이다.
 
 - **차단이 아니라 소통이다.** 판정이 휴리스틱이라 오탐이 나고 정당한 병렬 작업도 많다. 그래서
-  `deny`가 아니라 `escalate`(사용자 확인)로 올린다.
+  `deny`가 아니라 `ask`(사용자 확인)로 올린다.
+- 🔴 **`permissionDecision`의 유효 값은 `allow`·`deny`·`ask`·`defer` 넷뿐이다** — 아래 §hook 결정값 참고.
+  2026-08-19까지 가드 4종은 존재하지 않는 `escalate`를 내보내 **전부 무효**였다.
 - 이미 **끝난** 작업은 막지 않고 결과 요약을 컨텍스트로 흘린다 — 목적은 봉쇄가 아니라
   **재호출 대신 재사용**이다.
 - 리스 **획득은 `PostToolUse`** 가 한다. `PostToolUse`는 승인·성공한 편집에서만 발동하므로 리스가
   "고치려던 사람"이 아니라 **"실제로 고친 사람"** 을 가리키고, 확인을 승인한 세션이 소유권을 이어받아
   같은 경고가 반복되지 않는다.
+
+### hook 결정값 — `escalate`는 존재하지 않는다 (2026-08-19 실측)
+
+`PreToolUse` hook이 돌려주는 `hookSpecificOutput.permissionDecision`의 **유효 값은 네 개뿐**이다.
+
+| 값 | 뜻 | 비고 |
+| --- | --- | --- |
+| `allow` | 확인 없이 통과 | |
+| `deny` | 차단 | **auto 모드에서도 집행된다**(실측) |
+| `ask` | 사용자 확인 | auto 모드에서는 분류기가 흡수할 수 있다(아래) |
+| `defer` | 판단 보류 | **print-mode 전용** — 대화형 세션에서는 무시된다 |
+
+🔴 **가드 4종은 2026-08-19까지 존재하지 않는 `escalate`를 내보내고 있었다.** 증상은 세션당 한 번
+`PreToolUse:Bash hook error — Hook JSON output validation failed — (root): Invalid input`이 뜨는 것이고,
+그 뒤로는 **아무 일도 일어나지 않았다.** `hookSpecificOutput`은 `hookEventName` 판별
+**discriminated union**이라 값 하나가 어긋나면 **출력 객체 전체가 거부**되고, 그 hook의 결정이
+통째로 폐기된 채 도구가 그냥 진행한다 — 즉 **fail-open**이다.
+
+근거(CLI 2.1.226 바이너리 실측):
+
+- zod enum 정의 `Nr(["allow","deny","ask","defer"])`
+- 런타임 `throw Error("Unknown hook permissionDecision type: … Valid types are: allow, deny, ask, defer")`
+- 바이너리 전체에서 `"escalate"` 리터럴 **0건**
+
+#### 🔴 auto 모드에서 `ask`는 하드 스톱이 아니다
+
+교정 후에도 **프롬프트가 뜨지 않았다.** `~/.claude/settings.json`에 `autoMode`(`classifyAllShell: true`)가
+있으면 셸 명령을 **분류기가 판정**하고, hook의 `ask`도 그 흐름에서 해소된다. 분류기가 무해하다고 본
+명령이면 사람에게 올라오지 않는다.
+
+| 셀 | 명령 | 결과 |
+| --- | --- | --- |
+| 처리군(보호경로 + 쓰기신호) | `cp skills-lock.json /dev/null` | 임시 `deny` 전환 시 **차단** — 에러 문구가 **가드의 reason 원문** |
+| 대조 B(보호경로 O·쓰기신호 X) | `cat skills-lock.json \| head -1` | 통과 |
+| 대조 A(쓰기신호 O·보호경로 X) | `cp README.md /dev/null` | **분류기**가 차단 — 판별 무효 |
+
+→ 처리군이 **가드 문구로** 차단됐으므로 **hook 결정이 CLI에 도달·해석·집행된다**는 것은 확정이다.
+따라서 `ask`가 조용한 이유는 스키마가 아니라 **auto 모드**다. **확실히 멈춰야 하는 경계는 `deny`로 둔다.**
+
+🔴 **두 차단은 에러 문구의 출처로 구분한다** — 가드가 막으면 `permissionDecisionReason` 원문이,
+분류기가 막으면 `denied by the Claude Code auto mode classifier`가 나온다. 이 구분을 안 하면
+"막혔으니 내 가드가 작동한다"로 오독한다(대조 A가 정확히 그 함정이었다).
 
 ### 물어보기 — 상대 세션을 무엇으로 지목하는가
 
@@ -1086,7 +1141,7 @@ pane으로 행을 찾되, 레지스트리의 `session_id`와 다르면 **다른 
   → 답을 받고 진행·취소를 결정
 ```
 
-**`escalate`를 승인하기 전에 물어보는 것**이 규약이다. 물어보지 않고 승인하면 가드는 확인 클릭 한 번을
+**`ask`를 승인하기 전에 물어보는 것**이 규약이다. 물어보지 않고 승인하면 가드는 확인 클릭 한 번을
 늘렸을 뿐 아무것도 막지 못한다.
 
 ### TTL

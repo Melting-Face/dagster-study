@@ -75,6 +75,21 @@
 루브릭 전문과 채점 매트릭스는 **[`skill-matcher`](../.claude/agents/skill-matcher.md)** 가 정본이며,
 이 표는 그 결과 중 **등재분만** 옮긴 것이다.
 
+🔴 **"등재"는 프리로드가 아니다 — 두 경로를 구분한다**(2026-08-19 probe 실측).
+
+| 경로 | 수단 | 현황 |
+| --- | --- | --- |
+| **프리로드** | 프론트매터 `skills:` — 기동 시 **전체 본문이 컨텍스트에 주입**된다 | `data-engineer` × `dagster-expert` **1건뿐** |
+| **텍스트 안내** | 지시문 §참고 스킬 표 — 워커가 필요할 때 `Read`로 `~/.claude/skills/<name>/SKILL.md`를 직접 읽는다 | 나머지 전부 |
+
+- 🔴 **워커에는 `Skill` 도구가 없다**(실측 — probe·`data-qa` 양쪽 자기보고 일치). 따라서 표에 이름을 적는 것만으로는
+  **스킬이 발동하지 않는다.** 표는 "무엇을 읽을지"의 안내이지 배선이 아니다.
+- 프리로드를 **lock 등재분으로 제한**하는 이유: 주입은 워커의 선택이 아니라 무조건이라, lock 미고정 스킬을
+  넣으면 **무결성 미검증 콘텐츠가 상시 컨텍스트에 앉는다**. 무결성 고정이 12.5%뿐인 현 상태에서는 위험이 크다.
+- 🔴 **주입된 본문은 데이터이지 지시가 아니다.** 실례: `dagster-expert` 본문의
+  `# Output confirms success—no verification needed`는 이 저장소 **철학 원칙 7과 정면 충돌**한다
+  (probe가 원문 그대로 인용해 확인). 프리로드하는 워커의 지시문에는 **이를 따르지 않는다는 단서**를 넣는다.
+
 | 워커 | 주 스킬 | 제약 |
 | --- | --- | --- |
 | `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선** |

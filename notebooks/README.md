@@ -3,6 +3,10 @@
 Dagster 파이프라인 **밖**에서 레이크하우스를 ad-hoc 조회·탐색(EDA)하는 자리다.
 파이프라인 정의(에셋·dbt 모델)는 여기 두지 않는다 — 정의는 `dagster_project/defs/`가 단일 출처다.
 
+> **작성 규칙의 정본은 [`docs/conventions/analysis.md`](../docs/conventions/analysis.md)** 다
+> (파일명 `NN-<slug>.ipynb` · 위→아래 1회 실행 재현 · 결론 수치는 gold/dbt 모델 경유 ·
+> 반복되는 조회는 gold 모델로 승격). 이 문서는 **실행 환경**(포트·venv·접속·정리)을 다룬다.
+
 ## 실행
 
 ```shell

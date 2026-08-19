@@ -1,7 +1,14 @@
 # DAGSTER STUDY
 
 MIMIC-IV·eICU 중환자 데이터를 **Dagster + dbt + Iceberg 레이크하우스**로 적재·변환하고,
-SOFA → Sepsis-3 실버 피처를 만드는 학습·포트폴리오 프로젝트다.
+그 위에서 **SOFA → Sepsis-3 같은 임상 질문에 답하는** 학습·포트폴리오 프로젝트다.
+
+**파이프라인은 수단, 분석이 목적**이다. 두 축이 다음처럼 나뉜다.
+
+| 축 | 하는 일 | 규칙 정본 |
+| --- | --- | --- |
+| **파이프라인** | S3 → Iceberg 적재, dbt 실버 피처(22모델), 오케스트레이션 | [`conventions/dagster.md`](docs/conventions/dagster.md) · [`conventions/dbt.md`](docs/conventions/dbt.md) |
+| **분석** | gold 지표·코호트, 노트북 탐색, 리포트 | [`conventions/analysis.md`](docs/conventions/analysis.md) |
 
 > **현재 이행 중**: 단일 호스트 Docker Compose → **호스트 Dagster + 로컬 Kubernetes(컴퓨트·스토리지)**.
 > 로드맵·단계별 게이트는 [`docs/redesign.md`](docs/redesign.md).
@@ -15,6 +22,7 @@ SOFA → Sepsis-3 실버 피처를 만드는 학습·포트폴리오 프로젝�
 - [재설계 로드맵](docs/redesign.md) — 이행 단계와 성공 게이트
 - [전체 아키텍처 / 데이터 흐름](docs/architectures/overview.md)
 - [리소스 산정](docs/resource-sizing.md)
+- [분석 컨벤션](docs/conventions/analysis.md) — gold 모델 / 노트북 / 리포트 3층과 결론의 재현 경로
 - 코딩 규칙: [공통](docs/conventions/general.md) · [Python](docs/conventions/python.md) · [Dagster](docs/conventions/dagster.md) · [dbt](docs/conventions/dbt.md) · [Kubernetes](docs/conventions/k8s.md)
 
 ## 구성 요소
@@ -29,6 +37,7 @@ SOFA → Sepsis-3 실버 피처를 만드는 학습·포트폴리오 프로젝�
 | 오브젝트 스토어 | SeaweedFS (S3 호환, path-style) | Iceberg 웨어하우스 |
 | UI 진입점 | **K8s** — ingress-nginx (`*.localtest.me:8080`) | HTTP UI만 Ingress, 데이터 접속은 `port-forward`(§2-1) |
 | 변환 | dbt — `dbt-trino`(현행) → `dbt-spark`(이행 중) | 모델 22개(`models/mimic_iv/`), 방언은 내장·dispatch 매크로로 흡수(`macros/cross_engine.sql`) |
+| 분석 | **호스트** — Jupyter Lab(:8889) → Spark Connect / dbt gold 모델 | 탐색=`notebooks/`, 지표=gold(**현재 0개**), 결론=`docs/analyses/`(미생성). 규칙 [`conventions/analysis.md`](docs/conventions/analysis.md) |
 
 ## 실행방법
 
@@ -117,7 +126,8 @@ uv run --group notebook jupyter lab --port 8889 --notebook-dir ../../../notebook
 ```
 
 > **8889를 쓰는 이유**: 기본 포트 8888은 compose SeaweedFS filer UI가 게시한다.
-> 스타터 노트북·주의사항은 [`notebooks/README.md`](notebooks/README.md).
+> 스타터 노트북·주의사항은 [`notebooks/README.md`](notebooks/README.md),
+> **작성 규칙(재현성·정의 배치·수치 인용)** 은 [`docs/conventions/analysis.md`](docs/conventions/analysis.md).
 > SQL 엔진은 **Spark SQL**이다 — Trino는 재설계에서 제거 대상이라 기본 기동에서 빠졌다.
 
 ### 5. 모델 추가

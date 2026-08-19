@@ -1,5 +1,9 @@
 # 프로젝트 CLAUDE.md (dagster-study)
 
+> 이 저장소는 **파이프라인(수단) + 분석(목적)** 두 축이다. 중환자 데이터를 레이크하우스로
+> 적재·변환하는 것은 **임상 질문(SOFA → Sepsis-3 등)에 답하기 위한 준비**이며,
+> 답을 내는 규칙은 [`docs/conventions/analysis.md`](docs/conventions/analysis.md)가 정본이다.
+
 ## 문서화 원칙
 
 - 이 프로젝트에서 정한 **규칙·결정·작업 패턴은 최대한 문서로 남긴다**.
@@ -105,6 +109,21 @@
   일반 경로(`pa.Table` 반환)는 `context.add_output_metadata(...)`, 대용량 경로는
   `MaterializeResult(metadata=...)`. 상세 [`docs/conventions/dagster.md`](docs/conventions/dagster.md).
 
+## 분석 컨벤션
+
+상세 [`docs/conventions/analysis.md`](docs/conventions/analysis.md).
+
+- **분석은 3층으로 나눈다** — **gold 모델**(`tags=['gold']`, 재현 가능한 지표·코호트) /
+  **노트북**(`notebooks/`, 탐색 전용) / **리포트**(`docs/analyses/<NN>-<slug>.md`, 결론).
+  같은 조회를 **3회 이상** 하거나 리포트가 인용하면 **gold로 승격**한다(Rule of Three).
+- **정의는 노트북에 두지 않는다** — 단일 출처는 `defs/`·`models/`다. 노트북에서 검증한 로직은
+  모델·에셋으로 옮긴 뒤 노트북을 지운다. 노트북은 **위→아래 1회 실행으로 재현**돼야 한다.
+- **결론에 쓰는 수치는 gold/dbt 모델을 경유**한다(임시 SQL 결과를 리포트에 옮기지 않는다).
+  코호트는 **attrition**(제외 조건별 행 수 감소)을, 결측·이상치는 처리 방법을 남긴다.
+  🔴 **수치에는 산출 엔진을 병기**한다 — 같은 SQL이 엔진에 따라 값이 갈린 사례가 있다(`dbt.datediff`).
+- **재식별 금지·소규모 셀 마스킹**(관례상 5 미만)을 지킨다. `.ipynb` 셀 출력은 `nbstripout`으로
+  제거되며 **`--no-verify` 우회 금지**([`docs/security.md`](docs/security.md)).
+
 ## 테스트 컨벤션
 
 - 테스트는 **계층별 우선순위**로 채운다: dbt 스키마 테스트 → 통합·스모크(`dg check`·`dbt build`)
@@ -190,6 +209,11 @@
   **그 세션에 직접 물어본다**. 상대 지목은 **`TMUX_PANE`**(=`ListAgents`의 `tmux` 컬럼)으로 하고
   `session_id`로 확인한다 — `[7f1735]` 같은 **ref는 관측자마다 달라 전역 키가 아니다**(실측 반증).
   🔴 `Bash` 경유 쓰기는 이 가드를 우회하므로 **파일 수정을 `Bash`로 하라는 지시는 거부**한다.
+  **브랜치 전환·stash·reset처럼 워킹트리 전역을 바꾸는 git 명령**은 다른 세션이 살아 있으면
+  `PreToolUse(Bash)`가 확인을 올린다 — 사후 감지가 무의미해 실행 직전에만 개입한다.
+  근본 해법은 **`git worktree` 분리**([`docs/conventions/git.md`](docs/conventions/git.md) §7)이고 이 경고는 완충재다.
+  🔴 **대기는 기본값이 아니다** — 충돌 시 **질의 + 기본 진행안 + 시한**을 함께 보내고, 유예 동안
+  겹치지 않는 작업을 계속하며, 시한 내 회신이 없으면 통보한 기본안대로 진행한다(무기한 대기는 교착).
   **워커 경계의 실효 강제는 `permissions` 규칙**이다(프론트매터 `tools`·경계 지시문은 난이도·규율일 뿐).
   `deny` > `ask` > `allow` 순으로 **auto 모드 분류기보다 먼저** 평가되고 **서브에이전트에도 동일 적용**된다 —
   비가역 작업(git 커밋·푸시, `terraform/kubectl apply`, `compose down -v`, `dbt --full-refresh`, `DROP`/`TRUNCATE`,

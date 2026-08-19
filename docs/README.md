@@ -3,6 +3,10 @@
 이 프로젝트의 아키텍처와 코딩 규칙을 정리한 문서 모음입니다.
 (GitHub Wiki로 이식 가능하도록 평면 구조로 작성)
 
+이 저장소는 **파이프라인(수단) + 분석(목적)** 두 축으로 굴러갑니다. 중환자 데이터를 레이크하우스로
+적재·변환하는 것은 **SOFA → Sepsis-3 같은 임상 질문에 답하기 위한 준비**이고, 그 답을 내는 규칙은
+[분석 컨벤션](conventions/analysis.md)에 있습니다.
+
 ## 목차
 
 ### 아키텍처 ([architectures/](architectures/README.md))
@@ -19,6 +23,14 @@
 ### 데이터셋
 
 - [데이터셋 스키마·피처 레퍼런스](dataset_schema.md) — MIMIC-IV(icu·hosp 11테이블)·eICU(3테이블) 원천 스키마와 **SOFA→Sepsis-3 실버 파이프라인(22 모델)** 매핑
+
+### 분석 (analysis)
+
+파이프라인이 만든 테이블로 **질문에 답하는** 축. 규칙 정본은 컨벤션에 있고, 실행 환경은 노트북 README에 있다.
+
+- [분석 컨벤션](conventions/analysis.md) — **gold 모델 / 노트북 / 리포트 3층 분리**와 그 판단 기준, 결론 수치의 재현 경로, DUA·재식별 통제의 작업 절차 반영
+- [`notebooks/README.md`](../notebooks/README.md) — 호스트 Jupyter Lab(포트 8889) 실행·Spark Connect 접속·셀 출력 통제
+- 리포트는 `docs/analyses/<NN>-<slug>.md`에 쌓는다(**아직 없음** — 첫 분석 때 생성)
 
 ### 철학
 
@@ -37,6 +49,7 @@
 | [Python](conventions/python.md)     | ruff, 타입 힌트, 예외 처리, 의존성 관리, 스크립트 절차형(함수/클래스 최소화) |
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg, dbt-spark 타깃, **방언 흡수(내장 vs dispatch 매크로·의미론 검증)** |
+| [**분석**](conventions/analysis.md) | **3층 분리**(gold 모델 / 노트북 / 리포트)와 배치 기준, gold 실행 규칙(grain·네이밍·테스트), 노트북 재현성·셀 출력 커밋 금지, **결론 수치는 모델 경유**·코호트 attrition·엔진 병기, 리포트 구성 |
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
 | [테스트](test.md)                   | 테스트 계층(피라미드)·우선순위, dbt 스키마/단위/singular·Dagster pytest·스모크 |
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |

@@ -50,6 +50,10 @@ capitalisation_policy = "lower"
 | `silver` (intermediate) | 조인·비즈니스 로직            | `view` 또는 `table`  |
 | `gold` (marts)          | 분석/소비용 집계              | `table`              |
 
+> **gold 레이어의 실행 기준(언제 만드나·grain·네이밍·테스트)은 [`analysis.md`](analysis.md) §2가 정본**이다.
+> 여기서는 레이어 표기(tag)와 디렉터리 규칙만 정한다. **현재 gold 모델은 0개**이며,
+> 같은 조회가 3회 이상 반복되거나 리포트가 그 수치를 인용하는 시점에 silver에서 승격한다.
+
 현재 구조(코드 기준):
 
 ```text

@@ -23,6 +23,7 @@
 | 보안·거버넌스 | `docs/security.md` | `CLAUDE.md` 운영 섹션 · `docs/references.md`(규제 출처) · `.claude/agents/security.md`(점검 항목) |
 | 환경변수 추가 | `.env.example` | `compose.yml`(앵커) → 코드(`EnvVar`) → `docs/operations.md` 전파 체인 |
 | 데이터셋 스키마·피처 | `docs/dataset_schema.md` | 해당 `models/<dataset>/source.yml` · `schema.yml` |
+| 분석 규칙(gold·노트북·리포트) | `docs/conventions/analysis.md` | `CLAUDE.md` 분석 섹션 · `docs/conventions/dbt.md`(gold 레이어) · `docs/test.md`(grain 테스트) · `notebooks/README.md` |
 | 에이전트 오케스트레이션·기록관 | `docs/conventions/agents.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `.claude/agents/*.md` · `.claude/commands/journal.md` · **`scripts/journal_guard.py`·`scripts/protected_paths_guard.py`·`.claude/settings.json`(기계 강제 가능한 규약은 hook·권한 규칙에 반영)·`docs/conventions/git.md`(커밋 대상·금지)·`.gitignore`** (저널 원문은 볼트 `$OBSIDIAN_VAULT/agents/`, repo 미커밋) |
 
 ## 실무 규칙

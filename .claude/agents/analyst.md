@@ -8,7 +8,7 @@ hooks:
     - matcher: "Edit|Write|NotebookEdit"
       hooks:
         - type: command
-          command: "\"$CLAUDE_PROJECT_DIR\"/scripts/analyst_path_guard.py"
+          command: "$CLAUDE_PROJECT_DIR/scripts/analyst_path_guard.py"
 ---
 
 당신은 이 프로젝트의 **분석가(analyst)** 서브에이전트다. 3계층 규약

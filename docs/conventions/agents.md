@@ -20,6 +20,7 @@ flowchart TB
     subgraph impl[워커 · 구현 · 쓰기]
         DE[data-engineer]
         OE[devops-engineer]
+        AN[analyst<br/>notebooks · docs/analyses 한정]
     end
 
     subgraph judge[워커 · 판정 · 읽기 전용]
@@ -80,14 +81,21 @@ flowchart TB
 
 축(구현 / 실측 대조 / 체계 감사)은 두 도메인이 **동일**하다. 판단 규칙을 하나로 유지하기 위함이다.
 
-| 축 | 데이터 | 인프라 | 무엇을 묻는가 |
-| --- | --- | --- | --- |
-| **구현·수정** | `data-engineer` | `devops-engineer` | 만들었는가 |
-| **실측 대조** | `data-verifier` | `devops-verifier` | 실제가 선언과 같은가 |
-| **체계 감사** | `data-qa` | `devops-qa` | 재발을 막을 상시 장치가 있는가 |
-| **노출·규제**(도메인 공통) | `security` | `security` | 새어나가는가 · 규제를 지키는가 |
-| **관측·기록**(계층 밖) | `archivist` | `archivist` | 기록이 사실과 맞는가 |
+| 축 | 데이터 | 인프라 | 분석 | 무엇을 묻는가 |
+| --- | --- | --- | --- | --- |
+| **구현·수정** | `data-engineer` | `devops-engineer` | `analyst` | 만들었는가 |
+| **실측 대조** | `data-verifier` | `devops-verifier` | ← `data-verifier` 재사용 | 실제가 선언과 같은가 |
+| **체계 감사** | `data-qa` | `devops-qa` | ← `data-qa` 재사용 | 재발을 막을 상시 장치가 있는가 |
+| **노출·규제**(도메인 공통) | `security` | `security` | `security` | 새어나가는가 · 규제를 지키는가 |
+| **관측·기록**(계층 밖) | `archivist` | `archivist` | `archivist` | 기록이 사실과 맞는가 |
 
+- **분석은 새 축이 아니라 새 도메인**이라 3종 세트를 복제하지 않았다(YAGNI — gold 0개·리포트 0편).
+  `analyst`는 **구현 축 1명**이고, 판정은 데이터 도메인의 워커를 **그대로 재사용**한다:
+  gold 모델의 값 대조 = `data-verifier`, 테스트 커버리지 = `data-qa`, 산출물 반출 = `security`.
+  분석 산출물이 쌓여 판정 부하가 실제로 생기면 그때 분화한다.
+- **`analyst` ↔ `data-engineer` 경계**: gold 모델(dbt SQL)의 **정의는 `data-engineer`가 소유**한다.
+  `analyst`는 SQL 초안·grain·근거를 **제안만** 하고 직접 고치지 않는다 — 파이프라인 정의의
+  단일 소유자를 흐리지 않기 위함이다. `analyst`의 쓰기는 `notebooks/**`·`docs/analyses/**` 뿐이다.
 - `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성)는 **관점이 다르다** — 중첩 금지.
 - `archivist`는 **계층 밖 관측자**다. 판단·실행을 하지 않고 저널·MOC 정합만 본다.
 
@@ -97,6 +105,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | `director` | **미지정 = All tools** | O | 워커에 **계획만** 받게 하고 승인 후 실행 배정 |
 | `data-engineer`·`devops-engineer` | `Read, Write, Edit, Bash, Grep, Glob` | O | **계획만 반환**(커밋·`apply`·`down -v` 금지) |
+| `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) |
 | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa`·`security` | `Read, Grep, Glob, Bash` | ✕(규율) | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
 | `archivist` | `Read, Write, Edit, Grep, Glob, Bash` | O(저널·MOC **한정**) | 없음 |
 | `general-purpose`(내장) | **`*` = All tools** (정의 파일 없음·런타임 제공) | O | 제약을 **정의 파일로 못박을 수 없다** → 배정 프롬프트에 명시할 것 |
@@ -107,6 +116,11 @@ flowchart TB
 >
 > `general-purpose`는 **정의 파일조차 없어** 경계를 붙일 자리가 없다 — 위 논증이 아예 통하지 않는다.
 > 맞는 전문 워커가 있으면 그쪽을 쓰고, 불가피하게 쓸 때는 **배정 프롬프트에 제약을 명시**한다.
+>
+> ⚠️ **경로 경계도 마찬가지로 규율이다.** `analyst`의 "`notebooks/`·`docs/analyses/`만 쓰기"는
+> 지시문이 보장한다 — `permissions` 규칙은 **세션 전역**이라 특정 `subagent_type`에만 범위를 걸 수 없고,
+> `Edit(<경로>)`를 `deny`에 넣으면 그 경로를 **모든 주체**가 못 고친다(`data-engineer`도 막힌다).
+> 즉 워커별 경로 강제는 **현재 수단으로 불가능**하며, 이를 알고 규율로 운용한다.
 
 ### 권한 게이트 (permissions) — 유일한 기계 강제
 
@@ -668,6 +682,7 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `.claude/agents/devops-engineer.md` | subagent/worker (전문) | **데브옵스 엔지니어** — compose·Dockerfile·k8s manifest·Terraform HCL을 **구현·수정**(쓰기 워커, 로컬 compose 기동 허용) |
 | `.claude/agents/devops-verifier.md` | subagent/worker (전문) | **데브옵스 검증자** — 실행 중 인프라의 **런타임 상태**를 선언과 대조(**읽기 전용**), 불일치만 반환 |
 | `.claude/agents/devops-qa.md` | subagent/worker (전문) | **데브옵스 품질보증** — 인프라 **선언 파일·게이트 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
+| `.claude/agents/analyst.md` | subagent/worker (전문) | **분석가** — 레이크하우스로 **질문에 답한다**. 노트북·리포트 작성(쓰기 워커, `notebooks/**`·`docs/analyses/**` 한정), gold 승격은 **제안만** |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
 
 - director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 기본 `general-purpose`,
@@ -675,8 +690,10 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 - **전문 워커 = 읽기 전용 원칙**: `security`·`data-verifier`·`data-qa`·`devops-verifier`·`devops-qa`처럼
   **판정이 목적**인 워커에는 `Write`/`Edit`를 주지 않는다. 발견을 반환하면 승인 후 **수정은 별도 워커에 배정**한다
   (승인 게이트가 실제로 작동하게 하는 장치).
-  **구현이 목적**인 워커(`data-engineer`·`devops-engineer`)는 예외로 쓰기를 갖되, **비가역 작업**(커밋·푸시·
+  **구현이 목적**인 워커(`data-engineer`·`devops-engineer`·`analyst`)는 예외로 쓰기를 갖되, **비가역 작업**(커밋·푸시·
   `terraform apply`·`kubectl apply`·`compose down -v`·파괴적 변경)은 계획만 반환하고 사전 승인을 받는다.
+  `analyst`는 여기에 더해 **테이블을 만들거나 덮어쓰는 실행**(`dbt build`/`run`, 자산 머티리얼라이즈)과
+  **정의 파일 수정**(`defs/`·`models/`)도 하지 않는다 — 조회는 읽기 전용이다.
 
 ### 전문 워커 3종 세트의 경계 (중첩 금지)
 
@@ -691,6 +708,9 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 
 - 흐름(양 도메인 동일): `*-engineer` 구현 → `*-verifier` 실측 대조 → `*-qa`가 그 규칙을 **상시 게이트로 만들 계획** 반환 →
   승인 후 `*-engineer`가 작성. **판정자는 절대 스스로 고치지 않는다.**
+- **분석 흐름**: `analyst` 탐색·리포트 → gold 승격 **제안** → 승인 후 `data-engineer`가 모델 구현 →
+  `data-qa`가 grain·범위 테스트 보강 계획 → `security`가 산출물 반출 점검. 정본은
+  [`analysis.md`](analysis.md)이며, 검증 계층은 [`test.md`](../test.md) §6이다.
 - **`security`와의 경계**: `security`는 **비밀 누출·인그레스 노출·RBAC·ISMS-P 준수**의 정본 판정자다.
   `devops-qa`는 같은 파일을 보더라도 **운영 신뢰성·재현성**(태그 고정·자원 한도·healthcheck·CI 게이트)만 본다.
   겹치는 항목은 `devops-qa`가 중복 제기하지 않고 **`security` 확인 요청으로 넘긴다**.

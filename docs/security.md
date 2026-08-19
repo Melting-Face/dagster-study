@@ -78,6 +78,30 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 > **재식별 금지(제28조의5·DUA)**: 어떤 파이프라인·분석도 특정 개인 재식별을 시도하지 않는다.
 > 외부 데이터와의 결합은 DUA·가이드라인 심의 없이는 수행하지 않는다.
 
+### 2-3. 분석 산출물 통제 (노트북·리포트)
+
+파이프라인은 데이터를 **저장소 밖**(SeaweedFS)에 두지만, **분석 산출물은 저장소 안으로 들어온다.**
+`.ipynb` 셀 출력과 리포트의 표·그림은 **조회 결과를 그대로 박제**하므로, 여기가 이 프로젝트에서
+원천 데이터가 저장소로 새는 **유일한 실질 경로**다. 작업 규칙 정본은
+[conventions/analysis.md](conventions/analysis.md), 이 절은 그 거버넌스 근거다.
+
+| 통제 | 수단 | 상태 | 근거 |
+| --- | --- | --- | --- |
+| 셀 출력 커밋 차단 | `nbstripout` pre-commit 훅(출력·실행횟수 제거) | ✅ 구현 | `.pre-commit-config.yaml` |
+| 자동 스냅샷 차단 | `.gitignore`의 `**/.ipynb_checkpoints/` | ✅ 구현 | Jupyter가 출력째로 스냅샷을 남긴다 |
+| 실행 산출물 잔류 차단 | `nbconvert --execute` 사본을 **검증 직후 삭제** | 🟡 규칙 | [test.md §6](test.md) |
+| 개별 행 노출 차단 | 리포트에 개별 환자 행 금지, **소규모 셀(관례상 5 미만) 마스킹** | 🟡 규칙 | 3.3 · DUA |
+| 재식별 금지 | 외부 데이터 결합은 심의 없이 하지 않는다 | 🟡 규칙 | 제28조의5 · DUA |
+
+- 🔴 **`gitleaks`는 크리덴셜 패턴을 잡지 헬스 데이터를 잡지 못한다.** 자동 검사 통과를 안전으로 읽지
+  않는다 — 분석 산출물의 위험은 **비밀값이 아니라 데이터 그 자체**다.
+- 🔴 **훅을 `--no-verify`로 우회해 커밋하지 않는다.** 우회하면 위 ✅ 두 줄이 동시에 무력화된다.
+- **저장소는 공개(public)이고 푸시는 사실상 비가역이다** — force-push해도 캐시·포크·이벤트가 남는다.
+  따라서 통제 지점은 푸시가 아니라 **커밋 이전**이며, 분석 산출물은 **공유 직전 수동 관문**
+  ([test.md §6](test.md))을 거친다.
+- **ISMS-P 대응**: 산출물 공유·반출은 **3.3(제공 시 보호조치)**, 조회 결과의 저장소 유입은
+  **3.2(보유·이용 시 보호조치)** 에 대응한다.
+
 ## 3. 우선순위 TODO (거버넌스·보안 관점)
 
 > 각 항목의 **실행 절차**는 [§4](#4-todo-실행-절차)에 도구별로 상세화한다.
@@ -88,6 +112,7 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | --- | --- | --- | --- |
 | ★★★★★ | 원천 데이터·`.env`·크리덴셜 **저장소 커밋 금지** 준수·점검 | DUA · 2.7 · 3.1 | [general.md](conventions/general.md#비밀정보-secrets) |
 | ★★★★☆ | Iceberg **보존·파기** 자동화 — 🟡 잡 구현(만료+orphan 정리, [defs/maintenance.py](../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)), 보존기간·대상 범위 확정 잔여 | 3.4 · 2.9 | [operations.md §2](operations.md) |
+| ★★★★☆ | **분석 산출물 반출 통제** — ✅ 셀 출력 훅·스냅샷 무시 구현, 🟡 소규모 셀 마스킹·실행 산출물 삭제는 **규칙 단계**(기계 강제 없음) | 3.2 · 3.3 · DUA | [§2-3](#2-3-분석-산출물-통제-노트북리포트) · [analysis.md](conventions/analysis.md) |
 | ★★★★☆ | **저장/전송 암호화**(at-rest·TLS) — 실서비스 확장 전제 | 2.7 | [docker.md](conventions/docker.md) |
 | ★★★☆☆ | 서비스 **RBAC·최소권한** 매트릭스 문서화 | 2.5 · 2.6 | [operations.md](operations.md) |
 | ★★★☆☆ | Postgres·SeaweedFS **백업·복구** 정책 | 2.12 | [operations.md](operations.md) |

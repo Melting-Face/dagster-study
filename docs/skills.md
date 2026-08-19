@@ -30,6 +30,7 @@
 | Spark 배치·성능 튜닝 | `spark-engineer` · `spark-optimization` | ⚙️ |
 | SQL 성능 최적화 | `sql-optimization` | ⚙️ |
 | 분석·애드혹 질의 | `answering-natural-language-questions-with-dbt` · `duckdb` | ⚙️ |
+| 차트·시각화(리포트 그림) | `dataviz` | ⚙️ |
 | 컨테이너·Compose | `docker-expert` | ⚙️ |
 | Kubernetes·k3s·Helm | `kubernetes-specialist` · `helm-chart-scaffolding` | ⚙️ |
 | CI/CD(GitHub Actions) | `github-actions-templates` | ⚙️ |
@@ -54,6 +55,7 @@
 | `devops-engineer` | `docker-expert` · `kubernetes-specialist` · `helm-chart-scaffolding` · `github-actions-templates` · `shellcheck-configuration` | Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md) |
 | `devops-verifier` | `docker-expert` · `kubernetes-specialist` | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지 |
 | `devops-qa` | `docker-expert` · `kubernetes-specialist` · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙) |
+| `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `dataviz` · `sql-optimization` · `spark-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만** |
 | `security` | **전용 스킬 없음** → [security.md](security.md)·[conventions/general.md](conventions/general.md) | 도메인 스킬은 설정 해석 목적의 **읽기 참조만** |
 | `director` | 도메인별 — [.claude/agents/director.md](../.claude/agents/director.md) §도메인 지식 표 | 도메인 지식은 인라인하지 않고 참조 |
 

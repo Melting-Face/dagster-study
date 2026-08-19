@@ -207,6 +207,9 @@
   인프라는 **`devops-engineer`·`devops-verifier`·`devops-qa`**. **판정자(`*-verifier`·`*-qa`·`security`)는 읽기 전용**으로
   발견만 반환하고, 구현 워커(`*-engineer`)만 쓰기를 갖되 비가역 작업(커밋·`terraform/kubectl apply`·`compose down -v`·
   파괴적 변경)은 계획만 반환한다. `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성) 관점 분리.
+  **분석은 새 축이 아니라 새 도메인**이라 3종을 복제하지 않고 **구현 축 `analyst` 1명**만 둔다(판정은 `data-*` 재사용).
+  `analyst`의 쓰기는 **`notebooks/**`·`docs/analyses/**` 한정**이고 gold 모델은 **제안만**(구현은 `data-engineer`) —
+  🔴 이 경로 경계는 **규율이지 기계 강제가 아니다**(`permissions`는 세션 전역이라 워커별 범위를 못 건다).
   서브에이전트를 호출하면 **실행 메타**(`subagent_type`·`agent`/`model`·허용 도구·도구 호출 수·토큰·소요·승인 결과)와
   **경계 준수 여부**를 저널에 남긴다(수치 없으면 `미측정` — 추정치 금지).
   저널 **`NN` 넘버링은 hook이 강제**한다(`scripts/journal_guard.py` + `.claude/settings.json`) — `SessionStart`가 다음 번호·열린 미션을 주입하고, `PreToolUse(Write)`가 중복·규약 위반 생성을 차단하며, `Stop`이 저널 누락을 경고한다. 착수 순번의 판정 기준은 **본문 상호작용 로그의 첫 이벤트**.

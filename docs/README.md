@@ -56,7 +56,7 @@
 | [Kubernetes](conventions/k8s.md)    | (이행) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm + **Spark/Flink Operator·호스트 Dagster 트리거(Pipes)·kind on Podman/레지스트리·러너 이미지 빌드·Ingress(UI 고정 URL)·컴퓨트 시분할** |
 | [Terraform/IaC](conventions/terraform.md) | (도입) 스택 구조, 버전 고정·lock 커밋, `terraform fmt`(2-space) 고정, state·비밀 커밋 금지, cloud-init 선언형, templatefile 주의 |
 | [**컨벤션 인덱스**](conventions/README.md) | `docs/conventions/` 전체 목차·읽는 순서·정본 원칙 |
-| [에이전트 오케스트레이션](conventions/agents.md) | AI 세션 **3계층**(supervisor→director→subagent, director 우선 1명) 역할·경계, **상호작용 로그·승인 게이트·단일 기록자**, **기록관 저널** 규약(개인 Obsidian 볼트 `$OBSIDIAN_VAULT/agents/<날짜>/<미션>.md`, 작업일자별·미션당 1파일, repo 커밋 금지), **구조도**(계층·배정·상향 보고·권한 매트릭스), **기록 시점(체크포인트)**·미션 판단 기준·수동 보정 `/journal`, **에스컬레이션**(권한 밖·특이사항 → supervisor), **`security` 최종 컨펌**(director 실행·채택 결정), **`archivist` 전담 기록**(single-writer 유지·supervisor 폴백), 전문 워커 **7종**(데이터·인프라 각 3종 + `security`) + 계층 밖 `archivist`, **정합성 가드 hook**(`scripts/journal_guard.py` — `NN` 넘버링 경합 차단·저널 누락 경고) |
+| [에이전트 오케스트레이션](conventions/agents.md) | AI 세션 **3계층**(supervisor→director→subagent, director 우선 1명) 역할·경계, **상호작용 로그·승인 게이트·단일 기록자**, **기록관 저널** 규약(개인 Obsidian 볼트 `$OBSIDIAN_VAULT/agents/<날짜>/<미션>.md`, 작업일자별·미션당 1파일, repo 커밋 금지), **구조도**(계층·배정·상향 보고·권한 매트릭스), **기록 시점(체크포인트)**·미션 판단 기준·수동 보정 `/journal`, **에스컬레이션**(권한 밖·특이사항 → supervisor), **`security` 최종 컨펌**(director 실행·채택 결정), **`archivist` 전담 기록**(single-writer 유지·supervisor 폴백), 전문 워커 **8종**(데이터·인프라 각 3종 + `security` + 분석 도메인 `analyst`) + 계층 밖 `archivist`, **정합성 가드 hook**(`scripts/journal_guard.py` — `NN` 넘버링 경합 차단·저널 누락 경고) |
 
 ### 운영 (operations)
 

@@ -19,7 +19,10 @@ from dagster_project.defs.poc.constants import SPARKAPP_MANIFEST
 from dagster_project.defs.poc.resources import SparkOperatorResource
 
 GROUP_NAME = "poc"
+# 러너 결과 줄에서 뽑는다: `[poc] wrote table=<catalog>.<ns>.sample rows=<n>`
+# 테이블명 하드코딩은 러너 카탈로그 설정과 갈린다(실제로 `jdbccat`으로 남아 있었다).
 _ROW_RE = re.compile(r"rows=(\d+)")
+_TABLE_RE = re.compile(r"table=(\S+)")
 
 
 @dg.asset(group_name=GROUP_NAME, kinds={"spark", "iceberg", "bronze"})
@@ -41,13 +44,13 @@ def poc_spark_ingest(
     if not run.succeeded:
         raise dg.Failure(description=f"SparkApplication 실패: {name} state={run.state}")
 
-    match = _ROW_RE.search(run.logs)
-    rows = int(match.group(1)) if match else None
+    row_match = _ROW_RE.search(run.logs)
+    table_match = _TABLE_RE.search(run.logs)
     return dg.MaterializeResult(
         metadata={
             "state": run.state,
-            "rows": rows if rows is not None else "unknown",
-            "table": "jdbccat.poc.sample",
+            "rows": int(row_match.group(1)) if row_match else "unknown",
+            "table": table_match.group(1) if table_match else "unknown",
             "driver_pod": run.driver_pod,
         }
     )

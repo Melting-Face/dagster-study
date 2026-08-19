@@ -8,6 +8,12 @@ Spark Operator의 `SparkApplication`(CRD)을 직접 제출하고 상태를 폴�
 `status.currentState.currentStateSummary` + `status.stateTransitionHistory`.
 성공·실패 모두 최종적으로 `ResourceReleased`로 수렴하므로, 성공 여부는
 전이 이력에 `Succeeded`가 있었는지로 판정한다(최종 상태만 보면 구분 불가).
+
+🔴 단, **상태 필드만 믿지 않는다**. 오퍼레이터의 `SparkApplication` watch가 장시간 후
+죽어, driver 파드가 `Succeeded`인데도 상태가 `DriverReady`에 영구 고착하는 현상이 있다
+(2026-08-19 실측, 최장 4시간 32분). 그때 오퍼레이터 파드는 재시작 0·GC 정상이라
+살아 있는 것처럼 보인다. 그래서 **driver 파드 phase를 보조 신호로 함께** 본다
+(상세·기각 가설은 conventions/k8s.md §9).
 """
 
 import time
@@ -42,6 +48,11 @@ TERMINAL_STATES = frozenset(
 )
 SUCCESS_STATE = "Succeeded"
 
+# driver 파드의 종료 phase. 오퍼레이터 상태와 달리 kubelet이 직접 쓰므로
+# watch가 죽어도 정확하다 — 상태 고착 시의 탈출 신호로 쓴다.
+POD_TERMINAL_PHASES = frozenset({"Succeeded", "Failed"})
+POD_SUCCESS_PHASE = "Succeeded"
+
 # driver 파드 이름은 `<app>-<attemptId>-driver`라 attempt마다 바뀐다
 # (Kubeflow의 `<app>-driver`와 다르다). 이름을 조립하지 말고 오퍼레이터가 붙이는
 # 라벨로 찾는다 — 2026-08-18 실측: `poc-ingest-0-driver`.
@@ -64,6 +75,10 @@ class SparkOperatorResource(dg.ConfigurableResource):
     namespace: str = "default"
     poll_interval_s: int = 5
     timeout_s: int = 900
+    # driver 파드가 종료된 뒤 오퍼레이터 전이를 기다려 주는 유예.
+    # 정상 경로의 전이는 파드 종료 후 약 2분이라(2026-08-19 실측) 넉넉히 잡는다.
+    # 이 시간을 넘기면 watch가 죽은 것으로 보고 파드 phase로 판정한다.
+    pod_terminal_grace_s: int = 180
 
     def _custom_api(self) -> client.CustomObjectsApi:
         # 호스트 kubeconfig의 지정 컨텍스트로 접속
@@ -110,6 +125,16 @@ class SparkOperatorResource(dg.ConfigurableResource):
         )
         return pods.items[0].metadata.name if pods.items else None
 
+    def _driver_phase(self, name: str) -> str | None:
+        """Driver 파드의 phase를 읽는다(없으면 None).
+
+        오퍼레이터 상태와 독립된 신호다 — watch가 죽어도 kubelet이 쓰는 값이라 정확하다.
+        """
+        pods = self._core_api().list_namespaced_pod(
+            self.namespace, label_selector=DRIVER_SELECTOR.format(name=name)
+        )
+        return pods.items[0].status.phase if pods.items else None
+
     def submit_and_wait(self, manifest: dict) -> SparkRunResult:
         """SparkApplication을 제출하고 종료까지 폴링한 결과를 반환한다."""
         co = self._custom_api()
@@ -122,6 +147,8 @@ class SparkOperatorResource(dg.ConfigurableResource):
         state = ""
         succeeded = False
         waited = 0
+        # driver 파드가 종료 상태로 처음 관측된 시각(유예 기산점). None이면 아직 미종료.
+        pod_terminal_at: int | None = None
         while waited < self.timeout_s:
             obj = co.get_namespaced_custom_object(
                 CRD_GROUP, CRD_VERSION, self.namespace, CRD_PLURAL, name
@@ -129,6 +156,21 @@ class SparkOperatorResource(dg.ConfigurableResource):
             state, succeeded = self._read_state(obj)
             if state in TERMINAL_STATES:
                 break
+
+            # watch가 죽으면 상태가 영영 전이하지 않는다(실측 4시간 32분 고착).
+            # 파드가 끝났는데 유예까지 전이가 없으면 파드 phase로 판정하고 빠져나온다.
+            phase = self._driver_phase(name)
+            if phase in POD_TERMINAL_PHASES:
+                if pod_terminal_at is None:
+                    pod_terminal_at = waited
+                elif waited - pod_terminal_at >= self.pod_terminal_grace_s:
+                    state = f"{state or 'Unknown'}(watch-stalled,pod={phase})"
+                    succeeded = phase == POD_SUCCESS_PHASE
+                    break
+            else:
+                # 재시도로 파드가 다시 뜬 경우 기산점을 되돌린다.
+                pod_terminal_at = None
+
             time.sleep(self.poll_interval_s)
             waited += self.poll_interval_s
 

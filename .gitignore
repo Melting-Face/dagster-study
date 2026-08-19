@@ -55,6 +55,10 @@ kubeconfig-oci
 # 근거: docs/conventions/git.md §5
 .claude/settings.local.json
 
+# 세션 간 동기화 레지스트리 — 병렬 세션의 서브에이전트 claim·파일 리스(런타임 상태).
+# 머신 로컬·수명 수십 분이라 형상관리 대상이 아니다. 생성 주체는 scripts/session_sync_guard.py.
+.claude/.claims/
+
 # Dagster 로컬 인스턴스 산출물 (DAGSTER_HOME=dagster/dockerfile.d/src 로 호스트 실행 시 생성)
 dagster/dockerfile.d/src/storage/
 dagster/dockerfile.d/src/.telemetry/

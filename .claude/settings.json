@@ -77,6 +77,64 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py agent-pre",
+            "statusMessage": "서브에이전트 중복 호출 검사",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py file-pre",
+            "statusMessage": "동일 파일 동시편집 검사",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py agent-post",
+            "statusMessage": "서브에이전트 결과 공유 기록",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py file-post",
+            "statusMessage": "파일 리스 갱신",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py session-end",
+            "statusMessage": "세션 점유 해제",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [

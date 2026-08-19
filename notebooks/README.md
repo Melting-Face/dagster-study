@@ -33,6 +33,24 @@ compose의 `trino`는 `--profile legacy-sql` 로만 뜬다(방언 값 대조용)
 **비밀정보를 노트북에 두지 않는다**. pyiceberg로 직접 붙는 경로는 `.env`가 추가로 필요하다
 (스타터 노트북 §6 참고).
 
+### pyiceberg 직접 접속 — 엔드포인트와 S3 키는 한 쌍이다
+
+`.env`로 대상을 K8s 카탈로그로 돌릴 때 **`ICEBERG_S3_ACCESS_KEY`/`ICEBERG_S3_SECRET_KEY`도 함께**
+채워야 한다. 엔드포인트(`ICEBERG_S3_ENDPOINT`)만 K8s로 바꾸고 키는 공용 `AWS_ACCESS_KEY_ID`
+(compose SeaweedFS용)를 두면 **두 SeaweedFS의 키가 달라** 이렇게 죽는다(2026-08-19 실측):
+
+| 단계 | 결과 |
+|---|---|
+| `list_namespaces()` · `list_tables()` | ✅ 성공 (카탈로그 DB만 보므로) |
+| `load_table()` | ❌ `ACCESS_DENIED during HeadObject` (metadata.json을 S3에서 읽는 순간) |
+
+**부분 성공이라 원인을 오해하기 쉽다** — 나열이 되니 자격증명은 맞다고 넘겨짚게 된다.
+`ICEBERG_S3_*`를 비우면 공용 `AWS_*`로 폴백하므로 **compose 단독 구성은 기존대로** 동작한다.
+값은 `kubectl get secret lakehouse-creds -o jsonpath='{.data.s3-access-key}' | base64 -d` 로 얻는다.
+
+> Spark Connect 경로는 이 문제와 무관하다 — 자격증명이 서버 측에 있어 클라이언트에 비밀이 필요 없다.
+> **그래서 기본 경로는 Spark Connect다.**
+
 ## ⚠️ 셀 출력은 커밋되지 않는다
 
 원천은 비식별 연구 데이터셋이지만 **DUA 대상**이다([`docs/security.md`](../docs/security.md)).

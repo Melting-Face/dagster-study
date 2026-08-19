@@ -18,12 +18,12 @@ from dagster_pyspark import LazyPySparkResource
 
 import dagster as dg
 from dagster_project.common.constants import (
-    AWS_ACCESS_KEY_ID,
     AWS_REGION,
-    AWS_SECRET_ACCESS_KEY,
     CATALOG_NAME,
     ICEBERG_CATALOG_URI,
+    S3_ACCESS_KEY_ID,
     S3_ENDPOINT,
+    S3_SECRET_ACCESS_KEY,
     SPARK_REMOTE,
     TRINO_HOST,
     TRINO_PORT,
@@ -45,8 +45,8 @@ def resources() -> dg.Definitions:
             # 공유: S3 접속(SeaweedFS). 파라미터는 common.constants에서 추적.
             "s3": S3Resource(
                 endpoint_url=S3_ENDPOINT,
-                aws_access_key_id=AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                aws_access_key_id=S3_ACCESS_KEY_ID,
+                aws_secret_access_key=S3_SECRET_ACCESS_KEY,
                 region_name=AWS_REGION,
             ),
             "dbt": build_dbt_resource(),
@@ -71,8 +71,8 @@ def resources() -> dg.Definitions:
                         "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
-                        "s3.access-key-id": AWS_ACCESS_KEY_ID,
-                        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+                        "s3.access-key-id": S3_ACCESS_KEY_ID,
+                        "s3.secret-access-key": S3_SECRET_ACCESS_KEY,
                         "s3.region": AWS_REGION,
                         "s3.path-style-access": "true",
                     }
@@ -87,8 +87,8 @@ def resources() -> dg.Definitions:
                         "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
-                        "s3.access-key-id": AWS_ACCESS_KEY_ID,
-                        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+                        "s3.access-key-id": S3_ACCESS_KEY_ID,
+                        "s3.secret-access-key": S3_SECRET_ACCESS_KEY,
                         "s3.region": AWS_REGION,
                         "s3.path-style-access": "true",
                     }
@@ -105,8 +105,8 @@ def resources() -> dg.Definitions:
                         "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
-                        "s3.access-key-id": AWS_ACCESS_KEY_ID,
-                        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+                        "s3.access-key-id": S3_ACCESS_KEY_ID,
+                        "s3.secret-access-key": S3_SECRET_ACCESS_KEY,
                         "s3.region": AWS_REGION,
                         "s3.path-style-access": "true",
                     }
@@ -122,8 +122,8 @@ def resources() -> dg.Definitions:
                         "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
-                        "s3.access-key-id": AWS_ACCESS_KEY_ID,
-                        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+                        "s3.access-key-id": S3_ACCESS_KEY_ID,
+                        "s3.secret-access-key": S3_SECRET_ACCESS_KEY,
                         "s3.region": AWS_REGION,
                         "s3.path-style-access": "true",
                     }
@@ -139,8 +139,8 @@ def resources() -> dg.Definitions:
                         "uri": ICEBERG_CATALOG_URI,
                         "warehouse": WAREHOUSE,
                         "s3.endpoint": S3_ENDPOINT,
-                        "s3.access-key-id": AWS_ACCESS_KEY_ID,
-                        "s3.secret-access-key": AWS_SECRET_ACCESS_KEY,
+                        "s3.access-key-id": S3_ACCESS_KEY_ID,
+                        "s3.secret-access-key": S3_SECRET_ACCESS_KEY,
                         "s3.region": AWS_REGION,
                         "s3.path-style-access": "true",
                     }

@@ -141,6 +141,10 @@
 
 - **환경변수는 참조로 주입**(`dg.EnvVar`/`os.environ`), 하드코딩 금지. 추가 시
   `.env`→`compose.yml`(공용 앵커 `x-dagster-common`)→코드 **전파 체인**을 확인한다.
+  🔴 **접속 대상을 바꾸는 값은 한 벌로 묶어 바꾼다** — 엔드포인트만 K8s로 돌리고 자격증명은
+  공용 `AWS_*`를 두면 compose↔K8s SeaweedFS의 키가 달라 **나열은 되고 `load_table`에서
+  `ACCESS_DENIED`** 로 죽는다(부분 성공이라 오진하기 쉽다). 그래서 S3 키도 엔드포인트와 같은
+  접두어(`ICEBERG_S3_ACCESS_KEY`/`_SECRET_KEY`)로 두고, 미설정 시 `AWS_*`로 폴백한다.
   Iceberg snapshot·로그 보존 정책 포함 [`docs/operations.md`](docs/operations.md).
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
   전 서비스 `deploy.resources` 명시. **옵션 기능은 `profiles`로 분리**(뼈대는 profile

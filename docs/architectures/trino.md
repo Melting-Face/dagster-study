@@ -1,6 +1,23 @@
-> **이행 상태(2026-08-18)**: 대체 경로가 **동작 확인**됨 — `dbt-spark`가 Spark Connect 서버를 통해
-> Iceberg를 조회하는 것까지 검증([../redesign.md](../redesign.md) Phase 1). 다만 22모델의 **실행 단계
-> 방언 교정**과 bronze 데이터 이관이 남아 있어 compose의 `trino` 서비스는 아직 유지한다.
+> **이행 상태(2026-08-19)**: **상시 기동 해제** — compose `trino`가 `profiles: ["legacy-sql"]`로
+> 내려가 기본 `up`에서 빠졌다(자원 3 CPU / 6G 회수). 호스트 게시 포트도 `8080→8081`로 옮겼다
+> (8080은 kind ingress가 점유).
+>
+> **"중단"과 "삭제"는 분리한다.** 제거의 선행조건은 둘이었다.
+>
+> | 선행조건 | 상태 |
+> |---|---|
+> | ① **유지보수 프로시저 Spark 이관** (없으면 기능 공백) | ✅ **해소**(2026-08-19) — `rewrite_data_files`·`remove_orphan_files`로 이관, [spark.md](spark.md) |
+> | ② **22모델 방언 값 대조** (Trino가 정본) | ⏳ **미해소** — ["도는 것"이 아니라 "같은 값"](../redesign.md), `dbt compile`은 이를 못 잡는다 |
+>
+> ②가 남아 **`dbt-trino` 어댑터와 `TrinoResource`는 유지**한다(리소스는 유지보수용에서
+> **대조용**으로 역할만 바뀌었다). ②까지 해소되면 compose 서비스·어댑터·`common/trino.py`를
+> 하나의 논리적 커밋으로 제거한다.
+>
+> ```shell
+> docker compose --profile legacy-sql up -d trino   # 값 대조가 필요할 때만
+> ```
+>
+> ad-hoc 조회는 **Spark SQL**로 간다 — 호스트 노트북 경로는 [`notebooks/README.md`](../../notebooks/README.md).
 
 # Trino (아키텍처 · 프로젝트 관점)
 

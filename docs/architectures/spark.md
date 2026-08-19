@@ -70,14 +70,32 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
 
 ### 프로젝트 결정
 
-- **지금**: **Trino `optimize`** 로 처리한다. `remove_orphan_files`를 Trino로 실행한 결정과 일관되며,
-  재설계로 Spark를 **인제스트 용도로 먼저 도입**하더라도 컴팩션은 당분간 Trino를 유지한다([redesign.md](../redesign.md) 급소①).
-  유지보수 잡의 **1단계 op로 구현**했다
-  ([maintenance.py](../../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)의 `optimize_iceberg_files`).
-- **언제 Spark로**: 데이터·컴팩션 빈도가 커져 쿼리용 Trino와의 **자원 경합**이 문제되면, 유지보수를
-  별도 Spark(또는 전용 Trino 클러스터)로 분리한다.
-- **안전 순서**: **compact(optimize) → expire snapshots → remove orphan files**(현행 잡이 op 의존성으로
-  강제). 컴팩션이 새 파일·스냅샷을 만든 뒤 만료가 옛 작은 파일 참조를 풀고, orphan 정리가 잔여를 제거한다.
+- **지금**: **Spark `rewrite_data_files`** 로 처리한다(2026-08-19 Trino에서 이관 — Trino 제거의 선행조건①).
+  `remove_orphan_files`도 함께 Spark로 옮겨 **유지보수 엔진을 하나로** 모았다.
+  유지보수 잡의 **1·3단계 op로 구현**했다
+  ([maintenance.py](../../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)).
+  접속은 **공식 통합 `dagster-pyspark`의 `LazyPySparkResource`** 를 쓴다(커스텀 리소스를 만들지 않는다 —
+  [conventions/dagster.md](../conventions/dagster.md)의 "불필요한 서브클래싱 지양"). Spark Connect로 붙이는
+  방법은 **`spark_config={"spark.remote": ...}`** 한 줄이다 — 내부 `builder.config(k, v)`가 이 키를 받아
+  `pyspark.sql.connect` 세션을 만든다(2026-08-19 실측). 카탈로그 설정은 **서버 측**에 있어
+  Dagster는 주소만 갖는다(비밀정보 비노출).
+  - **`Lazy~`를 쓰는 이유**: 세션을 `spark_session` **접근 시점**에 만든다. 비-Lazy(`PySparkResource`)는
+    리소스 초기화에서 즉시 연결해, 유지보수와 무관한 run까지 Spark Connect 가용성(=port-forward)에 묶인다.
+  - **`dagster-spark`는 직접 쓰지 않는다** — `spark-submit` 래퍼(`create_spark_op`)라 용도가 다르다.
+    `dagster-pyspark`가 설정 스키마를 가져다 쓰므로 전이 의존으로만 설치된다.
+  - **제약**: Spark Connect 세션은 `sparkContext`를 지원하지 않는다(`NOT_IMPLEMENTED`).
+    RDD·`sc.parallelize`가 필요한 코드는 Connect로 못 옮긴다 — 유지보수는 SQL만 써서 무관하다.
+- **Trino와 다른 지점(값에 영향)**: Spark bin-pack은 `min-input-files`(기본 5) 미만이면 그룹을
+  **통째로 건너뛴다**. Trino `optimize`에는 이 문턱이 없다 → 파일이 몇 개뿐인 테이블에서
+  "0건 재작성"이 나오는 건 정상이며, 같은 임계값을 줘도 **두 엔진의 결과가 같지 않다**.
+- 🔴 **`remove_orphan_files`는 Hadoop FileSystem을 쓴다** — Iceberg의 `S3FileIO`(`io-impl`)는
+  카탈로그가 아는 파일만 다루는데, 이 프로시저는 카탈로그가 **모르는** 파일을 찾는 게 목적이라
+  warehouse 디렉터리를 직접 나열해야 한다. Spark Connect 서버에 `spark.hadoop.fs.s3*`(S3A) 설정이
+  없으면 `UnsupportedFileSystemException: No FileSystem for scheme "s3"`로 죽는다(2026-08-19 실측).
+  jar(`hadoop-aws`·`aws-java-sdk-bundle`)는 러너 이미지에 이미 있고 **설정만** 필요했다.
+- **안전 순서**: **compact(`rewrite_data_files`) → expire snapshots → remove orphan files**(현행 잡이
+  op 의존성으로 강제). 컴팩션이 새 파일·스냅샷을 만든 뒤 만료가 옛 작은 파일 참조를 풀고,
+  orphan 정리가 잔여를 제거한다.
 
 ## 참고
 

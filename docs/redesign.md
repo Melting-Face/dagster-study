@@ -32,7 +32,8 @@
 │  Flink Operator (Helm) → FlinkDeployment → JobManager/TaskManager│  [STREAM]
 │  Redpanda (Kafka API)   ← 스트림 소스(vitalsign 리플레이)          │  [STREAM]
 │  SeaweedFS  (StatefulSet+PVC) ← S3(path-style)·IB 웨어하우스·체크포인트│
-│  Catalog Postgres (StatefulSet+PVC) ← Iceberg JDBC 카탈로그        │
+│  CloudNativePG (Helm) → Cluster(CRD) → Catalog Postgres(+PVC)     │
+│                                       ← Iceberg JDBC 카탈로그      │
 │  로컬 레지스트리 (kind local-registry)                             │
 └──────────────────────────────────────────────────────────────────┘
    Iceberg 공유:  Spark(batch write) ↔ dbt-spark(마트) ↔ Flink(stream r/w)
@@ -82,6 +83,8 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 | 오브젝트 스토어 | **SeaweedFS 유지** + `path-style` 강제 | Spark·Flink S3A 모두 `fs.s3a.path.style.access=true` 필수 |
 | 스트림 소스 | **Redpanda**(Kafka API) | Kafka보다 경량(ZK 불요). vitalsign 리플레이 → Flink 입력 |
 | 데이터 서비스 위치 | SeaweedFS·카탈로그 Postgres **K8s로 이전** | 단일 패러다임(K8s) 통일 |
+| 카탈로그 Postgres 관리 | **CloudNativePG 오퍼레이터**(← Deployment+emptyDir) | PVC·failover·PITR·튜닝이 CR 한 장. Spark·Flink 오퍼레이터와 **같은 선언형 패러다임**. 이전 구성은 재기동만으로 카탈로그가 소멸했다 |
+| SeaweedFS 관리 | **StatefulSet 유지**(오퍼레이터 미채택 🔎) | 오퍼레이터는 master/volume/filer 분리로 **+500m/+1Gi** 상주 순증인데, 이미 PVC라 막을 유실 급소가 없다. Phase 2 이후 재검토 |
 | Dagster 실행 위치 | **호스트 유지** | 개발 루프 속도 + 컨트롤/컴퓨트 분리 시연 |
 
 ## 4. 단계별 이행 플랜 (PoC 우선 · PDCA)
@@ -116,6 +119,11 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **Act**: compose에서 Trino 제거·env 전파 체인 재확인([operations.md](operations.md)).
 - **진행 상황(2026-08-18)**
   - 데이터 서비스는 **이미 K8s에 있음**(SeaweedFS·카탈로그 Postgres, PoC 단계에서 선행).
+  - **(2026-08-19)** 카탈로그 Postgres를 **CloudNativePG `Cluster`로 재정의**했다 —
+    기존 `Deployment`+`emptyDir`는 파드 재기동만으로 카탈로그가 소멸하는 구성이었다.
+    보존할 데이터가 없는 시점이라 이행 비용이 최저(재적재 전제).
+    **적용 완료** — CNPG 1.30.0(chart 0.29.0) 설치, `Cluster` 1인스턴스 + PVC 5Gi 기동,
+    Spark 잡이 새 카탈로그에 `iceberg.poc.sample` 등록까지 확인. 접속은 `catalog-postgres-rw`.
   - `dbt-spark 1.11.0` 설치. **pyspark는 3.5 계열로 핀**(클러스터 러너 Spark 3.5.9와 맞춤).
   - 프로파일 2종 추가 — **`spark_session`**(호스트 로컬 Spark, 상시 서비스 0) /
     **`spark_connect`**(클러스터 **Spark Connect 서버**, 컴퓨트=K8s). 둘 다 **연결 확인 완료**.
@@ -141,12 +149,33 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **선행 조건(로드맵에 없던 발견)**: bronze 테이블이 **K8s 카탈로그에 없다**(compose 쪽 카탈로그에만 존재).
   실행 단계 검증은 **Phase 2(대용량 적재 Spark 이전)와 순서가 얽힌다** — 데이터 이관이 먼저다.
 
-### Phase 2 — 대용량 bronze 인제스트 Spark 전환 ⏸ **원천 데이터 부재로 대기**
+### Phase 2 — 대용량 bronze 인제스트 Spark 전환 ⏸ **원천 일부 확보, 핵심 대용량은 미확보**
 
-> **2026-08-18 실측**: 이관할 bronze가 **어디에도 없다**. compose Postgres에 `iceberg_catalog` DB가 없고,
-> compose SeaweedFS는 **버킷 0개**, 호스트에도 csv.gz가 없다. 즉 이 단계는 "이관"이 아니라 **최초 적재**이며,
-> MIMIC-IV·eICU는 **PhysioNet 자격증명 + DUA** 대상이라 사용자가 직접 받아야 한다(저장소 커밋 금지).
-> 데이터가 준비되면 `scripts/upload_raw_to_seaweedfs.py`로 `s3://warehouse/raw/`에 올린다.
+> 🔴 **2026-08-19 정정** — 2026-08-18의 "원천이 어디에도 없다"는 **오진이었다**.
+> compose SeaweedFS의 `warehouse` 버킷에 원천 csv.gz **9개(압축 110.7MB)** 가 실재했다.
+> 당시엔 **K8s SeaweedFS만** 조회했고 compose 쪽은 컨테이너가 `Exited`라 S3 API가 죽어 있어
+> "버킷 0개"로 읽혔다. **죽은 엔드포인트의 조회 실패를 데이터 부재로 판정하면 안 된다** —
+> 부재 판정은 **조회 경로가 살아 있을 때만** 유효하다.
+> (`iceberg_catalog` DB 부재·호스트 csv.gz 부재는 사실이었다.)
+>
+> **2026-08-19 이관 완료**: compose SeaweedFS → K8s SeaweedFS로 S3→S3 스트리밍 복사.
+> 크기 대조 9/9 + **gzip CRC 전수 검증 9/9** 통과(크기만으로는 SeaweedFS 체크섬 손상을 못 잡는다).
+> 이제 원천은 **K8s SeaweedFS `s3://warehouse/raw/` 단일 소재**이고, compose SeaweedFS 컨테이너는 제거했다
+> (호스트 바인드 마운트 `./seaweedfs/data` 309MB는 남아 사실상 원본 백업).
+>
+> **확보 현황** — `scripts/upload_raw_to_seaweedfs.py` 매니페스트(=자산이 실제로 읽는 파일) 14개 기준:
+>
+> | 구분 | 파일 |
+> | --- | --- |
+> | ✅ 확보(4) | `eicu/patient`·`eicu/diagnosis`·`mimiciv/hosp/admissions`·`mimiciv/hosp/d_labitems` |
+> | ✖ **부재(10)** | `eicu/nurseCharting` · `mimiciv/icu/{icustays,chartevents,inputevents,outputevents,d_items}` · `mimiciv/hosp/{patients,labevents,prescriptions,microbiologyevents}` |
+> | ➕ 여분(5) | `mimiciv/hosp/{diagnoses_icd,drgcodes,d_icd_diagnoses,d_icd_procedures,d_hcpcs}` — 매니페스트 밖 |
+>
+> → **이 단계가 겨냥한 대용량 3종**(`chartevents`·`labevents`·`nurseCharting`)이 **전부 부재**라
+> Spark 인제스트 전환은 여전히 대기다. 22모델이 요구하는 7 source 중에도 `admissions` 하나뿐이라
+> **`dbt build` 실행 검증도 불가**하다. 나머지는 **PhysioNet 자격증명 + DUA** 대상이라
+> 사용자가 직접 받아야 한다(저장소 커밋 금지). 받은 뒤 `scripts/upload_raw_to_seaweedfs.py`로 올린다.
+> → 다만 **eICU 2종은 실물이므로 bronze 적재 자산을 실제로 돌려볼 수 있다**(경로 검증 가능).
 >
 > **데이터 없이 미리 끝낸 것**(합성 3행으로 전 구간 검증 후 정리):
 > S3(csv.gz) → Dagster 자산 → Iceberg 적재 → **Spark Connect에서 조회**까지 K8s 스택에서 통과.
@@ -157,7 +186,14 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 - **Check**: 행 수·스키마가 기존 적재분과 일치(회귀), small-files 대비 파일 크기 개선 확인.
 - **Act**: 유지보수(compaction) 순서 재점검(compact→expire→orphan, [spark.md](architectures/spark.md)).
 
-### Phase 3 — Flink 실시간 스트리밍 (Flink의 존재이유)
+### Phase 3 — Flink 실시간 스트리밍 (Flink의 존재이유) ⏸ **미착수 · 오퍼레이터 미설치**
+
+> **2026-08-19 상태**: Phase 0에서 검증용으로 띄웠던 Flink 스택(`flink-session`·Flink Operator·
+> cert-manager)을 **제거**했다. 잡 없는 세션 클러스터가 **1 CPU / 2Gi를 13시간 점유**하며
+> "BATCH·STREAM 시분할(동시 실행 금지)" 규약을 어기고 있었다.
+> **"중단"과 "삭제"의 분리**(trino 선례)와 같은 취지 — 검증 결과·매니페스트·러너 이미지는 전부
+> 남아 있고 `INSTALL_FLINK=true ./scripts/k8s-operators.sh` 한 줄로 되돌아온다(롤백 비용 ≈ 0).
+> `INSTALL_FLINK` 기본값이 이미 `false`라 **재기동해도 Flink는 뜨지 않는다**(스크립트가 정본).
 
 - **Plan/Do**: Flink Operator(Helm) + Redpanda 배포. `vitalsign` 등을 Redpanda로 **리플레이**하고,
   **`FlinkDeployment`** 잡이 이벤트타임 윈도우로 **실시간 SOFA/Sepsis-3 조기경보**를 계산해 Iceberg에 싱크.

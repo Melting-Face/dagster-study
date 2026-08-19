@@ -59,13 +59,13 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | 인증기준(분야) | 현 프로젝트 통제 | 상태 | 미비점·TODO |
 | --- | --- | --- | --- |
 | **2.5 인증 및 권한관리** | (study 단일 사용자) 서비스 계정은 `.env` 크리덴셜로 분리. **OCI API 키는 로컬 생성·공개키만 업로드**, SSH 키는 **용도별 분리**, k3s kubeconfig `600` | 🟡 | Trino·Dagster·SeaweedFS **RBAC/최소권한** 미문서화. **k3s 클러스터 RBAC**(기본 cluster-admin 단일 kubeconfig) 미분리 |
-| **2.6 접근통제** | 내부 네트워크(compose)로 서비스 격리, 비밀 설정 `:ro` 마운트([philosophy #4](philosophy.md)). **OCI 공개 노드**는 Security List `/32` 화이트리스트(SSH 22·API 6443, `0.0.0.0/0`은 `validation`으로 차단) + 호스트 iptables([terraform.md](conventions/terraform.md)) | 🟡 | 관리 UI(SeaweedFS·Dagster) **포트 노출** 범위 점검·인증 필요. 호스트 iptables의 **kubelet 10250이 소스 무제한**(SL이 앞단 방어) — 방어 심화 필요 |
-| **2.7 암호화 적용** | 비밀정보 **하드코딩 금지·참조 주입**(`dg.EnvVar`/`${ENV:...}`), `.env` gitignore ([general.md](conventions/general.md#비밀정보-secrets)). 개인키·`*.tfstate`·`*.tfvars`·회수 kubeconfig는 **gitignore + 권한 600** | 🟡 | **저장 암호화(at-rest)** 미설정(SeaweedFS·Postgres·Iceberg). **전송 암호화(TLS)** — S3 endpoint `http://`(내부 평문). `tfstate` **원격 백엔드+암호화** 미도입(현재 로컬 평문) |
+| **2.6 접근통제** | 내부 네트워크(compose)로 서비스 격리, 비밀 설정 `:ro` 마운트([philosophy #4](philosophy.md)). **OCI 공개 노드**는 Security List `/32` 화이트리스트(SSH 22·API 6443, `0.0.0.0/0`은 `validation`으로 차단) + 호스트 iptables([terraform.md](conventions/terraform.md)) | 🟡 | 카탈로그 PG 3종 서비스(`-rw`/`-ro`/`-r`)는 **전부 ClusterIP·Ingress 없음** 확인(2026-08-19), 단 **`NetworkPolicy` 부재**로 클러스터 내 임의 파드가 5432에 도달 가능. 관리 UI(SeaweedFS·Dagster) **포트 노출** 범위 점검·인증 필요. 호스트 iptables의 **kubelet 10250이 소스 무제한**(SL이 앞단 방어) — 방어 심화 필요 |
+| **2.7 암호화 적용** | 비밀정보 **하드코딩 금지·참조 주입**(`dg.EnvVar`/`${ENV:...}`), `.env` gitignore ([general.md](conventions/general.md#비밀정보-secrets)). 개인키·`*.tfstate`·`*.tfvars`·회수 kubeconfig는 **gitignore + 권한 600**. **카탈로그 PG 전송구간은 CNPG가 자체 CA·서버 인증서를 생성해 TLS 1.3 가능**(2026-08-19 실측 `ssl_min/max_protocol_version=TLSv1.3`) | 🟡 | **저장 암호화(at-rest)** 미설정(SeaweedFS·Postgres·Iceberg). 🔴 카탈로그 PG가 `emptyDir`(휘발)에서 **영속 PVC**(호스트 디스크·비암호화)로 바뀌어 at-rest 미설정이 **실질 리스크로 승격**(2026-08-19). 클라이언트 `sslmode` 강제는 미확인. S3 endpoint `http://`(내부 평문). `tfstate` **원격 백엔드+암호화** 미도입 |
 | **2.8 정보시스템 도입 및 개발 보안** | pre-commit **gitleaks** 시크릿 스캔·`ruff`·`hadolint`, 이미지 `latest` 금지([docker.md](conventions/docker.md)) | ✅ | 의존성 취약점 스캔(SCA) 미도입 |
 | **2.9 시스템 및 서비스 운영관리** | Docker 로그 보존(`max-size 10m × 20`), healthcheck+`depends_on`, `deploy.resources` 명시 | ✅ | — |
 | **2.10 시스템 및 서비스 보안관리** | UTC 저장/KST 표시로 **로그 타임스탬프 일관성**([timezone.md](conventions/timezone.md)) | 🟡 | 중앙 **감사 로그(접속기록)** 수집·보관 미설정 |
 | **2.11 사고 예방 및 대응** | — | ⬜ | 침해 대응 절차·알림(모니터링) 미정의 |
-| **2.12 재해복구 및 업무연속성** | — | ⬜ | Postgres(카탈로그)·SeaweedFS **백업·복구** 정책 미설정 |
+| **2.12 재해복구 및 업무연속성** | 카탈로그 Postgres가 **CloudNativePG 관리**로 바뀌며 백업 **경로는 확보**(Barman Cloud 플러그인) | ⬜ | **여전히 미활성**(`INSTALL_CNPG_BACKUP=false` 기본 + cert-manager 부재). 🔴 계획된 백업 대상(클러스터 내부 SeaweedFS)은 **같은 장애 도메인**이라 DR이 아니다 — 논리 오류 복구용. SeaweedFS 백업 정책은 여전히 미설정 |
 
 ### 2-2. 영역 3 — 개인정보 처리 단계별 (연구 데이터 대응)
 
@@ -168,7 +168,7 @@ Trino 접속은 컨벤션대로 리소스로 관리한다(`common/trino.py`의 `
 | 대상 | 방법 |
 | --- | --- |
 | SeaweedFS(오브젝트) | **SSE-S3**(AES-256, 서버 관리 키·envelope 암호화). S3 API로 업로드 시 서버 측 암호화 적용 |
-| Postgres(Iceberg 카탈로그·Dagster DB) | 커뮤니티 Postgres는 네이티브 TDE 미지원 → **볼륨/디스크 암호화**(LUKS·클라우드 EBS 암호화)로 대체 |
+| Postgres(Iceberg 카탈로그·Dagster DB) | 커뮤니티 Postgres는 네이티브 TDE 미지원 → **볼륨/디스크 암호화**(LUKS·클라우드 EBS 암호화)로 대체. 🔴 카탈로그 PG는 2026-08-19부터 **영속 PVC**(kind `rancher.io/local-path` = 호스트 디스크, 비암호화)라 이 항목이 실질 리스크다 |
 | Iceberg 데이터 파일 | SeaweedFS SSE-S3에 위임(데이터는 warehouse 버킷에 저장) |
 
 **전송 시 암호화(in-transit)**
@@ -177,7 +177,7 @@ Trino 접속은 컨벤션대로 리소스로 관리한다(`common/trino.py`의 `
 | --- | --- |
 | S3(SeaweedFS) | `security.toml`로 TLS 구성(gRPC·HTTPS 분리). 현재 endpoint `http://seaweedfs:8333`는 **격리된 compose 내부망**이라 평문 허용 — **외부 노출 시 HTTPS 필수**([constants.py](../dagster/dockerfile.d/src/src/dagster_project/common/constants.py) `S3_ENDPOINT`) |
 | Trino | `http-server.https.enabled=true` + 키스토어. 비밀번호 인증은 **TLS 필수** |
-| Postgres | `ssl=on` + `server.crt`/`server.key`, 클라이언트 `sslmode=require` |
+| Postgres | `ssl=on` + `server.crt`/`server.key`, 클라이언트 `sslmode=require`. **카탈로그 PG는 CNPG가 자체 CA(`catalog-postgres-ca`)와 서버 인증서를 자동 발급**해 서버 측 TLS 1.3이 이미 켜져 있다(2026-08-19 실측) — 남은 것은 **클라이언트 `sslmode` 강제**다. ⚠️ CA 개인키가 `default` 네임스페이스 Secret에 있어, 같은 ns의 secret read 권한 = CA 키 접근이다 |
 
 > 내부 격리망(단일 호스트 compose)에서는 평문이 허용되나, **관리 UI·서비스를 호스트 밖으로 노출하면
 > 전 구간 TLS를 적용**한다([docker.md](conventions/docker.md)).
@@ -185,6 +185,13 @@ Trino 접속은 컨벤션대로 리소스로 관리한다(`common/trino.py`의 `
 ### 4-3. 서비스 RBAC·최소권한 (2.5 · 2.6)
 
 서비스별 계정을 **분리**하고 필요한 권한만 부여한다(현재 단일 크리덴셜 공유 → 분리 필요).
+
+**CloudNativePG(카탈로그 PG)** — RBAC이 **2계층**이다(2026-08-19 실측).
+컨트롤러 `ClusterRole/cloudnative-pg`는 **전 네임스페이스의 `secrets`·`configmaps`·`services`에 RW**를 갖는다
+(cluster-wide 설치 · CNPG 아키텍처상 불가피). 반면 인스턴스용 `Role/catalog-postgres`는 `resourceNames`로
+**자기 시크릿·configmap·Cluster에만** 한정돼 최소권한을 지킨다.
+→ 방어 심화 과제: 차트의 감시 네임스페이스 제한 검토, `NetworkPolicy`로 5432 접근 제한
+(현재 없음 — 클러스터 내 임의 파드가 카탈로그 PG에 도달 가능).
 
 **SeaweedFS S3** — `-s3.config=s3.json`의 `identities`로 서비스별 accessKey·최소 action 지정
 (`Admin`/`Read`/`Write`/`List`/`Tagging`). *주의: `-s3.iam.config`는 identities 미지원 → `-s3.config` 사용.*
@@ -229,9 +236,15 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO trino_ro;
 
 | 대상 | 백업 | 복구 |
 | --- | --- | --- |
-| Postgres(`iceberg_catalog`·Dagster DB) | 논리 백업 `pg_dump`(정기 cron) 또는 물리 백업 `pg_basebackup` + **WAL 아카이브**(PITR) | `pg_restore`(논리) / base backup + WAL 재생(물리) |
+| 카탈로그 Postgres(K8s, CNPG) | **Barman Cloud 플러그인**(CNPG-I)으로 base backup + WAL 아카이브 → SeaweedFS S3. `INSTALL_CNPG_BACKUP=true`로 opt-in(**현재 off**) | CNPG `Cluster`의 `bootstrap.recovery`로 복원(PITR 지원) |
+| 메타 Postgres(compose, Dagster DB) | 논리 백업 `pg_dump`(정기 cron) 또는 물리 백업 `pg_basebackup` + **WAL 아카이브**(PITR) | `pg_restore`(논리) / base backup + WAL 재생(물리) |
 | SeaweedFS `s3://warehouse` | 버킷 객체 복제(다른 호스트/버킷) 또는 볼륨 백업 | 복제본에서 복원 후 카탈로그 정합 확인 |
 
+> 🔴 **백업 대상이 같은 장애 도메인이면 DR이 아니다** — CNPG 백업을 클러스터 내부 SeaweedFS로 보내면
+> 원본 PVC와 백업본이 **같은 kind 노드·같은 호스트 디스크**에 놓여 노드 유실 시 함께 사라진다.
+> 목적을 **논리 오류·실수 복구**로 한정하고, 진짜 DR이 필요해지면 목적지를 호스트 밖으로 뺀다.
+> 카탈로그 DB가 담는 것은 테이블 식별자·메타 포인터라 **PHI 유출 경로는 아니다**(평문 전송이어도 등급이 다르다).
+>
 > **정합 주의**: Iceberg는 메타데이터(Postgres 카탈로그)와 데이터(SeaweedFS)가 분리 저장되므로
 > **둘의 백업 시점을 맞춘다**. 카탈로그만 복구하면 없는 데이터 파일을 가리켜 읽기 실패가 난다.
 > 백업 주기·보존기간은 [operations.md §2](operations.md) 표에 확정한다.

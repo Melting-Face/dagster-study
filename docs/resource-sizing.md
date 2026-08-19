@@ -40,17 +40,18 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 | | Spark Operator | 100m | 256Mi | 250m | 512Mi |
 | | Flink Operator | 200m | 512Mi | 500m | 1Gi |
 | | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
-| | Catalog Postgres(Iceberg JDBC) | 250m | 384Mi | 500m | 512Mi |
+| | **CloudNativePG 오퍼레이터**(컨트롤러) | 100m | 200Mi | 250m | 384Mi |
+| | Catalog Postgres(Iceberg JDBC, CNPG `Cluster` 1인스턴스) | 250m | 512Mi | 500m | 768Mi |
 | | **Spark Connect 서버**(Phase 1, dbt 접속용) | 500m | 1.5Gi | 1 | 2Gi |
 | | **ingress-nginx 컨트롤러**(UI 고정 URL) | 100m | 90Mi | — | — |
-| | **상주 소계** | **~1.95** | **~5.0Gi** | | |
+| | **상주 소계** | **~2.05** | **~5.3Gi** | | |
 | **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
 | | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
-| | **BATCH 피크(상주+Spark)** | **~4.45** | **~8.5Gi** | | ✅ 6/16 내 |
+| | **BATCH 피크(상주+Spark)** | **~4.55** | **~8.8Gi** | | ✅ 6/16 내 |
 | **STREAM(일시)** | Redpanda(dev, 1 broker) | 500m | 1.5Gi | 1 | 2Gi |
 | | Flink JobManager | 1 | 1.5Gi | 1 | 2Gi |
 | | Flink TaskManager × 1(2 slot) | 1 | 2Gi | 1 | 2.5Gi |
-| | **STREAM 피크(상주+Flink)** | **~3.95** | **~8.5Gi** | | ✅ 6/16 내 |
+| | **STREAM 피크(상주+Flink)** | **~4.05** | **~8.8Gi** | | ✅ 6/16 내 |
 
 > ingress-nginx는 **`limits`가 없는 유일한 워크로드**다(외부 매니페스트 그대로, [conventions/k8s.md](conventions/k8s.md) §2 예외).
 > 상주 부하가 작아 예산에는 영향이 미미하지만, 상한이 없다는 점은 인지하고 쓴다.
@@ -71,6 +72,16 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 | 상주만(오퍼레이터 2종 + SeaweedFS + 카탈로그 PG + cert-manager) | 3500m (43%) | 5538Mi (24%) |
 | + Flink 세션 클러스터(JM 1 + TM 1) | 4500m (56%) | 7586Mi (34%) |
 
+> ⚠️ 위 실측은 **2026-08-18** 값으로, 이후 구성이 바뀌었다(Flink 스택 제거 / CNPG 도입).
+>
+> **2026-08-19 재실측** (`kubectl describe node`, CNPG 적용 직후):
+>
+> | 구성 | Requests CPU | Requests Mem |
+> | --- | --- | --- |
+> | 상주(Spark Operator + **CNPG 오퍼레이터·`Cluster` 1인스턴스** + SeaweedFS + Spark Connect + ingress) | 3200m (40%) | 5444Mi (24%) |
+>
+> Flink Operator·cert-manager가 빠지고 CNPG 2종이 들어와 **CPU는 -300m**, 메모리는 거의 같다.
+>
 > podman machine 실제 할당은 **8 CPU / 22GiB**로, 문서 목표치(6/16)보다 여유가 있다.
 > 목표 예산으로 좁힐 경우 위 수치가 상한에 근접하므로 시분할이 다시 필수가 된다.
 
@@ -210,10 +221,19 @@ daemon 필요 메모리
 
 ## Postgres
 
-Dagster 메타데이터 + Iceberg JDBC 카탈로그를 함께 담는다. 접속자: Dagster·Trino·dbt·pyiceberg.
+**두 벌**이고 성격이 다르다 — 자원도 따로 잡는다.
+
+| 대상 | 담는 것 | 위치 | 튜닝 지점 |
+| --- | --- | --- | --- |
+| 메타 Postgres | Dagster run·이벤트·스케줄 상태 | compose(호스트) | `compose.yml` / `postgresql.conf` |
+| 카탈로그 Postgres | Iceberg 테이블 메타(JDBC 카탈로그) | K8s(CNPG `Cluster`) | `k8s/catalog-postgres.yaml`의 `spec.postgresql.parameters` |
 
 - `shared_buffers` ≈ RAM × **0.25**, `work_mem`(정렬/조인 버퍼, 연결당), `max_connections`
-- 동시 run·Trino 워커·pyiceberg 연결이 늘면 `max_connections`를 상향한다.
+- 동시 run·pyiceberg 연결이 늘면 `max_connections`를 상향한다.
+- 카탈로그 쪽은 **테이블 메타만** 담아 데이터가 작다 → `shared_buffers 128MB`로 충분하다.
+  접속자는 Dagster(pyiceberg)·Spark·Flink·dbt 4종이라 연결 수가 먼저 병목이 된다.
+- 🔴 **메타 PG를 클러스터로 옮기지 않는다** — Dagster는 호스트에 남으므로, 메타 스토리지를 kind에 두면
+  클러스터가 없을 때 Dagster 자체가 기동하지 못하는 **순환 의존**이 된다.
 
 ## SeaweedFS
 

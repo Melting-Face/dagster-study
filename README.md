@@ -32,8 +32,8 @@ MIMIC-IV·eICU 중환자 데이터를 **Dagster + dbt + Iceberg 레이크하우�
 | 오케스트레이션 | **호스트** — Dagster webserver·daemon | 메타 스토리지는 compose `postgres` |
 | 배치 컴퓨트 | **K8s** — Apache Spark Operator → `SparkApplication` | 러너 이미지 `spark-runner:0.4.0`(Iceberg·S3A·Spark Connect) |
 | SQL 엔드포인트 | **K8s** — Spark Connect 서버 | dbt-spark가 `spark.remote`로 접속(Phase 1) |
-| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` | 러너 이미지 `flink-runner:0.2.0`(Iceberg) |
-| 테이블 포맷 | Iceberg (JDBC 카탈로그 = `catalog-postgres`) | Spark·Flink가 **동일 카탈로그 공유**(카탈로그명 `iceberg`로 통일) |
+| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` ⏸ **현재 미설치** | 러너 이미지 `flink-runner:0.2.0`(Iceberg). Phase 3에서 `INSTALL_FLINK=true`로 복구 |
+| 테이블 포맷 | Iceberg (JDBC 카탈로그 = **CloudNativePG** `catalog-postgres`, 접속은 `-rw` 서비스) | Spark·Flink가 **동일 카탈로그 공유**(카탈로그명 `iceberg`로 통일) |
 | 오브젝트 스토어 | SeaweedFS (S3 호환, path-style) | Iceberg 웨어하우스 |
 | UI 진입점 | **K8s** — ingress-nginx (`*.localtest.me:8080`) | HTTP UI만 Ingress, 데이터 접속은 `port-forward`(§2-1) |
 | 변환 | dbt — `dbt-trino`(현행) → `dbt-spark`(이행 중) | 모델 22개(`models/mimic_iv/`), 방언은 내장·dispatch 매크로로 흡수(`macros/cross_engine.sql`) |
@@ -57,8 +57,8 @@ cp .env.example .env
 
 ```shell
 ./scripts/k8s-up.sh                       # podman machine + kind 클러스터 + 레지스트리
-INSTALL_FLINK=true ./scripts/k8s-operators.sh   # Spark Operator (+ cert-manager·Flink Operator)
-./scripts/k8s-poc-storage.sh              # SeaweedFS + Iceberg 카탈로그 Postgres
+./scripts/k8s-operators.sh                # Spark Operator + CloudNativePG (Flink는 INSTALL_FLINK=true)
+./scripts/k8s-poc-storage.sh              # SeaweedFS + Iceberg 카탈로그 Postgres(CNPG Cluster)
 ./scripts/k8s-down.sh                     # 정리
 ```
 
@@ -69,13 +69,13 @@ INSTALL_FLINK=true ./scripts/k8s-operators.sh   # Spark Operator (+ cert-manager
 
 | URL | 대상 |
 | --- | --- |
-| http://flink.localtest.me:8080 | Flink Web UI (JobManager) |
+| http://flink.localtest.me:8080 | Flink Web UI (JobManager) — ⏸ Flink 미설치라 현재 미응답 |
 | http://spark.localtest.me:8080 | Spark Web UI (Connect 서버, 쿼리 이력 누적) |
 
 데이터 접속(카탈로그 Postgres·SeaweedFS·Spark Connect gRPC)은 `port-forward`를 쓴다.
 
 ```shell
-kubectl port-forward svc/catalog-postgres 15432:5432   # Iceberg JDBC 카탈로그
+kubectl port-forward svc/catalog-postgres-rw 15432:5432   # Iceberg JDBC 카탈로그(CNPG 쓰기 서비스)
 kubectl port-forward svc/seaweedfs        18333:8333   # S3 API
 kubectl port-forward svc/spark-connect    15002:15002  # dbt(spark_connect 타깃)
 ```

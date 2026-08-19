@@ -3,7 +3,7 @@
 > **상태**: 🚧 **채택·이행중**. 재설계로 **컴퓨트·데이터 서비스를 K8s로 이전**하되 **Dagster는 호스트에 유지**한다
 > (오케스트레이터↔원격 컴퓨트 분리). 전체 로드맵은 [../redesign.md](../redesign.md), PoC 게이트는 그 Phase 0.
 > 아래 §1~8은 [docker.md](docker.md)의 원칙(이미지 고정·자원 한도·비밀 참조·non-root)을 K8s 리소스로 옮긴 공통 규칙,
-> §9~11은 **본 재설계 고유 규칙**(Spark Operator·호스트 Dagster 트리거·로컬 클러스터)이다.
+> §9~12는 **본 재설계 고유 규칙**(Spark Operator·호스트 Dagster 트리거·로컬 클러스터·CNPG 카탈로그 PG)이다.
 > **연관**: 아키텍처 [../architectures/k8s.md](../architectures/k8s.md)·[../architectures/spark.md](../architectures/spark.md),
 > 환경변수 전파 [../operations.md](../operations.md), 보안 통제 [../security.md](../security.md).
 
@@ -11,7 +11,10 @@
 
 - **오퍼레이터/컨트롤러**(Spark Operator·Flink Operator): `Deployment`.
 - **컴퓨트 잡**(Spark driver/executor·Flink JM/TM): 오퍼레이터가 CRD(`SparkApplication`·`FlinkDeployment`)로 생성.
-- **상태 저장**(catalog postgres·seaweedfs·redpanda): `StatefulSet` + `PersistentVolumeClaim`(PVC)로 데이터 유실 방지.
+- **상태 저장**(seaweedfs·redpanda): `StatefulSet` + `PersistentVolumeClaim`(PVC)로 데이터 유실 방지.
+  단 **카탈로그 postgres는 오퍼레이터(CNPG)** 가 관리한다(§12) — 파드·PVC·서비스를 오퍼레이터가 만든다.
+  🔴 **`emptyDir`를 상태 저장에 쓰지 않는다** — 2026-08-19까지 카탈로그 PG가 `emptyDir`였고,
+  파드 재기동만으로 Iceberg 테이블 메타가 전부 소멸하는 상태였다(S3 parquet은 남아 "부분 생존"으로 보인다).
 - 노출은 `Service`(기본 ClusterIP), 외부 진입은 필요 시 `Ingress`. (**Dagster는 호스트**라 클러스터 밖, §8)
 
 ## 2. 리소스 requests/limits 필수 (compose `deploy.resources` 매핑)
@@ -139,6 +142,13 @@ resources:
 
 ## 9-2. Flink Operator·FlinkDeployment 규칙 (스트리밍)
 
+> ⏸ **현재 미설치**(2026-08-19). Phase 0 검증 후 `flink-session`·Flink Operator·cert-manager를
+> 제거했다 — 잡 없는 세션 클러스터가 **1 CPU / 2Gi를 상주 점유**해 §9-3 시분할 규약을 어겼기 때문이다.
+> 아래 규칙과 매니페스트·러너 이미지는 **Phase 3 재개용으로 그대로 유효**하며
+> `INSTALL_FLINK=true ./scripts/k8s-operators.sh`로 복구한다(`INSTALL_FLINK` 기본값은 `false`).
+> 🔴 세션 클러스터는 **잡이 없어도 JM이 상주**한다(아래 Web UI 항목) — 이게 자원이 조용히 새는 경로다.
+> 검증이 끝나면 반드시 내린다.
+
 - **오퍼레이터**: Apache **Flink Kubernetes Operator**를 Helm으로 설치하고, 스트리밍 잡은 **`FlinkDeployment`(CRD)** 로 선언한다.
   JobManager/TaskManager 자원(`memory`·`cpu`)을 명시한다(§2, 수치는 [../resource-sizing.md](../resource-sizing.md)).
   CRD는 `flink.apache.org/**v1beta1**` 단일(2026-08-18 실측, operator 1.15.0).
@@ -183,6 +193,10 @@ resources:
 - **BATCH(Spark)와 STREAM(Flink)은 동시 실행하지 않는다**(단일 PC 6 CPU/16 GB에서 동시 피크가 예산 초과).
   한 번에 한 엔진만 띄우고, 대기 엔진 파드는 0으로 스케일한다. 근거·배분은 [../resource-sizing.md](../resource-sizing.md) "Kubernetes 재설계 시나리오".
 - Redpanda·Flink JM/TM는 **스트리밍 데모 중에만** 상주시키고, 종료 후 스케일 0으로 자원을 회수한다.
+- 🔴 **이 규칙은 2026-08-19에 실제로 깨져 있었다** — Phase 0 검증용 `flink-session`이 잡 없이 13시간
+  상주하며 `spark-connect`와 **동시 점유**(합 1.5 CPU / 3.5Gi requests)했다. 발견 경로는 성능 이상이 아니라
+  **"안 쓰는 것 정리"** 였다. 규약이 문서에만 있고 **회수 시점을 아무도 트리거하지 않으면** 이렇게 샌다.
+  → 검증·데모가 끝나는 **그 자리에서** 내린다. 상주 컴퓨트는 주기적으로 `kubectl get pods -A`로 대조한다.
 
 ## 10. 호스트 Dagster → 로컬 K8s 트리거·연결 규칙
 
@@ -259,6 +273,54 @@ resources:
   코드에도 `common/constants.py`가 `os.environ.setdefault`로 기본값을 못 박는다(환경 누락 시 조용한 손상 방지).
   Java SDK 경로(Spark·Flink의 iceberg-aws-bundle)는 영향받지 않는다 — 파이썬(pyiceberg/pyarrow·boto3) 경로만 해당.
 
+## 12. 카탈로그 Postgres = CloudNativePG(CNPG) 규칙
+
+- **오퍼레이터**: [CloudNativePG](https://cloudnative-pg.io/)(CNCF). `scripts/k8s-operators.sh`가 Helm으로
+  `ns=cnpg-system`에 설치하고, `Cluster` CR은 `k8s/catalog-postgres.yaml`(적용은 `k8s-poc-storage.sh`).
+- 🔴 **차트 버전 ≠ appVersion**(§9 Spark 오퍼레이터와 같은 함정): chart **0.29.0** = CNPG **1.30.0**.
+  `helm search repo cnpg/cloudnative-pg --versions`로 대조하고 `k8s-env.sh`의 `CNPG_CHART_VERSION`에 핀한다.
+- 🔴 **서비스 이름에 접미사가 붙는다** — `<cluster>-rw`(쓰기)·`-ro`(읽기 전용)·`-r`(전체)만 생기고
+  `<cluster>` 이름의 서비스는 **만들어지지 않는다**. jdbc URI는 `catalog-postgres-rw:5432`다.
+- 🔴 **자동생성 시크릿(`<cluster>-app`)을 쓰지 않는다** — 호스트 Dagster가 이 DB에 직접 붙으므로
+  (`.env`의 `ICEBERG_CATALOG_*`) 오퍼레이터가 만든 비밀번호는 사람이 `.env`로 옮겨야 하고, 그 동기화가
+  어긋나면 §11의 "부분 성공" 드리프트가 재현된다. → `bootstrap.initdb.secret`으로 **선언 시크릿**
+  `catalog-pg-app`(type `kubernetes.io/basic-auth`, 키 `username`/`password` 고정)을 지정하고,
+  값의 단일 출처는 `scripts/k8s-poc-storage.sh`(env override)로 둔다.
+  PG 크리덴셜은 `lakehouse-creds`(S3 전용)와 **분리**한다 — 같은 비밀번호를 두 시크릿에 두지 않는다.
+- 🔴 **`bootstrap.initdb.secret`은 "초기화 1회"다 — 스크립트 재실행으로 비밀번호가 회전되지 않는다.**
+  `PG_PASSWORD=새값 ./scripts/k8s-poc-storage.sh`를 돌리면 **k8s Secret만 바뀌고 DB 롤은 옛 값 그대로**다.
+  그러면 Secret을 읽는 Spark·Flink는 인증에 실패하고 `.env`를 읽는 호스트 Dagster는 성공해
+  **위 "부분 성공" 드리프트가 축만 바꿔 재현된다**(2026-08-19 `security`·`devops-qa` 감사 공통 지적).
+  CNPG가 시크릿 변경을 롤에 반영하는 것은 **`spec.managed.roles`로 선언한 롤뿐**이고
+  `bootstrap.initdb`로 만든 계정은 대상이 아니다(CNPG `declarative_role_management` 문서).
+  → **회전 절차**: ① `ALTER ROLE iceberg PASSWORD ...`(또는 `spec.managed.roles` 도입) ②`catalog-pg-app`
+  갱신 ③ `.env` 갱신 ④ Spark·Flink 워크로드 재기동. **셋 중 하나라도 빠지면 부분 성공이 난다.**
+- 🔴 **`bootstrap.initdb.owner`와 시크릿 `username`은 반드시 같아야 한다**(CNPG 문서 명시).
+  CR의 `owner`는 리터럴이라 `PG_USER` env override와 자동으로 맞춰지지 않으므로,
+  `k8s-poc-storage.sh`가 **적용 전에 CR의 `owner`와 `PG_USER`를 대조해 불일치 시 중단**한다.
+- **probe(§3)·RBAC(§5)·securityContext(§6)는 CR에 쓰지 않는다 — 오퍼레이터가 채운다.**
+  2026-08-19 `kubectl get pod catalog-postgres-1 -o yaml` 실측: `runAsNonRoot:true`·uid/gid `26`·
+  `readOnlyRootFilesystem:true`·`capabilities.drop:[ALL]`·`seccompProfile:RuntimeDefault`,
+  `/healthz`·`/readyz`·`/startupz` 3종 probe, 전용 SA·Role(자기 시크릿에 `resourceNames` 한정)이 모두 자동 생성된다.
+  **CR에 없다고 위반으로 읽지 않는다**(정적 감사의 거짓 갭). 반대로 중복 선언해 오퍼레이터 값과 충돌시키지도 않는다.
+- **operand 이미지 태그를 명시**한다(§4 `latest` 금지). 형식은 `MM.mm-TYPE-OS`
+  ([postgres-containers](https://github.com/cloudnative-pg/postgres-containers)). `system` 타입은 deprecated이므로
+  **`standard`** 를 쓴다(백업은 in-tree가 아닌 플러그인 경로라 barman 바이너리가 이미지에 필요 없다).
+- **백업·PITR은 Barman Cloud 플러그인(CNPG-I)** 으로 한다 — in-tree barman-cloud는 **CNPG 1.31.0에서 제거 예정**.
+  전제는 CNPG ≥ 1.26 + **cert-manager**다. cert-manager는 Flink Operator 웹훅과 **공용**이라
+  `k8s-env.sh`의 `ensure_cert_manager` 헬퍼가 있으면 재사용·없으면 설치한다(멱등).
+  ⚠️ 2026-08-19 현재 클러스터에 cert-manager는 **없다**(Flink 정리 시 함께 제거) — 백업을 켜면 이 헬퍼가 다시 깐다.
+  백업 대상은 클러스터 내부 **SeaweedFS(S3)** 로 두어 외부 비용을 만들지 않는다.
+  `INSTALL_CNPG_BACKUP=true`로 opt-in한다(§`profiles`와 같은 "뼈대는 항상 / 옵션은 opt-in" 원칙).
+  ⚠️ **현재 백업은 미구성**이다(기본값 `false`, cert-manager도 부재).
+  🔴 **이 백업은 DR이 아니다** — 백업본이 원본과 **같은 노드·같은 호스트 디스크**에 놓이므로
+  노드/PVC 유실 시 함께 사라진다. 목적은 **논리 오류·실수 복구**로 한정한다. 또 SeaweedFS S3는 `http://`
+  평문이라 WAL·base backup이 평문 전송·저장된다(카탈로그 DB는 테이블 식별자·메타 포인터만 담아
+  PHI 경로는 아니다 — [security.md](../security.md) 4-4).
+- 🔴 **PVC 사후 확장이 안 된다** — kind 기본 SC(`rancher.io/local-path`)는 `ALLOWVOLUMEEXPANSION=false`다
+  (2026-08-19 실측). 용량은 처음에 넉넉히 잡고, 늘리려면 클러스터 재생성이다.
+- **메타 Postgres(Dagster)는 이 규칙 밖**이다 — compose(호스트)에 남긴다(§8 호스트 Dagster, 순환 의존 회피).
+
 ## 참고
 
 - Kubernetes 문서: https://kubernetes.io/docs/home/
@@ -271,5 +333,7 @@ resources:
 - Dagster Pipes / PipesK8sClient: https://docs.dagster.io/api/python-api/libraries/dagster-k8s
 - Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/ · 릴리스: https://github.com/apache/spark-kubernetes-operator/releases
 - Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
+- CloudNativePG: https://cloudnative-pg.io/ · 릴리스: https://cloudnative-pg.io/releases/ · 차트: https://github.com/cloudnative-pg/charts
+- CloudNativePG Barman Cloud 플러그인: https://cloudnative-pg.io/plugin-barman-cloud/docs/installation/
 - kind Podman provider(rootless/rootful): https://kind.sigs.k8s.io/docs/user/rootless/
 - kind 로컬 레지스트리: https://kind.sigs.k8s.io/docs/user/local-registry/

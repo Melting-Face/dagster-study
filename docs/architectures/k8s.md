@@ -15,11 +15,15 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
   전면 이행은 **PoC 성공을 전제**로 단계적으로 진행한다. 전체 로드맵은 [../redesign.md](../redesign.md).
 - **로컬 배포판**: **kind on Podman(rootful)** + 로컬 레지스트리. 호스트 Dagster는 kubeconfig로 클러스터 API에 접근한다.
 - **핵심 컴포넌트**: **Spark Operator**(배치)·**Flink Operator**(스트림)로 `SparkApplication`·`FlinkDeployment`(CRD) 실행,
+  **CloudNativePG**(카탈로그 Postgres)로 `Cluster`(CRD) 관리,
   Redpanda·SeaweedFS·카탈로그 Postgres를 K8s에 배포한다(**Trino 제거**). Iceberg 테이블은 Spark·Flink가 공유한다.
   **웹 UI 진입점은 ingress-nginx**로 고정 URL화한다(`*.localtest.me:8080`).
 - **구축 현황(2026-08-19 실측)**: 클러스터 k8s **v1.36.1** 단일 노드.
   **Spark Operator 1.0.0**(chart 1.8.0) / **Flink Operator 1.15.0**(+cert-manager) 기동,
-  **Spark Connect 서버**(dbt 접속용) 상주, SeaweedFS·카탈로그 Postgres 운영 중.
+  **Spark Connect 서버**(dbt 접속용) 상주, SeaweedFS·카탈로그 Postgres 운영 중
+  카탈로그 Postgres는 **CloudNativePG 1.30.0**(chart 0.29.0)이 관리하는 `Cluster`로 **교체 완료**
+  (operand `postgresql:18.6-standard-trixie`, PVC 5Gi, `catalog-postgres-rw` 접속).
+  Spark 잡이 새 카탈로그에 `iceberg.poc.sample`을 등록하는 것까지 확인(2026-08-19).
   **ingress-nginx v1.15.1**(kind provider)로 Spark·Flink UI를 `port-forward` 없이 노출.
   Dagster 자산이 `SparkApplication`을 제출해 Iceberg에 적재하고(Phase 0 게이트 통과),
   **Flink이 같은 Iceberg 카탈로그를 조회**하는 것까지 확인.
@@ -31,7 +35,7 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 
   | compose | Kubernetes |
   | --- | --- |
-  | service | `Deployment`(+`Service`) / `StatefulSet`(postgres·seaweedfs) |
+  | service | `Deployment`(+`Service`) / `StatefulSet`(seaweedfs) / **오퍼레이터 CR**(카탈로그 postgres = CNPG `Cluster`) |
   | `deploy.resources` | `resources.requests`·`resources.limits` |
   | healthcheck | `livenessProbe`·`readinessProbe`·`startupProbe` |
   | `depends_on` | initContainers / readiness gating |
@@ -45,7 +49,12 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 ## 운영 메모 (이행)
 
 - 패키징은 **Helm 차트**(값 분리·환경별 오버라이드). 이미지 태그 고정(`latest` 금지).
-- 상태 저장(Postgres·SeaweedFS)은 `StatefulSet`+PVC.
+- 상태 저장(SeaweedFS)은 `StatefulSet`+PVC.
+- **카탈로그 Postgres는 CloudNativePG(CNPG) 오퍼레이터**가 관리한다(`postgresql.cnpg.io/v1` `Cluster`).
+  직접 `StatefulSet`을 쓰지 않는 이유: PVC·failover·백업(PITR)·파라미터 튜닝이 **CR 한 장**에 들어오고,
+  Spark·Flink 오퍼레이터와 **같은 선언형 패러다임**으로 통일된다. 서비스는 오퍼레이터가 만드는
+  `catalog-postgres-rw`/`-ro`/`-r`이다(접미사 없는 이름은 생기지 않는다).
+  **메타 Postgres는 compose(호스트)에 남긴다** — Dagster가 호스트라 순환 의존을 피한다.
 - **Spark 실행**: Apache 공식 **Spark Kubernetes Operator**(GA 1.0.0, Kubeflow에서 이전)를 Helm으로 설치(`ns=spark-operator`),
   Dagster 자산이 `PipesK8sClient`로 `SparkApplication`(CRD, `spark.apache.org/v1`)을 제출·폴링한다. 규칙은 [../conventions/k8s.md](../conventions/k8s.md) §9~11.
 - **Dagster 위치 주의**: 본 프로젝트는 Dagster를 **호스트에 유지**한다. `dagster-k8s`의 `K8sRunLauncher`는
@@ -59,4 +68,7 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
 - dagster-k8s: https://docs.dagster.io/deployment/oss/deployment-options/kubernetes
 - Apache Spark Kubernetes Operator: https://apache.github.io/spark-kubernetes-operator/
 - Apache Flink Kubernetes Operator: https://nightlies.apache.org/flink/flink-kubernetes-operator-docs-main/
+- CloudNativePG(PostgreSQL 오퍼레이터, CNCF): https://cloudnative-pg.io/ · 릴리스: https://cloudnative-pg.io/releases/
+- CloudNativePG Barman Cloud 플러그인(백업·PITR): https://cloudnative-pg.io/plugin-barman-cloud/docs/intro/
+- CloudNativePG operand 이미지 태그: https://github.com/cloudnative-pg/postgres-containers
 - kind(로컬 K8s, Podman provider): https://kind.sigs.k8s.io/

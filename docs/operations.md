@@ -90,7 +90,11 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 - **dbt-spark 타깃 키**(`ICEBERG_*`·`SPARK_REMOTE`)도 같은 성격이다. 호스트에서 dbt를 돌리면
   in-cluster 서비스(카탈로그 Postgres·SeaweedFS·Spark Connect)에 **port-forward가 필요**하므로
   `.env` 기본값은 `localhost:<로컬포트>`를 가리킨다. 클러스터 안에서 도는 워크로드는
-  매니페스트가 서비스명(`catalog-postgres`·`seaweedfs`)을 직접 주입한다.
+  매니페스트가 서비스명(`catalog-postgres-rw`·`seaweedfs`)을 직접 주입한다.
+  - 🔴 **카탈로그 PG의 서비스명에는 접미사가 붙는다** — CloudNativePG가 `<cluster>-rw`(쓰기)·`-ro`(읽기 전용)·
+    `-r`(전체)를 만들고 `<cluster>` 이름의 서비스는 **만들지 않는다**. 오퍼레이터 이전 시 `catalog-postgres`를
+    그대로 두면 DNS가 안 풀려 죽는다. 계정 시크릿도 `lakehouse-creds`(S3 전용)에서 분리해
+    **`catalog-pg-app`**(basic-auth, 키 `username`/`password`)이 in-cluster 단일 출처다.
 
 ## 2. 운영 정책 (보존·만료)
 

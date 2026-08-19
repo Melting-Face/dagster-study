@@ -35,8 +35,9 @@ spec:
             containers:
                 - name: flink-main-container
                   env:
+                      # CNPG가 만드는 쓰기 서비스(`-rw`). 읽기 전용은 `-ro`.
                       - name: ICEBERG_JDBC_URI
-                        value: "jdbc:postgresql://catalog-postgres:5432/iceberg"
+                        value: "jdbc:postgresql://catalog-postgres-rw:5432/iceberg"
                       - name: ICEBERG_WAREHOUSE
                         value: "s3://warehouse"
                       - name: S3_ENDPOINT
@@ -53,12 +54,13 @@ spec:
                       - name: AWS_SECRET_ACCESS_KEY
                         valueFrom:
                             secretKeyRef: {name: lakehouse-creds, key: s3-secret-key}
+                      # PG 크리덴셜은 CNPG bootstrap 시크릿(basic-auth라 키 이름이 username/password 고정)
                       - name: PG_USER
                         valueFrom:
-                            secretKeyRef: {name: lakehouse-creds, key: pg-user}
+                            secretKeyRef: {name: catalog-pg-app, key: username}
                       - name: PG_PASSWORD
                         valueFrom:
-                            secretKeyRef: {name: lakehouse-creds, key: pg-password}
+                            secretKeyRef: {name: catalog-pg-app, key: password}
                       - name: S3_ACCESS_KEY
                         valueFrom:
                             secretKeyRef: {name: lakehouse-creds, key: s3-access-key}

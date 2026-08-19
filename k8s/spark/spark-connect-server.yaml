@@ -63,17 +63,19 @@ spec:
                       - {name: grpc, containerPort: 15002}
                       - {name: ui, containerPort: 4040}
                   env:
-                      - {name: ICEBERG_JDBC_URI, value: "jdbc:postgresql://catalog-postgres:5432/iceberg"}
+                      # CNPG가 만드는 쓰기 서비스(`-rw`). 읽기 전용은 `-ro`.
+                      - {name: ICEBERG_JDBC_URI, value: "jdbc:postgresql://catalog-postgres-rw:5432/iceberg"}
                       - {name: ICEBERG_WAREHOUSE, value: "s3://warehouse"}
                       # 줄 길이 제한(yamllint 120) 회피 겸 재사용 — Iceberg SQL 확장 FQCN
                       - name: ICEBERG_EXTENSIONS
                         value: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
                       - {name: S3_ENDPOINT, value: "http://seaweedfs:8333"}
                       - {name: AWS_REGION, value: "us-east-1"}
+                      # PG 크리덴셜은 CNPG bootstrap 시크릿(basic-auth라 키 이름이 username/password 고정)
                       - name: PG_USER
-                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: pg-user}}
+                        valueFrom: {secretKeyRef: {name: catalog-pg-app, key: username}}
                       - name: PG_PASSWORD
-                        valueFrom: {secretKeyRef: {name: lakehouse-creds, key: pg-password}}
+                        valueFrom: {secretKeyRef: {name: catalog-pg-app, key: password}}
                       # S3 키는 AWS 표준 자격증명 체인으로 넘긴다(--conf에 안 적는다)
                       - name: AWS_ACCESS_KEY_ID
                         valueFrom: {secretKeyRef: {name: lakehouse-creds, key: s3-access-key}}

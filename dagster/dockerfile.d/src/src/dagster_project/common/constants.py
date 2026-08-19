@@ -19,7 +19,8 @@ WAREHOUSE = os.environ.get("ICEBERG_WAREHOUSE", "s3://warehouse")
 
 # 카탈로그 접속은 **환경마다 다르다** — compose(기본)와 K8s를 env로 전환한다.
 #   compose : postgres:5432/iceberg_catalog, Dagster 메타 DB와 같은 계정
-#   K8s     : catalog-postgres:5432/iceberg, 전용 계정(Secret lakehouse-creds)
+#   K8s     : catalog-postgres-rw:5432/iceberg, 전용 계정(Secret catalog-pg-app)
+#             카탈로그 PG는 CloudNativePG가 관리 → 서비스명에 `-rw`(쓰기) 접미사
 # 호스트에서 K8s를 대상으로 돌릴 땐 port-forward 주소를 넣는다(operations.md §1-2).
 ICEBERG_CATALOG_HOST = os.environ.get("ICEBERG_CATALOG_HOST", "postgres")
 ICEBERG_CATALOG_PORT = os.environ.get("ICEBERG_CATALOG_PORT", "5432")

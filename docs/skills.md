@@ -163,8 +163,25 @@
   리터럴로 남겨 `.claude/skills/x`를 **원리상 못 잡는 것**을 놓쳤다. 같은 버그로
   `terraform/**/*.tfstate*`가 `terraform/foo.tfstate`를 놓치고 있었다.
   **반려 원인은 코드가 아니라 테스트 집합의 편향**이었다 — [philosophy.md](philosophy.md) 원칙 7.
-  → 이후 **상대·절대·`~`·변수(`$HOME`)·디렉터리형 5형태**로 확장해 **위반 16종 전부 차단 /
-  대조군 7종 전부 통과**를 재확인했다. 경로 규칙을 바꾸면 **이 5형태 매트릭스를 다시 돌린다**.
+  → 이후 5형태로 확장했으나 **그 매트릭스에도 빠진 형태가 있었다**(병렬 세션이 자기 가드를 같은
+  매트릭스로 시험하다 발견해 통지). 최종 **6형태**로 다시 확장했다:
+
+  | # | 형태 | 예 | 왜 필요한가 |
+  | --- | --- | --- | --- |
+  | 1 | 상대 | `.claude/skills/x` | 선두 `**/`가 후행 `/`를 리터럴로 남김 |
+  | 2 | 절대 | `/Users/…/.agents/skills/x` | resolve된 심볼릭 링크 실체 |
+  | 3 | 틸드 | `~/.claude/skills/x` | 선언 그대로의 형태 |
+  | 4 | **셸 변수** | `$CLAUDE_PROJECT_DIR/.claude/agents/x` | 토큰 정규식이 `$`를 제외해 `VAR/경로`로 남아 **앵커된 패턴에 안 걸림** |
+  | 5 | 디렉터리형 | `tar -C ~/.claude/skills` | 대상이 디렉터리 자체면 `/**` 뒷부분이 비어 실패 |
+  | 6 | **상위 디렉터리** | `tar -C .claude` | 부모에 풀면 보호 대상이 생성·덮어쓰기됨 |
+
+  최종 검증: **위반 23종 전부 차단 / 대조군 20종 전부 통과**(과차단 0).
+  대조군에는 `README.md`·`docs/`·`dbt/models/`·`scripts/` 쓰기와 `git checkout main`·
+  `cd terraform && terraform fmt` 같은 **일상 명령**을 넣어 과차단을 측정했다.
+  🔴 경로 규칙이나 매칭 로직을 바꾸면 **이 6형태 매트릭스를 통째로 다시 돌린다.**
+- ✅ 부수 확인: `security`가 "가드로는 못 막을 수 있다"고 본 **토큰 쪼개기**
+  (`cd ~/.claude/skills && cat > evil/SKILL.md`·`D=~/…; echo x > $D/…`)는
+  **디렉터리형·접미어 전개 수정으로 함께 막혔다** — 별도 대응이 필요 없었다.
 - **D등급 검토 우선순위**(`security` 권고 — 공격면 기준):
   1. **즉시** `helm-chart-scaffolding`(`scripts/validate-chart.sh` 실행 파일) ·
      `auditing-skills`·`find-skills`(설치 절차를 담고 **`skill-matcher`가 로드** — 순환 신뢰)

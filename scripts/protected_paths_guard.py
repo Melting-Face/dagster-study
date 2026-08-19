@@ -135,20 +135,39 @@ def main() -> None:
 
     patterns = load_protected_patterns()
     hits = []
+    tokens = re.findall(r"[\w./*@~-]{3,}", command)
+    # 토큰 하나를 여러 형태로 펼친다. 형태를 빠뜨리면 **그 형태만 조용히 통과**하므로
+    # 넓게 잡고, 과차단은 대조군 테스트로 관리한다(§5형태 매트릭스).
+    candidates: set[str] = set()
+    heads: set[str] = set()
+    for token in tokens:
+        for base in (token, token.lstrip("./")):
+            # 🔴 접미어 전개 — 토큰 정규식이 `$`를 제외해 `$VAR/경로`가 `VAR/경로`로
+            #    남는다. 접두어가 붙은 채로는 `.claude/agents/**` 같은 **앵커된 패턴**에
+            #    걸리지 않는다(`$CLAUDE_PROJECT_DIR/.claude/agents/x`가 통과했다).
+            #    `/` 뒤 조각을 전부 후보로 넣어 접두어 종류에 무관하게 만든다.
+            parts = base.split("/")
+            for i in range(len(parts)):
+                suffix = "/".join(parts[i:])
+                if not suffix:
+                    continue
+                candidates.add(suffix)
+                # 🔴 디렉터리형 — `tar -C <디렉터리>`처럼 **대상이 디렉터리 자체**면
+                #    `.../skills/**` 패턴의 뒷부분이 비어 매칭에 실패한다. `/`를 붙이면
+                #    `.*`가 빈 문자열로 매칭된다.
+                candidates.add(suffix + "/")
+                heads.add(suffix)
+
     for raw, compiled in patterns:
-        # 명령 문자열 안에 등장하는 경로 후보를 패턴과 대조한다.
-        # 후보를 4형태로 넓힌다 — 원형 / `./` 제거형 / 각각의 디렉터리형(`/` 부착).
-        # 🔴 디렉터리형이 필요한 이유: `tar -C <디렉터리>`처럼 **대상이 디렉터리
-        #    자체**면 `.../skills/**` 패턴의 뒷부분이 비어 매칭에 실패한다.
-        #    `/`를 붙이면 `.*`가 빈 문자열로 매칭돼 잡힌다(security 재컨펌 실측).
-        for token in re.findall(r"[\w./*@~-]{3,}", command):
-            stripped = token.lstrip("./")
-            if any(
-                compiled.fullmatch(c)
-                for c in (token, stripped, token + "/", stripped + "/")
-            ):
-                hits.append(raw)
-                break
+        if any(compiled.fullmatch(c) for c in candidates):
+            hits.append(raw)
+            continue
+        # 🔴 상위 디렉터리 — 보호 경로의 **부모**에 아카이브를 풀거나 동기화하면
+        #    보호 대상이 생성·덮어쓰기된다(`tar -C .claude`). 패턴의 글롭 앞
+        #    리터럴 머리와 대조한다.
+        literal_head = raw.split("*")[0].rstrip("/")
+        if literal_head and any(literal_head.startswith(h + "/") for h in heads):
+            hits.append(raw)
     if not hits:
         sys.exit(0)
 

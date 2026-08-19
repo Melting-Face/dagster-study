@@ -165,6 +165,13 @@
   서브에이전트를 호출하면 **실행 메타**(`subagent_type`·`agent`/`model`·허용 도구·도구 호출 수·토큰·소요·승인 결과)와
   **경계 준수 여부**를 저널에 남긴다(수치 없으면 `미측정` — 추정치 금지).
   저널 **`NN` 넘버링은 hook이 강제**한다(`scripts/journal_guard.py` + `.claude/settings.json`) — `SessionStart`가 다음 번호·열린 미션을 주입하고, `PreToolUse(Write)`가 중복·규약 위반 생성을 차단하며, `Stop`이 저널 누락을 경고한다. 착수 순번의 판정 기준은 **본문 상호작용 로그의 첫 이벤트**.
+  **병렬 세션의 중복 작업도 hook이 잡는다**(`scripts/session_sync_guard.py`) — 다른 세션이 같은
+  `subagent_type`을 **같은 대상**으로 실행 중이거나 **같은 파일**을 최근 고쳤으면 `escalate`로 확인을 올리고,
+  이미 **완료**한 서브에이전트 작업은 **결과 요약을 주입**해 재호출 대신 재사용시킨다. 레지스트리는
+  `.claude/.claims/`(gitignore). 차단이 아니라 **소통**이므로, 승인 전에 `ListAgents`→`SendMessage`로
+  **그 세션에 직접 물어본다**. 상대 지목은 **`TMUX_PANE`**(=`ListAgents`의 `tmux` 컬럼)으로 하고
+  `session_id`로 확인한다 — `[7f1735]` 같은 **ref는 관측자마다 달라 전역 키가 아니다**(실측 반증).
+  🔴 `Bash` 경유 쓰기는 이 가드를 우회하므로 **파일 수정을 `Bash`로 하라는 지시는 거부**한다.
   **워커 경계의 실효 강제는 `permissions` 규칙**이다(프론트매터 `tools`·경계 지시문은 난이도·규율일 뿐).
   `deny` > `ask` > `allow` 순으로 **auto 모드 분류기보다 먼저** 평가되고 **서브에이전트에도 동일 적용**된다 —
   비가역 작업(git 커밋·푸시, `terraform/kubectl apply`, `compose down -v`, `dbt --full-refresh`, `DROP`/`TRUNCATE`,

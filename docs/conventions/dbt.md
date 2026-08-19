@@ -270,8 +270,9 @@ models:
   | `sequence(start, stop)`·`date_trunc(fmt, ts)` | ✅ 무조치 | 양쪽 엔진에 동일 의미로 존재 |
 
 - ⚠️ **`dbt compile` 통과를 이행 완료로 읽지 말 것.** 현재 `spark_session`·`dev`(trino) 두 타깃 모두
-  22모델 compile 통과·렌더 결과 대조까지 됐지만, **실행 검증은 원천 데이터 부재로 보류** 상태다
-  ([../redesign.md](../redesign.md) Phase 2).
+  22모델 compile 통과·렌더 결과 대조까지 됐지만, **실행 검증은 원천 데이터 부족으로 보류** 상태다
+  ([../redesign.md](../redesign.md) Phase 2). 2026-08-19 기준 22모델이 참조하는 7개 source 중
+  **확보된 것은 `admissions` 하나**뿐이다(나머지 6종은 PhysioNet DUA 대상, 미확보).
 
 ## Trino / Iceberg 주의사항
 

@@ -58,12 +58,14 @@ kubectl create secret generic catalog-pg-app -n default \
     --from-literal=password="${PG_PASSWORD}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
-# 2) 스토리지 배포
-#    카탈로그 PG는 **CNPG Cluster CR**이므로 오퍼레이터가 먼저 있어야 한다.
-if ! kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1; then
-    printf 'CloudNativePG CRD 없음 — 먼저 ./scripts/k8s-operators.sh 를 실행하라\n' >&2
-    exit 1
-fi
+# 2) 선행 조건 — 오퍼레이터·플러그인 CRD.
+#    카탈로그 PG는 **CNPG Cluster CR**이고 그 CR이 barman 플러그인을 참조한다.
+for crd in clusters.postgresql.cnpg.io objectstores.barmancloud.cnpg.io; do
+    if ! kubectl get crd "${crd}" >/dev/null 2>&1; then
+        printf 'CRD 없음(%s) — 먼저 ./scripts/k8s-operators.sh 를 실행하라\n' "${crd}" >&2
+        exit 1
+    fi
+done
 
 # 2-1) 구 구성(Deployment + emptyDir) 잔존분 정리 — 같은 이름의 Service가 CNPG 서비스와 헷갈린다.
 #      카탈로그 데이터는 emptyDir였고 재적재 전제라 보존 대상이 아니다(2026-08-19 확인).
@@ -71,26 +73,40 @@ log "구 catalog-postgres Deployment/Service 정리(있으면)"
 kubectl -n default delete deploy/catalog-postgres --ignore-not-found
 kubectl -n default delete svc/catalog-postgres --ignore-not-found
 
-log "SeaweedFS + Catalog Postgres(CNPG) 배포"
+log "SeaweedFS 배포"
 kubectl apply -f "${REPO_ROOT}/k8s/seaweedfs.yaml"
-kubectl apply -f "${REPO_ROOT}/k8s/catalog-postgres.yaml"
 kubectl -n default rollout status statefulset/seaweedfs --timeout=180s
+
+# 3) S3 버킷 생성(멱등) — weed shell은 filer 자동발견 실패가 있어 -filer 명시
+#    파드가 Ready여도 filer의 gRPC(포트+10000)는 아직 안 열려 있을 수 있다
+#    (2026-08-19 실측: `dial tcp [::1]:18888 connect: connection refused`) → 재시도한다.
+#    버킷은 2개다: `warehouse`(Iceberg) / `pg-backup`(카탈로그 PG 백업).
+#    백업을 안 켜도 빈 버킷 하나는 비용이 없으므로 항상 만든다(분기 없는 단순함).
+#    🔴 분리하는 이유: 같은 버킷에 두면 Iceberg `remove_orphan_files`의 나열 대상과 섞인다.
+for bucket in warehouse pg-backup; do
+    log "${bucket} 버킷 생성"
+    for attempt in $(seq 1 12); do
+        if kubectl -n default exec statefulset/seaweedfs -- \
+            sh -c "echo 's3.bucket.create -name ${bucket}' | weed shell -master localhost:9333 -filer localhost:8888" \
+            >/dev/null 2>&1; then
+            log "${bucket} 버킷 준비 완료 (시도 ${attempt})"
+            break
+        fi
+        sleep 5
+    done
+done
+
+# 4) 백업 구성 — ObjectStore + ScheduledBackup.
+#    🔴 **Cluster보다 먼저** 적용한다. Cluster가 뜨는 즉시 WAL 아카이빙이 시작되는데
+#    그때 ObjectStore(와 pg-backup 버킷)가 없으면 아카이빙이 실패한다.
+log "백업 구성 적용 (ObjectStore + ScheduledBackup)"
+kubectl apply -f "${REPO_ROOT}/k8s/catalog-pg-backup.yaml"
+
+# 5) 카탈로그 Postgres(CNPG Cluster) — 백업 목적지가 준비된 뒤에 띄운다.
+log "Catalog Postgres(CNPG) 배포"
+kubectl apply -f "${REPO_ROOT}/k8s/catalog-postgres.yaml"
 # CR은 rollout status 대상이 아니다 → Cluster의 Ready 조건을 기다린다(initdb 포함이라 넉넉히).
 kubectl -n default wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/catalog-postgres --timeout=300s
-
-# 3) warehouse 버킷 생성(멱등) — weed shell은 filer 자동발견 실패가 있어 -filer 명시
-#    파드가 Ready여도 filer의 gRPC(포트+10000)는 아직 안 열려 있을 수 있다
-#    (2026-08-19 실측: `dial tcp [::1]:18888 connect: connection refused`) → 재시도한다.
-log "warehouse 버킷 생성"
-for attempt in $(seq 1 12); do
-    if kubectl -n default exec statefulset/seaweedfs -- \
-        sh -c 'echo "s3.bucket.create -name warehouse" | weed shell -master localhost:9333 -filer localhost:8888' \
-        >/dev/null 2>&1; then
-        log "warehouse 버킷 준비 완료 (시도 ${attempt})"
-        break
-    fi
-    sleep 5
-done
 
 log "완료. 다음: 이미지 빌드·push → kubectl apply -f k8s/spark/sparkapplication-poc.yaml"

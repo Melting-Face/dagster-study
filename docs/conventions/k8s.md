@@ -319,8 +319,11 @@ resources:
   **위 "부분 성공" 드리프트가 축만 바꿔 재현된다**(2026-08-19 `security`·`devops-qa` 감사 공통 지적).
   CNPG가 시크릿 변경을 롤에 반영하는 것은 **`spec.managed.roles`로 선언한 롤뿐**이고
   `bootstrap.initdb`로 만든 계정은 대상이 아니다(CNPG `declarative_role_management` 문서).
-  → **회전 절차**: ① `ALTER ROLE iceberg PASSWORD ...`(또는 `spec.managed.roles` 도입) ②`catalog-pg-app`
-  갱신 ③ `.env` 갱신 ④ Spark·Flink 워크로드 재기동. **셋 중 하나라도 빠지면 부분 성공이 난다.**
+  → **해결(2026-08-19)**: `spec.managed.roles`에 `iceberg`를 선언해 CNPG가 시크릿 변경을 롤에 재적용하게 했다.
+  실측 `status.managedRolesStatus.byStatus.reconciled: ["iceberg"]`. **`bootstrap.initdb`로 만든 롤을
+  선언 관리로 인수하는 형태**이며 `name`은 initdb의 `owner`와 같아야 한다.
+  단 회전 시 `.env`(호스트 Dagster)와 **이미 떠 있는 워크로드의 env**는 여전히 수동이다 —
+  Spark Connect·Flink는 파드 기동 시점의 값을 들고 있으므로 **재기동까지 한 벌**이다.
 - 🔴 **`bootstrap.initdb.owner`와 시크릿 `username`은 반드시 같아야 한다**(CNPG 문서 명시).
   CR의 `owner`는 리터럴이라 `PG_USER` env override와 자동으로 맞춰지지 않으므로,
   `k8s-poc-storage.sh`가 **적용 전에 CR의 `owner`와 `PG_USER`를 대조해 불일치 시 중단**한다.
@@ -335,7 +338,10 @@ resources:
 - **백업·PITR은 Barman Cloud 플러그인(CNPG-I)** 으로 한다 — in-tree barman-cloud는 **CNPG 1.31.0에서 제거 예정**.
   전제는 CNPG ≥ 1.26 + **cert-manager**다. cert-manager는 Flink Operator 웹훅과 **공용**이라
   `k8s-env.sh`의 `ensure_cert_manager` 헬퍼가 있으면 재사용·없으면 설치한다(멱등).
-  ⚠️ 2026-08-19 현재 클러스터에 cert-manager는 **없다**(Flink 정리 시 함께 제거) — 백업을 켜면 이 헬퍼가 다시 깐다.
+  🔴 **`rollout status` 완료 ≠ 웹훅 서빙 준비** — cainjector가 CA 번들을 주입하기 전에는
+  cert-manager 리소스 생성이 `x509: certificate signed by unknown authority`로 거부된다
+  (2026-08-19 실측: 직후 플러그인 apply가 3건 실패). `ensure_cert_manager`는 **설치 여부와 무관하게**
+  self-signed `Issuer`의 `--dry-run=server`가 통과할 때까지 폴링한다("이미 설치됨"도 준비를 뜻하지 않는다).
   백업 대상은 클러스터 내부 **SeaweedFS(S3)** 로 두어 외부 비용을 만들지 않는다.
   `INSTALL_CNPG_BACKUP=true`로 opt-in한다(§`profiles`와 같은 "뼈대는 항상 / 옵션은 opt-in" 원칙).
   ⚠️ **현재 백업은 미구성**이다(기본값 `false`, cert-manager도 부재).

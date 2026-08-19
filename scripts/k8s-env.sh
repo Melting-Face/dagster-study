@@ -46,10 +46,12 @@ CNPG_REPO="${CNPG_REPO:-cnpg}"
 CNPG_REPO_URL="${CNPG_REPO_URL:-https://cloudnative-pg.github.io/charts}"
 CNPG_CHART="${CNPG_CHART:-cloudnative-pg}"
 CNPG_CHART_VERSION="${CNPG_CHART_VERSION:-0.29.0}"
-# 백업·PITR(선택) — Barman Cloud **플러그인**(CNPG-I). in-tree barman-cloud는 CNPG **1.31.0에서 제거 예정**이라
-# 처음부터 플러그인으로 간다. 전제: CNPG ≥ 1.26 + cert-manager(Flink 웹훅과 공용 — ensure_cert_manager가
-# 있으면 재사용·없으면 설치. 2026-08-19 현재 클러스터에는 없다).
-INSTALL_CNPG_BACKUP="${INSTALL_CNPG_BACKUP:-false}"
+# 백업·PITR — Barman Cloud **플러그인**(CNPG-I). in-tree barman-cloud는 CNPG **1.31.0에서 제거 예정**이라
+# 처음부터 플러그인으로 간다. 전제: CNPG ≥ 1.26 + cert-manager(Flink 웹훅과 공용 — ensure_cert_manager).
+#
+# 🔴 **opt-in이 아니라 뼈대다.** `k8s/catalog-postgres.yaml`의 `spec.plugins`가 이 플러그인을
+# `isWALArchiver: true`로 참조하므로, 플러그인이 없으면 **WAL 아카이빙이 실패해 WAL이 무한정 쌓인다**
+# (PVC가 찬다). "선언은 백업을 요구하는데 런타임엔 없는" 상태를 만들지 않으려고 옵션을 없앴다.
 CNPG_BARMAN_PLUGIN_VERSION="${CNPG_BARMAN_PLUGIN_VERSION:-v0.14.0}"
 
 # ingress-nginx — UI를 고정 URL로 노출(port-forward 대체).
@@ -81,12 +83,35 @@ log() {
 ensure_cert_manager() {
     if kubectl get deploy -n cert-manager cert-manager-webhook >/dev/null 2>&1; then
         log "cert-manager 이미 설치됨 — 재사용"
-        return 0
+    else
+        log "cert-manager 설치 (${CERT_MANAGER_VERSION})"
+        kubectl apply -f \
+            "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
     fi
-    log "cert-manager 설치 (${CERT_MANAGER_VERSION})"
-    kubectl apply -f \
-        "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
+    kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+    kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
     kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+    # 🔴 **"이미 설치됨"도 서빙 준비를 뜻하지 않는다** — 아래 대기는 설치 여부와 무관하게 항상 돈다.
+    # 재사용 경로에서 건너뛰면 '설치는 돼 있는데 아직 못 쓰는' 창에 그대로 걸어 들어간다(2026-08-19 실측).
+    # 🔴 **rollout 완료 ≠ 웹훅 서빙 준비.** cainjector가 CA 번들을 웹훅 설정에 넣기 전까지는
+    # cert-manager 리소스 생성이 `x509: certificate signed by unknown authority`로 거부된다
+    # (2026-08-19 실측: 직후 barman 플러그인 apply가 이 오류로 3건 실패).
+    # 파드 Ready만 보고 다음 단계로 넘어가면 조용히 깨지므로 **실제로 통과할 때까지** 폴링한다.
+    log "cert-manager 웹훅 서빙 대기"
+    for _ in $(seq 1 36); do
+        if printf '%s\n' \
+            'apiVersion: cert-manager.io/v1' \
+            'kind: Issuer' \
+            'metadata: {name: cert-manager-readiness-probe, namespace: cert-manager}' \
+            'spec: {selfSigned: {}}' |
+            kubectl apply --dry-run=server -f - >/dev/null 2>&1; then
+            log "cert-manager 웹훅 준비 완료"
+            return 0
+        fi
+        sleep 5
+    done
+    printf 'cert-manager 웹훅이 시간 내에 준비되지 않았다\n' >&2
+    exit 1
 }
 
 # 필수 CLI 존재 확인, 없으면 종료

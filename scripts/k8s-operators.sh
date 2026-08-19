@@ -90,16 +90,14 @@ helm upgrade --install "${CNPG_RELEASE}" "${CNPG_REPO}/${CNPG_CHART}" \
     --set "resources.limits.memory=384Mi" \
     --wait
 
-# 3-2) Barman Cloud 플러그인(선택) — 백업·PITR. 백업 대상은 클러스터 내부 SeaweedFS(S3)라 외부 비용 0.
-if [ "${INSTALL_CNPG_BACKUP}" = "true" ]; then
-    ensure_cert_manager
-    log "Barman Cloud 플러그인 설치 (${CNPG_BARMAN_PLUGIN_VERSION}) — 오퍼레이터와 같은 ns(${CNPG_NS})"
-    kubectl apply -f \
-        "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/${CNPG_BARMAN_PLUGIN_VERSION}/manifest.yaml"
-    kubectl rollout status deployment -n "${CNPG_NS}" barman-cloud --timeout=180s
-else
-    log "Barman 플러그인 건너뜀 (INSTALL_CNPG_BACKUP=true 로 활성화)"
-fi
+# 3-2) Barman Cloud 플러그인 — 백업·PITR. 백업 대상은 클러스터 내부 SeaweedFS(S3)라 외부 비용 0.
+#      🔴 선택이 아니다 — Cluster CR이 `isWALArchiver: true`로 이 플러그인을 참조하므로
+#      없으면 WAL 아카이빙이 실패한다(k8s-env.sh 주석 참고).
+ensure_cert_manager
+log "Barman Cloud 플러그인 설치 (${CNPG_BARMAN_PLUGIN_VERSION}) — 오퍼레이터와 같은 ns(${CNPG_NS})"
+kubectl apply -f \
+    "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/${CNPG_BARMAN_PLUGIN_VERSION}/manifest.yaml"
+kubectl rollout status deployment -n "${CNPG_NS}" barman-cloud --timeout=180s
 
 log "설치 완료. 오퍼레이터 상태:"
 kubectl get pods -n "${SPARK_OPERATOR_NS}"

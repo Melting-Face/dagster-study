@@ -1,0 +1,67 @@
+# 카탈로그 Postgres 백업 — Barman Cloud 플러그인(CNPG-I) + SeaweedFS(S3)
+#
+# 전제: `INSTALL_CNPG_BACKUP=true ./scripts/k8s-operators.sh` (플러그인 + cert-manager)
+#       `scripts/k8s-poc-storage.sh`가 `pg-backup` 버킷을 만든다.
+# 참조: Cluster(k8s/catalog-postgres.yaml)의 `spec.plugins[].parameters.barmanObjectName`
+#
+# 🔴 **이것은 DR이 아니다.** 백업본이 원본 PVC와 **같은 kind 노드·같은 호스트 디스크**에 놓인다
+# (SeaweedFS도 클러스터 안에 있다). 노드가 죽으면 원본과 백업이 함께 사라진다.
+# 목적은 **논리 오류·실수 복구**(DROP·잘못된 마이그레이션·카탈로그 오염)로 한정한다.
+# 진짜 DR이 필요해지면 `destinationPath`를 호스트 밖 오브젝트 스토어로 바꾼다.
+# 상세는 docs/security.md §4-4, docs/conventions/k8s.md §12.
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+    name: catalog-pg-backup
+    namespace: default
+spec:
+    # 🔴 **SeaweedFS 체크섬 함정이 여기서 또 나온다** — barman-cloud는 boto3(파이썬 AWS SDK)라
+    # 최신 SDK 기본값대로 flexible checksum(CRC64NVME)을 붙이고 본문을 `aws-chunked`로 감싸는데,
+    # SeaweedFS가 이를 못 풀어 **PutObject가 `InternalError`로 실패**한다
+    # (2026-08-19 실측: WAL 아카이빙이 `exit status 4`로 무한 재시도, `ContinuousArchiving=False`).
+    # Dagster(pyiceberg) 경로에서 이미 밟은 것과 **같은 원인·다른 컴포넌트**다
+    # (common/constants.py의 `os.environ.setdefault`, docs/conventions/k8s.md §11).
+    # 사이드카에도 같은 값을 넣어야 한다 — 여기가 세 번째 적용 지점이다.
+    instanceSidecarConfiguration:
+        env:
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: when_required
+            - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+              value: when_required
+    configuration:
+        # Iceberg 웨어하우스(`s3://warehouse`)와 **버킷을 분리**한다 —
+        # 같은 버킷에 두면 Iceberg 유지보수(`remove_orphan_files`)의 나열 대상과 섞여
+        # 서로의 파일을 오해할 여지가 생긴다(관심사 분리).
+        destinationPath: s3://pg-backup/
+        endpointURL: http://seaweedfs:8333
+        # S3 키는 `lakehouse-creds`(S3 전용 시크릿). PG 계정 시크릿(`catalog-pg-app`)과 분리돼 있다.
+        s3Credentials:
+            accessKeyId:
+                name: lakehouse-creds
+                key: s3-access-key
+            secretAccessKey:
+                name: lakehouse-creds
+                key: s3-secret-key
+        wal:
+            compression: gzip
+        data:
+            compression: gzip
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+    name: catalog-pg-daily
+    namespace: default
+spec:
+    # 🔴 CNPG cron은 **6필드**(맨 앞이 초)다. 표준 5필드로 쓰면 의미가 밀린다.
+    # 🔴 오퍼레이터 컨테이너 기준 시각(**UTC**)으로 해석된다 — `execution_timezone`처럼
+    # KST를 지정할 필드가 없다. 아래는 **18:00 UTC = 03:00 KST**다
+    # (프로젝트 타임존 정책: 저장은 UTC·표시와 스케줄은 KST — docs/conventions/timezone.md).
+    schedule: "0 0 18 * * *"
+    backupOwnerReference: self
+    cluster:
+        name: catalog-postgres
+    method: plugin
+    pluginConfiguration:
+        name: barman-cloud.cloudnative-pg.io

@@ -305,6 +305,10 @@
   **그 세션에 직접 물어본다**. 상대 지목은 **`TMUX_PANE`**(=`ListAgents`의 `tmux` 컬럼)으로 하고
   `session_id`로 확인한다 — `[7f1735]` 같은 **ref는 관측자마다 달라 전역 키가 아니다**(실측 반증).
   🔴 `Bash` 경유 쓰기는 이 가드를 우회하므로 **파일 수정을 `Bash`로 하라는 지시는 거부**한다.
+  🔴 **matcher가 붙어도 경로 키가 다르면 조용히 무시된다** — `Edit`·`Write`는 `file_path`인데
+  **`NotebookEdit`은 `notebook_path`** 라, `file_path`만 읽던 `session_sync_guard`는
+  **노트북 편집에 투명**했다(2026-08-20 대조 실측 후 수정). 가드가 여럿이라고
+  **"하나가 막으니 다 막힌다"고 읽지 않는다** — 같은 배선인데 한 가드만 뚫려 있었다.
   🔴 **hook 결정값은 `allow`·`deny`·`ask`·`defer` 넷뿐이다** — 가드 4종
   (`protected_paths_guard`·`session_sync_guard`·`analyst_path_guard`·`worker_path_guard`)은
   2026-08-19까지 **존재하지 않는 `escalate`** 를 내보내 전부 무효였다. `hookSpecificOutput`은
@@ -323,9 +327,11 @@
   생성은 **`scripts/worktree-new.sh <type>/<slug> [--venv]`** 로 한다 — 🔴 맨손 `git worktree add`는
   **피어 감지를 조용히 끈다**(레지스트리가 `$CLAUDE_PROJECT_DIR/.claude/.claims`라 worktree마다 갈린다).
   스크립트가 `.env`·`.claims`·`settings.local.json`을 **링크로 공유**해 이를 막는다(3셀 대조로 실증).
-  🔴 **대가도 있다** — `live_sessions()`가 `cwd`로 거르지 않아 **git 축(switch·stash·reset)에 오탐**이
-  생긴다(다른 worktree 세션까지 센다). 인프라·중복 축은 정확하다. 축별 필터가 들어가기 전까지
-  **worktree 사용 시 git 축 경고는 오탐일 수 있다**고 읽는다.
+  ✅ **대가였던 git 축 오탐은 해소됐다**(`adfba1b`) — 레지스트리를 공유하면 `live_sessions()`가
+  `cwd`로 안 걸러 **git 축(switch·stash·reset)이 다른 worktree 세션까지 세는** 문제가 있었고,
+  **축별 필터**(git 축만 같은 워킹트리로 한정, 인프라·중복 축은 전체 유지)로 잡았다.
+  🔴 축이 갈리는 이유를 기억한다 — **worktree는 파일·인덱스를 격리하지만 클러스터·컨테이너는
+  격리하지 못한다.** 그래서 인프라 축은 트리를 넘어 세는 게 **맞고**, git 축은 넘으면 **틀리다**.
   🔴 **가드는 합성 페이로드로 테스트하면 실제 레지스트리를 바꾼다**(`main()`이 `touch_session()` 선행) —
   읽기 전용이 아니다. 테스트 후 `.claude/.claims/sessions/<접두>.json`을 지운다.
   `.venv`는 editable 설치 때문에 **링크 금지**(반쪽 격리) — `uv sync`, 실측 1.2GB.

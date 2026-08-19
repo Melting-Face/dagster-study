@@ -103,6 +103,11 @@ SHARED_INFRA_RE = re.compile(
     r")\b"
 )
 
+# 편집 대상 경로가 담기는 `tool_input` 키. **도구마다 다르다** —
+# `Edit`·`Write`는 `file_path`, `NotebookEdit`은 `notebook_path`다.
+# (`worker_path_guard`·`analyst_path_guard`와 같은 목록을 쓴다.)
+PATH_KEYS = ("file_path", "notebook_path", "path")
+
 # 대상 지문이 이 비율 이상 겹치면 같은 작업으로 본다 (Jaccard).
 OVERLAP_THRESHOLD = 0.5
 
@@ -616,8 +621,20 @@ def handle_agent_post(payload: dict) -> None:
 
 
 def lease_target(payload: dict) -> tuple[Path, str] | None:
-    """편집 대상 파일의 (리스 경로, 절대경로). 대상이 아니면 None."""
-    raw_path = (payload.get("tool_input") or {}).get("file_path") or ""
+    """편집 대상 파일의 (리스 경로, 절대경로). 대상이 아니면 None.
+
+    🔴 **경로 키가 도구마다 다르다** — `Edit`·`Write`는 `file_path`지만
+    **`NotebookEdit`은 `notebook_path`** 다. `file_path`만 읽으면 matcher가
+    `Edit|Write|NotebookEdit`으로 붙어 있어도 **NotebookEdit만 조용히 무시**된다
+    (2026-08-20 실측: 같은 디렉터리에서 `Write`는 리스가 남고 `NotebookEdit`은 안 남음).
+    에러가 아니라 no-op이라 "가드가 걸려 있다"는 인상만 남는다 — 원칙 7 계열.
+    `worker_path_guard`·`analyst_path_guard`는 처음부터 두 키를 다 본다(동일 정책).
+    """
+    tool_input = payload.get("tool_input") or {}
+    raw_path = next(
+        (tool_input[key] for key in PATH_KEYS if tool_input.get(key)),
+        "",
+    )
     if not raw_path:
         return None
     try:

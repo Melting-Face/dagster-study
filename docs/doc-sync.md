@@ -16,6 +16,7 @@
 | 변경 | 정본(먼저 수정) | 함께 갱신 |
 | --- | --- | --- |
 | 코딩 규칙 | `docs/conventions/<topic>.md` | `CLAUDE.md` 요약 · `docs/README.md` 목차 |
+| 코딩 철학(핵심 가치) | `docs/philosophy.md` | `CLAUDE.md` §코딩 철학 **번호까지 일치**시킨다(요약 목록이 원칙 표와 1:1) · `docs/references.md`(출처) |
 | 아키텍처·데이터 흐름 | `docs/architectures/overview.md` | `CLAUDE.md` · 관련 `conventions/*` 링크 |
 | 처리·배포 기술(개별) | `docs/architectures/<tech>.md`(trino·docker·spark·flink·k8s) | `docs/architectures/README.md` 목차 · `docs/references.md`(기술 출처) |
 | 프로젝트 구조 | `docs/conventions/dagster.md` | `CLAUDE.md` 구조 섹션 |

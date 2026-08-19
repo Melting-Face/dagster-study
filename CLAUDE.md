@@ -207,6 +207,14 @@
   `Lazy~`라 **세션은 접근 시점에** 생긴다(무관한 run이 port-forward 가용성에 묶이지 않는다).
   카탈로그 설정은 **서버 측**에 있어 비밀정보가 Dagster로 오지 않는다.
   `dagster-spark`(spark-submit 래퍼)는 전이 의존일 뿐 **직접 쓰지 않는다**.
+  **dbt도 같은 Connect 서버로 붙는다**(`spark_connect` 타깃) — 2026-08-19 **엔드투엔드 PoC 통과**
+  (build·`merge into` 실발행·docs generate·22모델 compile) → **Thrift 서버는 불필요**하고
+  `k8s/spark/spark-thrift-server.yaml`은 **선언만·미배포**(대피로)로 둔다.
+  🔴 **"미지원"과 "동작 안 함"은 다른 축이다** — dbt-spark의 지원 method는 thrift/http/odbc/session
+  4개뿐이라 Connect 경로는 **어댑터 계약이 아니라 pyspark 내부 위임 동작에 의존**한다.
+  그래서 필요한 건 Thrift 배포가 아니라 **업그레이드 회귀 감시**이고, 상한을 minor로 묶은 뒤
+  (`dbt-spark<1.12`·`pyspark<3.6`) **상한 인상 직전에 `scripts/spark_connect_smoke.py`를 통과**시킨다
+  ([`docs/test.md`](docs/test.md) §5-1 — 실인프라 수동 관문, 종료코드 `1`=회귀 / `2`=판정 불가로 분리).
   **노출은 HTTP UI만 Ingress**(ingress-nginx, `*.localtest.me:8080`)로 내고 gRPC·JDBC·S3는 `port-forward`를 쓴다 —
   kind는 **공개 포트를 클러스터 생성 시점에만** 정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
   컴퓨트 **러너 이미지는 로컬 레지스트리에 직접 push**하고(`kind load` 불필요) **태그와 매니페스트를 함께 올린다**.

@@ -17,13 +17,24 @@ dependencies = [
   # Phase 1 이행 중: dbt-spark로 옮기는 동안 두 어댑터를 **동시 설치**해 타깃만 바꿔가며 대조한다.
   # 이행 완료 시 제거한다(docs/redesign.md Phase 1).
   "dbt-trino>=1.8,<2.0",
-  # Spark 어댑터 — `session` extra는 pyspark를 동반해 로컬 SparkSession으로 붙는다.
-  # (상시 Thrift/Connect 엔드포인트 없이 방언 검증을 먼저 하기 위한 선택. 실행 엔진 최종안은 미확정)
-  "dbt-spark[session]>=1.11,<2.0",
+  # Spark 어댑터 — `session` extra는 pyspark를 동반해 SparkSession으로 붙는다.
+  # 2026-08-19 실측으로 **Spark Connect 서버 구동을 엔드투엔드 확인**했다(dbt debug/build/merge/
+  # docs generate/22모델 compile 전부 통과) → Thrift 서버 없이 성립한다(docs/architectures/spark.md).
+  #
+  # 🔴 **상한을 minor로 좁힌 이유**: 이 경로는 dbt-spark가 **공식 지원하지 않는다**.
+  #   `dbt/adapters/spark/connections.py`의 `SparkConnectionMethod`는 thrift/http/odbc/session
+  #   4개뿐이고 connect가 없다. 동작하는 이유는 `session.py`가 `builder.config(k, v)` →
+  #   `getOrCreate()`를 타서, pyspark classic 빌더가 `spark.remote`를 보고 RemoteSparkSession으로
+  #   위임하는 **내부 동작**에 얹히기 때문이다. 즉 계약이 아니라 구현에 의존한다 →
+  #   **minor 업그레이드가 조용히 깨뜨릴 수 있다.** 상한을 올릴 때는 반드시
+  #   `scripts/spark_connect_smoke.py`를 통과시킨 뒤 올린다(docs/test.md §5-1).
+  "dbt-spark[session]>=1.11,<1.12",
   # pyspark는 **클러스터 러너 이미지와 같은 계열로 고정**한다(현재 Spark 3.5.9).
   # 기본 해석은 4.x를 끌어오는데, Iceberg 런타임 jar(1.6.1 = Spark 3.5용)와 방언이 어긋난다.
   # `connect` extra(gRPC 클라이언트)까지 받아야 dbt-spark가 `spark.remote`로 붙는다.
-  "pyspark[connect]>=3.5,<4.0",
+  # 상한이 `<3.6`인 이유는 위 dbt-spark와 같다 — `spark.remote` 위임은 pyspark 내부 동작이라
+  # 버전 계약이 없다. 러너 이미지(3.5.9)와의 계열 일치도 함께 지킨다.
+  "pyspark[connect]>=3.5.9,<3.6",
   # Trino 파이썬 클라이언트 — Iceberg 유지보수 프로시저 실행(common/trino.py)에 직접 사용.
   # dbt-trino 전이 의존이나, 직접 import하므로 명시 선언(explicit dependencies).
   "trino>=0.330",

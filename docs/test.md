@@ -34,6 +34,10 @@
 | 5 | **dbt singular 테스트** | ★★☆☆☆ | 스키마 테스트로 표현 못 하는 교차 테이블 불변식만 선별 사용 |
 | 6 | **분석 재현성** | ★★☆☆☆ | 파이프라인이 아니라 **결론**을 방어한다. 실인프라가 필요해 비싸고 느리지만, 다른 어떤 계층도 "이 수치가 재현되는가"를 묻지 않는다 |
 
+> **실인프라에 붙는 계층은 둘뿐이고, 둘 다 상시 CI가 아니라 수동 관문이다** — §5-1(Spark Connect
+> 어댑터 스모크, *의존성 상한 인상 직전*)과 §6(분석 재현성, *분석 산출물 공유 직전*).
+> 나머지는 실인프라 미접속이 원칙이다(격리·재현).
+
 ---
 
 ## 1. dbt 스키마(데이터) 테스트 — ★★★★★
@@ -144,6 +148,41 @@ def test_patient_loads_table() -> None:
 > `dbt build`는 `run`+`test`를 합쳐 실행하므로 **1~3번 dbt 테스트가 이 명령에 자동 포함**된다.
 > Dagster 경유 실행 시엔 `dbt.cli(["build"])`가 `dbt_assets`에서 동일하게 테스트를 태운다([dagster.md](conventions/dagster.md#dbt-통합-pythonic-dbt_assets)).
 
+### 5-1. Spark Connect 어댑터 스모크 — 수동 관문
+
+```shell
+kubectl port-forward svc/spark-connect 15002:15002   # 별도 터미널 (실인프라 필요)
+uv run scripts/spark_connect_smoke.py
+```
+
+**무엇을 방어하나.** dbt-spark는 Spark Connect를 **공식 지원하지 않는다** —
+`SparkConnectionMethod`는 thrift/http/odbc/session 4개뿐이고 connect가 없다. 그런데도 도는 것은
+`session.py`가 `builder.config()` → `getOrCreate()`를 타서 pyspark classic 빌더가 `spark.remote`를
+RemoteSparkSession으로 위임하는 **내부 동작**에 얹히기 때문이다([architectures/spark.md](architectures/spark.md)).
+**계약이 아니라 구현에 의존**하므로 `dbt-spark`·`pyspark` 업그레이드가 **에러 없이** 깨뜨릴 수 있다.
+그래서 `pyproject.toml`이 상한을 minor로 묶어 두고(`dbt-spark<1.12`·`pyspark<3.6`),
+**상한을 올리기 직전에** 이 스모크를 관문으로 통과시킨다.
+
+검증 경로: 접속 → `create table`(iceberg) → 스키마 테스트 → **`merge into` 실발행 확인** →
+`docs generate`(카탈로그 메타데이터) → 전용 네임스페이스 `iceberg.smoke` 자동 정리.
+
+| 종료 코드 | 의미 |
+| --- | --- |
+| `0` | 전 항목 통과 — 상한을 올려도 된다 |
+| `1` | **회귀** — Connect 경로가 깨졌다 |
+| `2` | **판정 불가** — 포트 미개방·venv 부재 등 사전 조건 미충족 |
+
+🔴 **`1`과 `2`를 나눈 이유**가 이 게이트의 핵심이다. 포트가 닫혀 못 붙은 것을 실패로 읽으면
+회귀가 아닌데 회귀로 오진하고, 통과로 읽으면 **관측 경로가 죽은 채 통과**가 된다(철학 원칙 7).
+같은 이유로 2회차 build는 종료 코드가 아니라 **`merge into`가 실제로 발행됐는지**를 본다 —
+incremental이 조용히 full-refresh로 떨어져도 종료 코드는 `0`이다.
+
+> **격리 원칙의 의도된 예외**(§6과 같은 성격): 실인프라에 붙어야만 의미가 있어 **CI 상시 게이트가
+> 아니다**. 다만 §6이 *분석 산출물 공유 직전*의 관문이라면, 이쪽은 **의존성 상한 인상 직전**의 관문이다.
+> 게이트 자체를 **일부러 위반시켜 확인**했다 — 포트를 닫고 돌려 `2`, 열고 돌려 `0`을 받았고,
+> 그 과정에서 스크립트의 dbt 플래그 위치 오류(전역 자리에 둔 `--profiles-dir`)를 **거짓 회귀**로
+> 잡아냈다. 게이트를 만들고 통과만 보면 이 오류는 "Connect가 깨졌다"로 오독됐을 것이다.
+
 ---
 
 ## 6. 분석 재현성 검증 — ★★☆☆☆
@@ -203,6 +242,9 @@ dg check
 
 # 정적 검사 (pre-commit이 커밋 시 자동 실행)
 ruff check . && sqlfluff lint && mypy dagster/dockerfile.d/src/src
+
+# 수동 관문 (실인프라 필요 — 상시 CI 아님)
+uv run scripts/spark_connect_smoke.py   # §5-1 의존성 상한 인상 직전
 ```
 
 ## 무엇을 테스트하고, 무엇을 안 하나

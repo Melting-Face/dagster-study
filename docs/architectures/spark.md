@@ -47,6 +47,47 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
   (`k8s/spark/spark-connect-server.yaml`). Thrift(HiveServer2) 대비 클라이언트가 가볍고 어댑터 변경이 없다.
   **상주 자원을 쓰므로** 쓰지 않을 때는 `kubectl scale deploy/spark-connect --replicas=0`
   (시분할 규칙 [../resource-sizing.md](../resource-sizing.md)).
+
+### dbt-spark on Spark Connect — 엔드투엔드 PoC (2026-08-19 실측)
+
+Thrift 서버를 띄울지 정하려고 **어댑터 전 수명주기를 실제로 돌렸다**. 결론은 **Thrift 불필요**다.
+
+| 검증 항목 | 결과 | 소요 |
+| --- | --- | --- |
+| `dbt debug` | ✅ All checks passed | 3.8s |
+| `dbt build` — table 2 + incremental 1 + 스키마 테스트 3 (threads=1) | ✅ PASS=6 ERROR=0 | 4.5s |
+| 동일 build, **threads=4** | ✅ 로그상 **실제 병렬** 실행 | 4.2s |
+| incremental 2회차 | ✅ `merge into … as DBT_INTERNAL_DEST` **실발행** | — |
+| 산출물 실물 | ✅ `Provider = iceberg`, `s3://warehouse/poc/…`, 행·값 일치 | — |
+| `dbt docs generate`(카탈로그 메타데이터) | ✅ `catalog.json` 생성 | 5.9s |
+| `dbt compile` 전체(mimic_iv 22모델) | ✅ exit=0 | 4.9s |
+
+🔴 **"미지원"과 "동작 안 함"은 다른 축이다.** dbt-spark 1.11.0이 공식 지원하는 method는
+`dbt/adapters/spark/connections.py`의 `SparkConnectionMethod` 기준 **thrift/http/odbc/session 4개뿐**이고
+connect는 없다. 그런데도 도는 이유는 `session.py`가 `builder.config(k, v)` → `getOrCreate()`를 타서,
+pyspark classic 빌더가 `spark.remote`를 보고 RemoteSparkSession으로 위임하는 **내부 동작**에 얹히기
+때문이다. 즉 **지원 여부는 업그레이드 리스크의 축이고, 동작 여부는 기능 확보의 축**이다.
+두 축을 섞으면 "미지원이니 Thrift를 띄우자"는 잘못된 결론이 나온다 — 실제로 필요한 건
+**Thrift가 아니라 업그레이드 회귀 감시**다.
+
+- **그래서 의존성 상한을 minor로 좁혔다** — `dbt-spark[session]>=1.11,<1.12`,
+  `pyspark[connect]>=3.5.9,<3.6`. 계약이 아니라 구현에 의존하므로 minor 업그레이드가
+  **에러 없이** 깨뜨릴 수 있다.
+- **상한을 올릴 때는 `scripts/spark_connect_smoke.py`를 먼저 통과시킨다**
+  ([../test.md](../test.md) §5-1). 이 스크립트가 이 경로의 **유일한 관측 수단**이다.
+- **남은 조용한 실패**: 커넥션마다
+  `Cannot modify the value of a static config: spark.sql.catalogImplementation` 경고가 난다
+  (`enableHiveSupport()` 유래, `pyspark/sql/connect/session.py`의 `_apply_options`가
+  `conf.set()` 예외를 `warnings.warn()`으로 **강등**). 지금은 무해하지만(테이블이 전부
+  Iceberg JDBC 카탈로그에 있고 Hive 카탈로그를 안 쓴다) **`spark_connect` 타깃에 conf를
+  추가하면 조용히 무시된다**. 카탈로그 설정의 단일 출처는 **서버 측** 매니페스트다.
+- **Thrift는 선언만 유지한다**(`k8s/spark/spark-thrift-server.yaml`, 미배포) — `trino`·`flink`와 같은
+  **"중단과 삭제의 분리"**. 상주 JVM +500m/1.5Gi를 물고, `method: thrift`의 클라이언트 의존성
+  `pyhive`·`thrift`·`thrift_sasl`이 **미설치**라 지금 타깃만 바꾸면 접속 시점에 죽는다
+  (`connections.py`가 ImportError를 삼켜 `hive=None`으로 둔다). **대피로로만 둔다.**
+- **부수 해소**: "`dbt compile --target spark_connect`가 600초 초과·무출력 종료"(이전 세션 관측)는
+  **재현되지 않는다**(4.9s, exit 0). Spark Connect gRPC 클라이언트는 UNAVAILABLE에 백오프 재시도를
+  하므로 **port-forward가 끊긴 상태에서는 에러가 아니라 무한 대기처럼 보인다** — 정황상 원인이다(미확정).
 - **러너 이미지 버전(실측 고정)**: Spark **3.5.9** / Iceberg **1.6.1** / hadoop-aws **3.3.4** ↔ aws-java-sdk-bundle **1.12.262**.
   `hadoop-aws`는 베이스 이미지의 `hadoop-client-*`와 **정확히 같은 버전**이어야 한다.
 - executor 메모리·셔플 파티션 튜닝이 성능 핵심.

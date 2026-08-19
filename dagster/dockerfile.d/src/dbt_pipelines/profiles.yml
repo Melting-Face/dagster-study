@@ -64,6 +64,13 @@ dbt_pipelines:
       #   지금은 무해하다(테이블이 전부 Iceberg JDBC 카탈로그에 있고 Hive 카탈로그를 안 쓴다).
       #   하지만 여기 넣은 Iceberg/S3 설정은 **적용된 것처럼 보이고 실제로는 안 먹는다.**
       #   카탈로그 설정의 단일 출처는 **서버 측**(k8s/spark/spark-connect-server.yaml)이다.
+      #
+      # ✅ **2026-08-19 엔드투엔드 PoC 통과** — 이 타깃이 현재 Spark 경로의 **정본**이다.
+      #   debug / build(threads 1·4) / incremental `merge into` 실발행 / docs generate /
+      #   22모델 compile 전부 통과했다(상세 docs/architectures/spark.md).
+      #   🔴 단 이 경로는 **어댑터 계약이 아니라 pyspark 내부 동작에 의존**한다. 그래서
+      #   `pyproject.toml`이 `dbt-spark<1.12`·`pyspark<3.6`으로 상한을 묶고,
+      #   상한을 올릴 때는 `scripts/spark_connect_smoke.py`를 먼저 통과시킨다(docs/test.md §5-1).
       server_side_parameters:
         spark.remote: "{{ env_var('SPARK_REMOTE', 'sc://localhost:15002') }}"
 
@@ -81,7 +88,13 @@ dbt_pipelines:
     #   (리모트 세션 생성 → `defaultCatalog=iceberg` → `SHOW NAMESPACES IN iceberg` → 질의 성공).
     #   그래서 지금은 Connect가 정본이고, 이 타깃은 **미지원 경로가 깨졌을 때의 대피로**다.
     #
-    # 🔴 **값 정합이 중요한 경로의 정본은 이쪽이다.** dbt-spark 1.11.0이 공식 지원하는 method는
+    # 🔴 **"공식 지원"은 이쪽뿐이다 — 그러나 그것이 "이쪽을 써야 한다"는 뜻은 아니다.**
+    #   2026-08-19 엔드투엔드 PoC로 `spark_connect`가 **실제로 전 경로 동작**함을 확인했다
+    #   (build·merge·docs generate·22모델 compile). 즉 **지원 여부(=업그레이드 리스크의 축)** 와
+    #   **동작 여부(=기능 확보의 축)** 는 다른 축이고, 지금 필요한 것은 Thrift 배포가 아니라
+    #   **업그레이드 회귀 감시**다(`scripts/spark_connect_smoke.py`). 아래는 그 근거다.
+    #
+    #   dbt-spark 1.11.0이 공식 지원하는 method는
     #   `dbt/adapters/spark/connections.py:77-81` 기준 thrift/http/odbc/session 4개뿐이고
     #   **Connect는 없다**. 위 `spark_connect`는 어댑터 기능이 아니라, classic 빌더가
     #   `spark.remote`를 보고 RemoteSparkSession으로 위임하는 pyspark 내부 동작에 얹은 우회다

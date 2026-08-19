@@ -104,7 +104,23 @@ uv run dg dev                             # http://localhost:3000
 > 컨테이너로 통째 띄우려면 `docker compose up -d --build`(webserver·daemon 분리 기동).
 > 이 경우 Dagster가 클러스터를 트리거하는 경로는 별도 배선이 필요하다.
 
-### 4. 모델 추가
+### 4. 노트북 (호스트, 옵션)
+
+ad-hoc 탐색은 **Jupyter Lab**으로 한다. Dagster와 **같은 venv**를 쓰므로 커널 하나로
+Spark Connect·pyiceberg에 붙고 `dagster_project.common.*`를 그대로 import할 수 있다.
+
+```shell
+kubectl port-forward svc/spark-connect 15002:15002   # 별도 터미널
+
+cd dagster/dockerfile.d/src
+uv run --group notebook jupyter lab --port 8889 --notebook-dir ../../../notebooks
+```
+
+> **8889를 쓰는 이유**: 기본 포트 8888은 compose SeaweedFS filer UI가 게시한다.
+> 스타터 노트북·주의사항은 [`notebooks/README.md`](notebooks/README.md).
+> SQL 엔진은 **Spark SQL**이다 — Trino는 재설계에서 제거 대상이라 기본 기동에서 빠졌다.
+
+### 5. 모델 추가
 
 dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동 반영된다.
 각 데이터셋 subproject가 **`@dbt_assets(select="fqn:<dataset>")`** 로 자기 모델만 소유한다

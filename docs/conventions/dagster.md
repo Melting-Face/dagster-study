@@ -31,6 +31,22 @@ class MyDbtTranslator(DagsterDbtTranslator):   # ← 가급적 사용하지 않�
 → group 같은 설정은 서브클래스(`DagsterDbtTranslator`) 대신 **dbt config**로 선언한다:
 `dbt_project.yml`의 `+meta.dagster.group`(또는 모델 `meta.dagster.group`). (아래 예시 참고)
 
+### 리소스도 같다 — 공식 통합이 있으면 커스텀 리소스를 만들지 않는다
+
+`dg.ConfigurableResource`를 **직접 상속**하기 전에 `dagster-<technology>` 통합에 이미 있는지 먼저 본다.
+공식 리소스는 Dagster가 유지보수하고(`_is_dagster_maintained`), UI 표시·설정 스키마·수명주기 훅
+(`setup_for_execution`)이 표준을 따른다.
+
+- **사례(2026-08-19)**: Iceberg 유지보수용 Spark 접속을 커스텀 `SparkConnectResource`로 만들었다가
+  **`dagster-pyspark`의 `LazyPySparkResource`로 교체**했다. Spark Connect 접속은 커스텀 코드가 아니라
+  **`spark_config={"spark.remote": "sc://..."}`** 한 줄이면 된다 — 내부 `builder.config(k, v)`가
+  이 키를 받아 `pyspark.sql.connect` 세션을 만든다(실측). 커스텀 모듈(`common/spark.py`)은 삭제했다.
+- **`Lazy~` 변형이 있으면 그쪽을 본다** — `PySparkResource`는 리소스 초기화에서 세션을 **즉시** 만들어,
+  그 리소스를 쓰지 않는 run까지 백엔드 가용성에 묶는다. `LazyPySparkResource`는 `spark_session`
+  **접근 시점**에 만든다.
+- 커스텀 리소스는 **통합에 없거나 의미가 다를 때만** 만든다(예: `TrinoResource` — 유지보수 프로시저
+  실행용 경량 dbapi 래퍼로, 공식 Trino 리소스가 없다).
+
 ## 자산 모듈에서는 `from __future__ import annotations` 금지
 
 > Dagster는 `@asset`/op의 `context` 파라미터를 **클래스 identity**로 검사한다.

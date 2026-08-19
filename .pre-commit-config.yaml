@@ -48,6 +48,14 @@ repos:
     hooks:
       - id: gitleaks
 
+  # 노트북 셀 출력 제거 — 원천 진료 데이터가 .ipynb에 박제된 채 커밋되는 것을 막는다.
+  # gitleaks는 '크리덴셜 패턴'을 잡지 헬스 데이터를 잡지 못하므로 별도 방어가 필요하다.
+  # 근거: docs/security.md (원천 데이터 커밋 금지 · DUA)
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+
   # 커밋 메시지 Conventional Commits 검사 (규칙은 루트 .gitlint)
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1

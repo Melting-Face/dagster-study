@@ -118,19 +118,25 @@ services:
 
 ```yaml
 services:
-  trino: {}                      # 뼈대: profile 없음 → 항상 실행
+  postgres: {}                   # 뼈대: profile 없음 → 항상 실행
   prometheus:
     profiles: ["monitoring"]     # 옵션: --profile monitoring 일 때만 기동
 ```
 
-- **뼈대(core)**: `dagster-webserver`·`dagster-daemon`·`postgres`·`trino`·`seaweedfs` — profile 없음.
-- **옵션**: `prometheus`(`monitoring`).
+- **뼈대(core)**: `dagster-webserver`·`dagster-daemon`·`postgres`·`seaweedfs` — profile 없음.
+- **옵션**: `prometheus`(`monitoring`) · `trino`(`legacy-sql`).
 
 ```bash
 docker compose up -d                        # 뼈대만
 docker compose --profile monitoring up -d   # 뼈대 + 모니터링
 COMPOSE_PROFILES=monitoring docker compose up -d   # 프로필 고정
 ```
+
+> **`profiles`는 "제거 예정"의 중간 단계로도 쓴다.** `trino`는 재설계에서 제거 대상이지만
+> 22모델 방언 교정이 끝날 때까지 **값 대조의 정본**이라 정의는 남긴다
+> ([../architectures/trino.md](../architectures/trino.md)). 상시 기동만 끊어 자원(3 CPU / 6G)을
+> 회수하고 대조할 때만 올린다 — **"중단"과 "삭제"를 분리**하면 자원은 즉시 회수되면서
+> 롤백 비용이 0으로 유지된다.
 
 > `profiles`를 붙인 서비스를 **의존**(`depends_on`)하는 뼈대 서비스가 없어야 한다(있으면 기본 기동이 깨진다).
 > 옵션↔옵션 의존은 같은 프로필을 공유하거나 함께 활성화한다. 대안인 다중 파일 `-f` override는

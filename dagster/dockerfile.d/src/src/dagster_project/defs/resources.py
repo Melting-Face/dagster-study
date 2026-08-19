@@ -14,6 +14,7 @@ from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
 from dagster_iceberg.io_manager.arrow import PyArrowIcebergIOManager
 from dagster_iceberg.resource import IcebergTableResource
+from dagster_pyspark import LazyPySparkResource
 
 import dagster as dg
 from dagster_project.common.constants import (
@@ -23,6 +24,7 @@ from dagster_project.common.constants import (
     CATALOG_NAME,
     ICEBERG_CATALOG_URI,
     S3_ENDPOINT,
+    SPARK_REMOTE,
     TRINO_HOST,
     TRINO_PORT,
     TRINO_USER,
@@ -48,7 +50,14 @@ def resources() -> dg.Definitions:
                 region_name=AWS_REGION,
             ),
             "dbt": build_dbt_resource(),
-            # Trino 접속(Iceberg 유지보수용). 파라미터는 common.constants에서 추적.
+            # Spark Connect 접속(Iceberg 유지보수 프로시저용 — defs/maintenance.py).
+            # 카탈로그 설정은 **서버 측**에 있어 여기엔 주소만 온다(비밀정보 비노출).
+            # `Lazy~`를 쓰는 이유: 세션을 `spark_session` **접근 시점**에 만든다.
+            # 비-Lazy(PySparkResource)는 리소스 초기화에서 즉시 연결해, 유지보수 잡과
+            # 무관한 run까지 Spark Connect(=port-forward) 가용성에 묶인다.
+            "spark": LazyPySparkResource(spark_config={"spark.remote": SPARK_REMOTE}),
+            # Trino 접속. 유지보수는 Spark로 이관했고, 이 접속은 dbt-spark 이행 중
+            # **방언 값 대조**용으로 남긴다(docs/architectures/trino.md).
             "trino": TrinoResource(
                 host=TRINO_HOST, port=TRINO_PORT, user=TRINO_USER, catalog=CATALOG_NAME
             ),

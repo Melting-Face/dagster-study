@@ -124,8 +124,17 @@
   `.env`→`compose.yml`(공용 앵커 `x-dagster-common`)→코드 **전파 체인**을 확인한다.
   Iceberg snapshot·로그 보존 정책 포함 [`docs/operations.md`](docs/operations.md).
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
-  전 서비스 `deploy.resources` 명시. **옵션 기능(모니터링)은 `profiles`로 분리**(뼈대는 profile
-  없이 항상 실행, `--profile <name>`으로 opt-in). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
+  전 서비스 `deploy.resources` 명시. **옵션 기능은 `profiles`로 분리**(뼈대는 profile
+  없이 항상 실행, `--profile <name>`으로 opt-in) — `monitoring`(prometheus)·`legacy-sql`(trino).
+  **`profiles`는 "제거 예정"의 중간 단계로도 쓴다** — `trino`는 재설계 제거 대상이나 22모델 방언
+  교정이 끝날 때까지 **값 대조의 정본**이라 정의는 남기고 **상시 기동만 끊는다**("중단"과 "삭제"의 분리:
+  자원은 즉시 회수, 롤백 비용 0). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
+- **호스트 노트북(옵션)**: ad-hoc 탐색은 **Jupyter Lab**을 **Dagster와 같은 venv**에서 띄운다
+  (`[dependency-groups] notebook`, `uv run --group notebook jupyter lab --port 8889`).
+  런타임 의존성은 건드리지 않으며 **포트 8889**를 쓴다(8888은 SeaweedFS filer UI가 점유).
+  SQL 엔진은 **Spark Connect**이고 카탈로그 설정은 **서버 측**에 있어 **비밀정보를 노트북에 두지 않는다**.
+  🔴 `.ipynb` 셀 출력은 원천 데이터를 박제하고 `gitleaks`가 잡지 못하므로 **`nbstripout` 훅**과
+  `.ipynb_checkpoints/` 무시로 이중 방어한다. 상세 [`notebooks/README.md`](notebooks/README.md).
 - **로컬 K8s(현행 검증 환경)**: **kind on Podman**(rootful 머신 필수) 클러스터 `lakehouse` +
   로컬 레지스트리 `localhost:5001`. 기동은 `scripts/k8s-up.sh` → `k8s-operators.sh` → `k8s-poc-storage.sh`
   (설정 단일 출처 `scripts/k8s-env.sh`). Dagster는 **호스트 유지**, 컴퓨트·스토리지만 클러스터에 둔다.
@@ -137,6 +146,15 @@
   **Iceberg 카탈로그 이름은 전 엔진 `iceberg`로 통일**한다 — JDBC 카탈로그는 `catalog_name`으로 레지스트리를
   분할해, 이름이 다르면 같은 DB를 봐도 서로의 테이블이 안 보인다. 또 **SeaweedFS는 AWS SDK의 aws-chunked
   체크섬을 못 풀어** 객체가 조용히 손상되므로 `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`를 유지한다.
+  🔴 **Iceberg `io-impl`(S3FileIO)과 `spark.hadoop.fs.s3*`(S3A)는 둘 다 필요하다** — S3FileIO는 카탈로그가
+  **아는** 파일만 다루므로, warehouse를 직접 나열하는 `remove_orphan_files`는 Hadoop FS를 타고
+  설정이 없으면 `No FileSystem for scheme "s3"`로 죽는다. warehouse가 `s3://`라 **`fs.s3.impl`도** 매핑한다.
+  **Iceberg 유지보수(컴팩션·orphan 정리)는 Spark 프로시저**로 실행한다(Trino에서 이관).
+  접속은 **공식 통합 `dagster-pyspark`의 `LazyPySparkResource`** 를 쓰고 커스텀 리소스를 만들지 않는다 —
+  Spark Connect는 **`spark_config={"spark.remote": ...}`** 한 줄로 붙으며(`builder.config`가 이 키를 받는다),
+  `Lazy~`라 **세션은 접근 시점에** 생긴다(무관한 run이 port-forward 가용성에 묶이지 않는다).
+  카탈로그 설정은 **서버 측**에 있어 비밀정보가 Dagster로 오지 않는다.
+  `dagster-spark`(spark-submit 래퍼)는 전이 의존일 뿐 **직접 쓰지 않는다**.
   **노출은 HTTP UI만 Ingress**(ingress-nginx, `*.localtest.me:8080`)로 내고 gRPC·JDBC·S3는 `port-forward`를 쓴다 —
   kind는 **공개 포트를 클러스터 생성 시점에만** 정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
   컴퓨트 **러너 이미지는 로컬 레지스트리에 직접 push**하고(`kind load` 불필요) **태그와 매니페스트를 함께 올린다**.

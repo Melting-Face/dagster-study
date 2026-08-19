@@ -64,3 +64,8 @@ dagster/dockerfile.d/src/storage/
 dagster/dockerfile.d/src/.telemetry/
 dagster/dockerfile.d/src/history/
 dagster/dockerfile.d/src/schedules/
+
+# Jupyter 자동 스냅샷 — 셀 출력이 그대로 들어 있어 **원천 데이터가 박제**된다.
+# 노트북 본문(.ipynb)은 커밋 대상이고, 출력 제거는 nbstripout 훅이 담당한다.
+# 근거: docs/security.md (원천 진료 데이터 커밋 금지)
+**/.ipynb_checkpoints/

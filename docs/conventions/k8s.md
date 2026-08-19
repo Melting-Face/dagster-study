@@ -206,6 +206,14 @@ resources:
   참조처: `k8s/spark/spark-connect-server.yaml`·`k8s/spark/sparkapplication-poc.yaml`(Spark),
   `k8s/flink/flinkdeployment-session.yaml`(Flink).
   현행 태그는 **`spark-runner:0.4.0`**(Iceberg·S3A·Spark Connect) / **`flink-runner:0.2.0`**(Iceberg·shaded hadoop).
+- 🔴 **Iceberg의 `io-impl`(S3FileIO)만으로는 부족한 작업이 있다** — `spark.hadoop.fs.s3*`(S3A)를 **함께** 준다.
+  S3FileIO는 **카탈로그가 아는 파일**만 다루므로, warehouse 디렉터리를 직접 나열해야 하는
+  `remove_orphan_files`(카탈로그가 *모르는* 파일을 찾는 게 목적)는 **Hadoop FileSystem**을 탄다.
+  설정이 없으면 `UnsupportedFileSystemException: No FileSystem for scheme "s3"`로 죽는다(2026-08-19 실측).
+  warehouse가 `s3://`라 **`fs.s3.impl`도 S3A로 매핑**해야 하고(`fs.s3a.impl`만으론 안 잡힌다),
+  jar(`hadoop-aws`·`aws-java-sdk-bundle`)는 러너 이미지에 이미 있어 **설정만** 추가하면 된다.
+  S3A는 AWS SDK **v1**이라 SeaweedFS의 aws-chunked 문제(SDK v2 flexible checksum)와는 무관하다.
+  참조: `k8s/spark/spark-connect-server.yaml`.
 - **서비스 접근**: **웹 UI는 Ingress**(고정 URL), **데이터 접속은 `port-forward`** 를 기본으로 한다.
   Dagster 리소스(SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
 - 🔴 **kind는 공개 포트를 클러스터 생성 시점에만 정할 수 있다.** 노드가 컨테이너라 사후에 포트를 추가할 수 없어,

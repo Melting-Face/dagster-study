@@ -27,6 +27,14 @@ spec:
                 - name: spark-connect
                   image: localhost:5001/spark-runner:0.4.0
                   imagePullPolicy: Always
+                  # `spark.hadoop.fs.*` 가 따로 필요한 이유:
+                  #   Iceberg의 S3FileIO(`io-impl`)는 **카탈로그가 아는 파일**만 읽고 쓴다.
+                  #   반면 `remove_orphan_files`는 warehouse 디렉터리를 **Hadoop FileSystem으로 나열**해
+                  #   카탈로그가 모르는 파일을 찾아낸다 → S3FileIO로는 대체가 안 된다.
+                  #   설정이 없으면 `UnsupportedFileSystemException: No FileSystem for scheme "s3"`로 죽는다
+                  #   (2026-08-19 실측). warehouse가 `s3://`라 `fs.s3.impl`도 S3A로 매핑해야 한다.
+                  #   jar(hadoop-aws·aws-java-sdk-bundle)는 러너 이미지에 이미 구워져 있다.
+                  #   S3A는 AWS SDK **v1**이라 SeaweedFS의 aws-chunked 문제(SDK v2 flexible checksum)와 무관하다.
                   command: ["/bin/bash", "-c"]
                   args:
                       - |
@@ -45,6 +53,11 @@ spec:
                           --conf spark.sql.catalog.iceberg.s3.endpoint="$S3_ENDPOINT" \
                           --conf spark.sql.catalog.iceberg.s3.path-style-access=true \
                           --conf spark.sql.defaultCatalog=iceberg \
+                          --conf spark.hadoop.fs.s3.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+                          --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem \
+                          --conf spark.hadoop.fs.s3a.endpoint="$S3_ENDPOINT" \
+                          --conf spark.hadoop.fs.s3a.path.style.access=true \
+                          --conf spark.hadoop.fs.s3a.connection.ssl.enabled=false \
                           spark-internal
                   ports:
                       - {name: grpc, containerPort: 15002}

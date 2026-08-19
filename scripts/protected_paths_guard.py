@@ -26,6 +26,7 @@
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -96,15 +97,25 @@ GLOB_TO_RE = (
 )
 
 
-def load_protected_patterns() -> list[tuple[str, re.Pattern[str]]]:
-    """`.claude/settings.json`의 `ask` 규칙에서 보호 경로 패턴을 뽑는다."""
-    settings = Path(".claude/settings.json")
+def load_protected_patterns() -> list[tuple[str, re.Pattern[str]]] | None:
+    """`.claude/settings.json`의 `ask` 규칙에서 보호 경로 패턴을 뽑는다.
+
+    읽지 못하면 `None`을 돌려준다 — 호출부는 이를 **통제 소멸**로 보고
+    fail-closed 처리한다. 빈 리스트(`[]`, 규칙이 정말 0개)와 구분해야 한다.
+    """
+    # 🔴 상대경로로 읽으면 cwd가 프로젝트 루트가 아닐 때 패턴이 0개가 되고
+    #    **에러도 없이 전부 통과**한다. 이 저장소는 `git worktree` 병렬 세션을
+    #    표준으로 쓰고 서브디렉터리에서 세션을 열 수도 있어 실제 위험이다.
+    #    hook 배선은 `$CLAUDE_PROJECT_DIR`로 절대경로를 쓰는데 스크립트 내부만
+    #    cwd에 의존하면 기준이 어긋난다(2026-08-19 security 실측).
+    root = Path(os.environ.get("CLAUDE_PROJECT_DIR", "."))
+    settings = root / ".claude/settings.json"
     if not settings.is_file():
-        return []
+        return None
     try:
         data = json.loads(settings.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return []
+        return None
 
     patterns = []
     for rule in data.get("permissions", {}).get("ask", []):
@@ -158,7 +169,7 @@ def main() -> None:
                 candidates.add(suffix + "/")
                 heads.add(suffix)
 
-    for raw, compiled in patterns:
+    for raw, compiled in patterns or ():
         if any(compiled.fullmatch(c) for c in candidates):
             hits.append(raw)
             continue
@@ -168,22 +179,31 @@ def main() -> None:
         literal_head = raw.split("*")[0].rstrip("/")
         if literal_head and any(literal_head.startswith(h + "/") for h in heads):
             hits.append(raw)
-    if not hits:
+    if patterns is None:
+        # 🔴 fail-closed — 통제가 죽은 채 조용히 통과하는 것보다 낫다.
+        reason = (
+            "보호 경로 설정을 읽지 못했다(`.claude/settings.json`) — 이 가드의 통제가 "
+            "**소멸한 상태**다. cwd나 `CLAUDE_PROJECT_DIR`를 확인하라. "
+            "통제 없이 진행할 의도면 승인하라."
+        )
+    elif hits:
+        targets = ", ".join(sorted(set(hits)))
+        reason = (
+            f"보호 경로에 쓰기 신호가 감지됐다: {targets}. "
+            "`permissions`의 `ask`는 도구별이라 `Bash` 경로로는 "
+            "걸리지 않는다 — 이 확인이 그 빈틈을 메운다. "
+            "의도한 변경이면 승인하라."
+        )
+    else:
         sys.exit(0)
 
-    targets = ", ".join(sorted(set(hits)))
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "escalate",
-                    "permissionDecisionReason": (
-                        f"보호 경로에 쓰기 신호가 감지됐다: {targets}. "
-                        "`permissions`의 `ask`는 도구별이라 `Bash` 경로로는 "
-                        "걸리지 않는다 — 이 확인이 그 빈틈을 메운다. "
-                        "의도한 변경이면 승인하라."
-                    ),
+                    "permissionDecisionReason": reason,
                 },
             },
             ensure_ascii=False,

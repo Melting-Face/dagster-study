@@ -56,7 +56,52 @@ dbt_pipelines:
 
     spark_connect:
       <<: *spark_session
+      # 🔴 **여기에 `spark.remote` 말고 다른 conf를 추가하지 마라.**
+      #   리모트 세션에서는 `pyspark/sql/connect/session.py:179-185`의 `_apply_options`가
+      #   `conf.set()` 예외를 `warnings.warn()`으로 강등한다 → static conf는 **조용히 무시**된다.
+      #   2026-08-19 실측: `enableHiveSupport()`가 넣는 `spark.sql.catalogImplementation`이
+      #   "Cannot modify the value of a static config"로 거부됐고 경고 2건만 남았다(질의는 성공).
+      #   지금은 무해하다(테이블이 전부 Iceberg JDBC 카탈로그에 있고 Hive 카탈로그를 안 쓴다).
+      #   하지만 여기 넣은 Iceberg/S3 설정은 **적용된 것처럼 보이고 실제로는 안 먹는다.**
+      #   카탈로그 설정의 단일 출처는 **서버 측**(k8s/spark/spark-connect-server.yaml)이다.
       server_side_parameters:
         spark.remote: "{{ env_var('SPARK_REMOTE', 'sc://localhost:15002') }}"
+
+    # spark_thrift : 클러스터의 Spark Thrift Server(HiveServer2)에 JDBC로 붙는다.
+    #
+    # ⏸ **선언만 해두고 현재 쓰지 않는다**(2026-08-19) — `trino`·`flink`와 같은
+    #   "중단과 삭제의 분리". 서버 매니페스트는 `k8s/spark/spark-thrift-server.yaml`에 있으나
+    #   **배포하지 않았다**. 아래 두 비용이 현재 이득보다 크기 때문이다:
+    #     ① 상주 컴퓨트 +500m/1.5Gi (Spark Connect와 별도 JVM)
+    #     ② 🔴 런타임 의존성 3종 추가 — `pyhive`·`thrift`·`thrift_sasl`이 **미설치**다.
+    #        `dbt/adapters/spark/connections.py:17-24`가 ImportError를 삼켜 `hive = None`으로
+    #        두므로, 지금 이 타깃을 쓰면 접속 시점에 `NoneType` 오류로 죽는다.
+    #        쓰려면 `dbt-spark[PyHive]`를 먼저 설치해야 한다.
+    #   2026-08-19 실측으로 `spark_connect` 경로가 **실제 동작**함을 확인했다
+    #   (리모트 세션 생성 → `defaultCatalog=iceberg` → `SHOW NAMESPACES IN iceberg` → 질의 성공).
+    #   그래서 지금은 Connect가 정본이고, 이 타깃은 **미지원 경로가 깨졌을 때의 대피로**다.
+    #
+    # 🔴 **값 정합이 중요한 경로의 정본은 이쪽이다.** dbt-spark 1.11.0이 공식 지원하는 method는
+    #   `dbt/adapters/spark/connections.py:77-81` 기준 thrift/http/odbc/session 4개뿐이고
+    #   **Connect는 없다**. 위 `spark_connect`는 어댑터 기능이 아니라, classic 빌더가
+    #   `spark.remote`를 보고 RemoteSparkSession으로 위임하는 pyspark 내부 동작에 얹은 우회다
+    #   (`pyspark/sql/session.py:460-479`). 게다가 `pyspark/sql/connect/session.py:179-185`의
+    #   `_apply_options`가 `conf.set()` 예외를 `warnings.warn()`으로 **강등**해,
+    #   `enableHiveSupport()`가 넣는 static conf(`spark.sql.catalogImplementation`) 거부가
+    #   조용히 삼켜진다. 죽지 않는 것과 지원되는 것은 다르다(docs/philosophy.md 원칙 7).
+    #
+    # 접속: `kubectl port-forward svc/spark-thrift 10000:10000`
+    # Iceberg 카탈로그 설정은 **서버 측**에 있어 여기에 비밀정보를 두지 않는다.
+    spark_thrift:
+      type: spark
+      method: thrift
+      host: "{{ env_var('SPARK_THRIFT_HOST', 'localhost') }}"
+      port: "{{ env_var('SPARK_THRIFT_PORT', '10000') | as_number }}"
+      user: dagster
+      schema: poc
+      threads: 4
+      connect_retries: 5
+      connect_timeout: 60
+      retry_all: true
 
   target: dev

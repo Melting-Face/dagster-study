@@ -12,7 +12,7 @@
 | [overview.md](overview.md) | ✅ | 현행 전체 스택·데이터 흐름(Dagster·dbt·Trino·Iceberg·SeaweedFS) |
 | [docker.md](docker.md) | ✅ | 컨테이너·compose 배포(채택) |
 | [spark.md](spark.md) | 🚧 | 배치 엔진 — 대용량 인제스트 + dbt-spark 마트 + 유지보수(이행중) |
-| [flink.md](flink.md) | 🚧 | 스트림 엔진 — 실시간 Sepsis-3 조기경보(이행중) |
+| [flink.md](flink.md) | 🚧⏸ | 스트림 엔진 — 실시간 Sepsis-3 조기경보(채택·이행중이나 **현재 미설치**, Phase 3에서 복구) |
 | [k8s.md](k8s.md) | 🚧 | 컨테이너 오케스트레이션 — 컴퓨트·데이터 서비스 이전(이행중) |
 | [oci.md](oci.md) | 🔎 | 클라우드 이행 — OCI Always Free A1(ARM) + Terraform + k3s(학습·확장 경로) |
 | [trino.md](trino.md) | 🔎 | MPP SQL 엔진 — 현행 compose까지 채택, **재설계로 제거**(dbt→dbt-spark) |

@@ -69,10 +69,19 @@ inner join {{ ref('icustay_times') }} as t using (stay_id)
   **서버 측**에 있어 클라이언트가 `sc://localhost:15002`만 알면 된다 — **보안상 이 경로를 기본으로 쓴다.**
   pyiceberg 직접 접속이 필요하면 자격증명은 반드시 `os.environ` 참조로 읽고 **값을 셀에 쓰지 않는다**
   (코딩 철학 #4).
-  > ⚠️ pyiceberg 직접 접속의 **자격증명 출처는 미확정**이다(2026-08-19). 호스트에서 K8s 카탈로그에
-  > 붙을 때 `.env`의 `AWS_ACCESS_KEY_ID`와 클러스터 Secret(`lakehouse-creds/s3-access-key`)의 **값이 달라**,
-  > 카탈로그 나열은 되고 `load_table`에서 `ACCESS_DENIED`로 죽는 **부분 성공**이 관측됐다.
-  > 키 분리(`ICEBERG_S3_*`) 도입 여부가 결정되기 전까지 이 경로를 문서·노트북에 **정답으로 고정하지 않는다**.
+  > **자격증명은 `ICEBERG_S3_*`로 분리한다**(2026-08-19 확정). 호스트에서 K8s 카탈로그에 붙을 때
+  > 쓰는 키는 `ICEBERG_S3_ACCESS_KEY`·`ICEBERG_S3_SECRET_KEY`(= 클러스터 Secret `lakehouse-creds`의 값)이며,
+  > 미설정 시 공용 `AWS_*`로 폴백한다(compose 단독 구성 호환). 엔드포인트(`ICEBERG_S3_ENDPOINT`)와
+  > **자격증명은 한 쌍**이다 — 엔드포인트만 바꾸고 키를 공용으로 두면 아래 증상이 난다.
+  >
+  > | 단계 | 결과 | 이유 |
+  > |---|---|---|
+  > | `list_namespaces()` · `list_tables()` | ✅ 성공 | 카탈로그 **Postgres**만 조회 |
+  > | `load_table()` | ❌ `ACCESS_DENIED during HeadObject` | `metadata.json`을 **S3에서** 읽는 순간 |
+  >
+  > 🔴 **부분 성공이라 오진하기 쉽다.** 키를 분리한 지금도 `ICEBERG_S3_*`를 비워두면 증상이 그대로
+  > 재현된다 — 원인이 "설계 공백"에서 **"설정 누락"** 으로 바뀐 것뿐이다. 전파 체인은
+  > [`../operations.md`](../operations.md) §1-2.
 - **무거운 계산은 Spark에서 끝내고 pandas로는 집계 결과만 받는다.** `toPandas()`를 원천 테이블에
   걸지 않는다(대용량 테이블은 호스트 메모리를 넘긴다 — `chartevents`·`labevents`).
 - **난수를 쓰면 seed를 고정**하고(`random_state=`), 표본 추출은 추출 조건을 셀에 남긴다.

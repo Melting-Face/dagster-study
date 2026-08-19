@@ -16,6 +16,7 @@
 
       ① 서브에이전트 중복 — 같은 `subagent_type`을 같은 대상으로 또 돌리는가
       ② 동일 파일 동시편집 — 다른 세션이 붙잡고 있는 파일을 고치려 하는가
+      ③ 워킹트리 전역 변경 — 남이 있는데 브랜치를 갈아타거나 stash/reset 하는가
 
     **차단이 아니라 소통이다.** 판정이 휴리스틱이라 오탐이 나올 수 있고,
     정당한 병렬 작업도 많다. 그래서 실행 중인 충돌은 `escalate`(사용자 확인)로
@@ -31,13 +32,16 @@
     런타임 상태로 오염시키지 않고, 전역 `~/.claude/`보다 프로젝트 스코프가 맞다.
 
 사용: Claude Code `settings.json`의 hooks에서 호출한다.
-    scripts/session_sync_guard.py <agent-pre|agent-post|file-pre|file-post|session-end>
+    scripts/session_sync_guard.py
+        <agent-pre|agent-post|file-pre|file-post|bash-pre|session-end>
 """
 
 import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -58,6 +62,23 @@ DONE_TTL = timedelta(hours=6)
 
 # 파일 리스가 유효한 시간. 편집할 때마다 갱신되므로 "최근 손댄 흔적"에 가깝다.
 LEASE_TTL = timedelta(minutes=20)
+
+# 세션 생존 신호가 유효한 시간. hook이 돌 때마다 갱신되므로 넉넉히 잡는다
+# (사용자가 오래 생각하는 동안 세션이 죽은 것으로 오인되면 경고가 사라진다).
+SESSION_TTL = timedelta(minutes=90)
+
+# 워킹트리 **전역**을 바꾸는 git 명령. 파일 단위 리스로는 원리적으로 못 막는다 —
+# 한 번에 모든 파일과 HEAD가 움직이기 때문이다(2026-08-19 실측: 두 세션의 브랜치
+# 전환이 양방향으로 서로를 덮쳤고, 사전 통지가 상태 변화 속도를 못 따라갔다).
+GLOBAL_GIT_RE = re.compile(
+    r"\bgit\b(?:\s+-C\s+\S+)?\s+(?:"
+    r"switch|checkout|checkout-index|stash"
+    r"|branch\s+(?:-\S*[fDM]\S*|--force|--delete|--move)"
+    r"|reset\s+--hard"
+    r"|worktree\s+(?:add|remove)"
+    r"|clean\s+-\S*[fd]"
+    r")\b"
+)
 
 # 대상 지문이 이 비율 이상 겹치면 같은 작업으로 본다 (Jaccard).
 OVERLAP_THRESHOLD = 0.5
@@ -243,7 +264,53 @@ def identity(payload: dict) -> dict[str, str]:
         "tmux_pane": os.environ.get("TMUX_PANE", ""),
         "pid": os.environ.get("CLAUDE_PID", ""),
         "socket": os.environ.get("CLAUDE_CODE_MESSAGING_SOCKET", ""),
+        "branch": current_branch(payload.get("cwd") or os.getcwd()),
     }
+
+
+def current_branch(cwd: str) -> str:
+    """현재 체크아웃된 브랜치명. git이 없거나 저장소가 아니면 빈 문자열."""
+    git_bin = shutil.which("git")
+    if git_bin is None:
+        return ""
+    probe = subprocess.run(  # noqa: S603
+        [git_bin, "-C", cwd, "branch", "--show-current"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    return probe.stdout.strip() if probe.returncode == 0 else ""
+
+
+def touch_session(payload: dict) -> dict[str, str]:
+    """내 세션의 생존 신호를 남기고 식별자를 돌려준다.
+
+    파일 리스·claim은 **작업을 해야** 생긴다. 그런데 브랜치 전환처럼 전역 상태를
+    바꾸는 행위는 "아직 아무것도 안 한 세션"에게도 피해를 준다. 그래서 어떤 hook이
+    돌든 **세션이 살아 있다는 사실 자체**를 먼저 남긴다 — 이게 있어야
+    "지금 이 워킹트리에 나 말고 누가 있나"를 물을 수 있다.
+    """
+    mine = identity(payload)
+    write_claim(
+        CLAIM_ROOT / "sessions" / f"{mine['session_ref']}.json",
+        {
+            "kind": "session",
+            **mine,
+            "cwd": payload.get("cwd") or os.getcwd(),
+            "updated": now().isoformat(timespec="seconds"),
+        },
+    )
+    return mine
+
+
+def live_sessions(me: str) -> list[dict]:
+    """나를 뺀, 살아 있는 세션들. 만료분은 sweep이 걷어낸다."""
+    return [
+        record
+        for _, record in sweep(CLAIM_ROOT / "sessions")
+        if record.get("session_ref") != me
+    ]
 
 
 def describe_peer(record: dict) -> str:
@@ -312,6 +379,8 @@ def sweep(directory: Path) -> list[tuple[Path, dict]]:
         ttl = DONE_TTL if record.get("status") == "done" else RUNNING_TTL
         if record.get("kind") == "file":
             ttl = LEASE_TTL
+        elif record.get("kind") == "session":
+            ttl = SESSION_TTL
         if current - stamp > ttl:
             path.unlink(missing_ok=True)
             continue
@@ -553,6 +622,7 @@ def handle_file_post(payload: dict) -> None:
 def handle_session_end(payload: dict) -> None:
     """세션 종료 — 내 리스와 실행 중 claim을 걷어낸다(잔해로 남기지 않는다)."""
     me = identity(payload)["session_ref"]
+    (CLAIM_ROOT / "sessions" / f"{me}.json").unlink(missing_ok=True)
     for directory in (CLAIM_ROOT / "files", CLAIM_ROOT / "agents"):
         for path, record in sweep(directory):
             if record.get("session_ref") != me:
@@ -563,11 +633,45 @@ def handle_session_end(payload: dict) -> None:
     sys.exit(0)
 
 
+def handle_bash_pre(payload: dict) -> None:
+    """전역 git 명령 직전 — 이 워킹트리에 다른 세션이 있으면 확인을 올린다.
+
+    파일 리스와 달리 **사후 감지가 무의미**하다. 브랜치는 한 번에 전역이 바뀌므로,
+    바뀐 뒤에 알려줘야 되돌릴 것이 이미 남의 HEAD까지 옮겨간 뒤다. 그래서 여기서만
+    막는다. 근본 해법은 `git worktree` 분리이고, 이 경고는 그때까지의 완충재다.
+    """
+    command = (payload.get("tool_input") or {}).get("command") or ""
+    if not command or not GLOBAL_GIT_RE.search(command):
+        sys.exit(0)
+
+    others = live_sessions(identity(payload)["session_ref"])
+    if not others:
+        sys.exit(0)  # 나 혼자면 전역 명령도 안전하다
+
+    lines = [
+        "⚠️ 워킹트리 전역 변경 — 이 워킹트리를 쓰는 다른 세션이 "
+        f"{len(others)}개 살아 있다.",
+        f"  실행하려는 명령: {command.strip()[:200]}",
+    ]
+    for peer in others:
+        branch = peer.get("branch") or "?"
+        lines.append(f"  · {describe_peer(peer)} — 브랜치 `{branch}`")
+    lines.append(
+        "브랜치 전환·stash·reset은 **파일 단위가 아니라 워킹트리 전역**이라, "
+        "상대의 HEAD와 미커밋 작업까지 함께 움직인다(2026-08-19 실측: 양방향으로 "
+        "서로를 덮쳤고 사전 통지가 상태 변화 속도를 못 따라갔다). "
+        "승인 전에 `SendMessage`로 알리고 동의를 받아라. "
+        "근본 해법은 `git worktree` 분리다(docs/conventions/git.md §7)."
+    )
+    escalate("PreToolUse", "\n".join(lines))
+
+
 HANDLERS = {
     "agent-pre": handle_agent_pre,
     "agent-post": handle_agent_post,
     "file-pre": handle_file_pre,
     "file-post": handle_file_post,
+    "bash-pre": handle_bash_pre,
     "session-end": handle_session_end,
 }
 
@@ -579,7 +683,11 @@ def main() -> None:
     if handler is None:
         print(f"알 수 없는 서브커맨드: {command!r}", file=sys.stderr)
         sys.exit(1)
-    handler(load_payload())
+    payload = load_payload()
+    # 어떤 hook이 돌든 생존 신호부터 남긴다 — 전역 명령 경고의 근거가 된다.
+    if command != "session-end":
+        touch_session(payload)
+    handler(payload)
 
 
 if __name__ == "__main__":

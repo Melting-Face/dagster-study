@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PoC 스토리지 배포: Secret(크리덴셜) → SeaweedFS(S3) + Catalog Postgres → warehouse 버킷
+# PoC 스토리지 배포: Secret(크리덴셜) → SeaweedFS(S3) + Catalog Postgres(CNPG) → warehouse 버킷
 # 사용: ./scripts/k8s-poc-storage.sh
+# 전제: ./scripts/k8s-operators.sh 로 CloudNativePG 오퍼레이터가 먼저 설치돼 있어야 한다.
 # 크리덴셜은 로컬 PoC 기본값(env override 가능). 실인프라는 외부 시크릿 매니저 사용.
 set -euo pipefail
 
@@ -13,32 +14,70 @@ require_cli kubectl
 kubectl config use-context "kind-${CLUSTER_NAME}"
 
 # 로컬 PoC 크리덴셜(placeholder — 실값은 env로 주입)
-S3_ACCESS_KEY="${S3_ACCESS_KEY:-poc-access}"          # pragma: allowlist secret
-S3_SECRET_KEY="${S3_SECRET_KEY:-poc-local-secret}"    # pragma: allowlist secret
+# 주석은 **gitleaks 문법**(`gitleaks:allow`)이다. 이 레포의 스캐너는 gitleaks이고
+# `pragma: allowlist secret`은 detect-secrets 문법이라 여기서는 아무것도 억제하지 못한다
+# ("예외 처리를 해뒀다"는 거짓 안심 — 2026-08-19 security 감사).
+S3_ACCESS_KEY="${S3_ACCESS_KEY:-poc-access}"          # gitleaks:allow
+S3_SECRET_KEY="${S3_SECRET_KEY:-poc-local-secret}"    # gitleaks:allow
+# PG_USER는 k8s/catalog-postgres.yaml의 `bootstrap.initdb.owner`와 **반드시 같아야 한다**(아래 0번 가드).
 PG_USER="${PG_USER:-iceberg}"
-PG_PASSWORD="${PG_PASSWORD:-iceberg-local}"           # pragma: allowlist secret
+PG_PASSWORD="${PG_PASSWORD:-iceberg-local}"           # gitleaks:allow
 
 S3_JSON="$(cat <<JSON
 {"identities":[{"name":"poc","credentials":[{"accessKey":"${S3_ACCESS_KEY}","secretKey":"${S3_SECRET_KEY}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
 JSON
 )"
 
-# 1) Secret (SeaweedFS s3.json + PG/S3 접속 키)
-log "Secret 생성/갱신: lakehouse-creds"
+# 0) 계정명 대조 — CNPG는 시크릿의 username과 CR의 `bootstrap.initdb.owner`가 **같아야 한다**(공식 문서).
+#    owner는 CR의 리터럴이라 PG_USER override와 자동으로 맞지 않는다 → 적용 전에 막는다.
+#    (2026-08-19 devops-qa·security 감사 공통 지적: 지금 일치하는 건 기본값이 같아서일 뿐이다)
+CR_OWNER="$(awk '/^ *owner:/ {print $2; exit}' "${REPO_ROOT}/k8s/catalog-postgres.yaml")"
+if [ "${CR_OWNER}" != "${PG_USER}" ]; then
+    printf 'PG_USER(%s) != k8s/catalog-postgres.yaml의 owner(%s)\n' "${PG_USER}" "${CR_OWNER}" >&2
+    printf 'CNPG bootstrap이 정의되지 않은 동작에 빠진다. 둘을 맞춘 뒤 다시 실행하라.\n' >&2
+    exit 1
+fi
+
+# 1) Secret — 용도별로 **분리**한다.
+#    lakehouse-creds : SeaweedFS s3.json + S3 접속 키 (S3 전용)
+#    catalog-pg-app  : 카탈로그 Postgres 계정 (CNPG `bootstrap.initdb.secret`이 요구하는
+#                      type=kubernetes.io/basic-auth · 키 이름 username/password 고정)
+#    🔴 같은 비밀번호를 두 시크릿에 중복 보관하지 않는다 — 이 레포가 반복해 밟은
+#    "값이 갈려 부분 성공하는" 드리프트의 씨앗이다. PG 크리덴셜의 in-cluster 단일 출처는 catalog-pg-app.
+log "Secret 생성/갱신: lakehouse-creds (S3 전용)"
 kubectl create secret generic lakehouse-creds -n default \
-    --from-literal=pg-user="${PG_USER}" \
-    --from-literal=pg-password="${PG_PASSWORD}" \
     --from-literal=s3-access-key="${S3_ACCESS_KEY}" \
     --from-literal=s3-secret-key="${S3_SECRET_KEY}" \
     --from-literal=s3.json="${S3_JSON}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
+log "Secret 생성/갱신: catalog-pg-app (카탈로그 PG 계정)"
+kubectl create secret generic catalog-pg-app -n default \
+    --type=kubernetes.io/basic-auth \
+    --from-literal=username="${PG_USER}" \
+    --from-literal=password="${PG_PASSWORD}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
 # 2) 스토리지 배포
-log "SeaweedFS + Catalog Postgres 배포"
+#    카탈로그 PG는 **CNPG Cluster CR**이므로 오퍼레이터가 먼저 있어야 한다.
+if ! kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1; then
+    printf 'CloudNativePG CRD 없음 — 먼저 ./scripts/k8s-operators.sh 를 실행하라\n' >&2
+    exit 1
+fi
+
+# 2-1) 구 구성(Deployment + emptyDir) 잔존분 정리 — 같은 이름의 Service가 CNPG 서비스와 헷갈린다.
+#      카탈로그 데이터는 emptyDir였고 재적재 전제라 보존 대상이 아니다(2026-08-19 확인).
+log "구 catalog-postgres Deployment/Service 정리(있으면)"
+kubectl -n default delete deploy/catalog-postgres --ignore-not-found
+kubectl -n default delete svc/catalog-postgres --ignore-not-found
+
+log "SeaweedFS + Catalog Postgres(CNPG) 배포"
 kubectl apply -f "${REPO_ROOT}/k8s/seaweedfs.yaml"
 kubectl apply -f "${REPO_ROOT}/k8s/catalog-postgres.yaml"
 kubectl -n default rollout status statefulset/seaweedfs --timeout=180s
-kubectl -n default rollout status deploy/catalog-postgres --timeout=120s
+# CR은 rollout status 대상이 아니다 → Cluster의 Ready 조건을 기다린다(initdb 포함이라 넉넉히).
+kubectl -n default wait --for=condition=Ready \
+    cluster.postgresql.cnpg.io/catalog-postgres --timeout=300s
 
 # 3) warehouse 버킷 생성(멱등) — weed shell은 filer 자동발견 실패가 있어 -filer 명시
 #    파드가 Ready여도 filer의 gRPC(포트+10000)는 아직 안 열려 있을 수 있다

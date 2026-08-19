@@ -1,52 +1,51 @@
-# Iceberg JDBC 카탈로그용 Postgres — PoC 최소 구성(데이터는 emptyDir, 재시작 시 소멸)
-# 접속 크리덴셜은 Secret(lakehouse-creds) 참조 — 하드코딩 금지
-apiVersion: apps/v1
-kind: Deployment
+# Iceberg JDBC 카탈로그 Postgres — **CloudNativePG(CNPG) 오퍼레이터** 관리
+#
+# 이전 구성은 `Deployment` + `emptyDir`였다 → 파드 재기동 시 카탈로그(테이블 메타)가 **전부 소멸**했다.
+# S3의 parquet은 남지만 "테이블"이 사라져 복구 = 재적재이므로, 상태 저장 규칙
+# (docs/conventions/k8s.md §1 StatefulSet+PVC)을 오퍼레이터로 충족한다.
+#
+# 오퍼레이터 설치: scripts/k8s-operators.sh · 크리덴셜 시크릿 생성: scripts/k8s-poc-storage.sh
+# 서비스 이름은 CNPG가 만든다 → **catalog-postgres-rw**(쓰기)·`-ro`(읽기 전용)·`-r`(전체).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
 metadata:
     name: catalog-postgres
     namespace: default
 spec:
-    replicas: 1
-    selector:
-        matchLabels:
-            app: catalog-postgres
-    template:
-        metadata:
-            labels:
-                app: catalog-postgres
-        spec:
-            containers:
-                - name: postgres
-                  image: postgres:16.4
-                  env:
-                      - name: POSTGRES_DB
-                        value: iceberg
-                      - name: POSTGRES_USER
-                        valueFrom:
-                            secretKeyRef: {name: lakehouse-creds, key: pg-user}
-                      - name: POSTGRES_PASSWORD
-                        valueFrom:
-                            secretKeyRef: {name: lakehouse-creds, key: pg-password}
-                      - name: PGDATA
-                        value: /var/lib/postgresql/data/pgdata
-                  ports:
-                      - {containerPort: 5432, name: postgres}
-                  volumeMounts:
-                      - {name: data, mountPath: /var/lib/postgresql/data}
-                  resources:
-                      requests: {cpu: 250m, memory: 384Mi}
-                      limits: {cpu: 500m, memory: 512Mi}
-            volumes:
-                - name: data
-                  emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-    name: catalog-postgres
-    namespace: default
-spec:
-    selector:
-        app: catalog-postgres
-    ports:
-        - {name: postgres, port: 5432, targetPort: 5432}
+    # PoC는 단일 인스턴스. HA(2+)는 상주 예산과 함께 판단한다(docs/resource-sizing.md §B).
+    instances: 1
+    # 이미지 태그 고정(§4 `latest` 금지). CNPG 1.30.0의 기본 operand는 `18.6-system-trixie`지만
+    # system 타입은 deprecated이고, 백업은 in-tree가 아닌 **Barman Cloud 플러그인**으로 가므로
+    # 이미지에 barman 바이너리가 필요 없다 → `standard`.
+    # 태그 형식 `MM.mm-TYPE-OS`: https://github.com/cloudnative-pg/postgres-containers
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
+    bootstrap:
+        initdb:
+            database: iceberg
+            owner: iceberg
+            # 🔴 CNPG **자동생성** 시크릿(`catalog-postgres-app`)을 쓰지 않고 선언 시크릿을 지정한다.
+            # 호스트 Dagster가 이 DB에 직접 붙기 때문이다(.env의 `ICEBERG_CATALOG_*`).
+            # 오퍼레이터가 비밀번호를 만들면 사람이 `kubectl get secret`으로 꺼내 `.env`에 옮겨야 하고,
+            # 그 동기화가 어긋나면 "나열은 되는데 접속에서 죽는" 부분 성공 드리프트가 재현된다
+            # (CLAUDE.md 운영 §"접속 대상을 바꾸는 값은 한 벌로 묶어 바꾼다").
+            # 비밀정보 단일 출처는 scripts/k8s-poc-storage.sh(env override).
+            secret:
+                name: catalog-pg-app
+    # superuser 접근은 기본 비활성(CNPG). 카탈로그는 DB owner 권한만으로 충분하다
+    # (owner=iceberg라 PG15+ 이후에도 public 스키마에 CREATE 가능).
+    enableSuperuserAccess: false
+    postgresql:
+        parameters:
+            # 카탈로그는 테이블 메타만 담아 데이터가 작다 → 상한(768Mi)에 맞춰 보수적으로 잡는다.
+            # 접속자: Dagster(pyiceberg)·Spark·Flink·dbt(docs/resource-sizing.md §Postgres).
+            shared_buffers: 128MB
+            max_connections: "100"
+    storage:
+        size: 5Gi
+        # kind 기본 SC(rancher.io/local-path). 🔴 `ALLOWVOLUMEEXPANSION=false`라 **사후 확장이 안 된다**
+        # (2026-08-19 실측) → 처음에 넉넉히 잡는다. 늘리려면 클러스터 재생성이다.
+        storageClass: standard
+    # §2 requests/limits 필수. 수치 근거는 docs/resource-sizing.md §B.
+    resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: 500m, memory: 768Mi}

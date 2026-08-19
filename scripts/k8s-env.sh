@@ -36,6 +36,22 @@ INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"
 FLINK_JOB_NS="${FLINK_JOB_NS:-default}"                # FlinkDeployment가 뜨는 ns(=SA·RBAC 생성 대상)
 
+# --- CloudNativePG (Iceberg JDBC 카탈로그 Postgres) ---
+# 카탈로그 PG를 오퍼레이터로 관리한다(구 Deployment+emptyDir 교체). Cluster CR은 k8s/catalog-postgres.yaml.
+# 🔴 **chart 버전 ≠ appVersion** — Spark 오퍼레이터와 같은 함정이다.
+# chart **0.29.0** = CNPG **1.30.0**. 대조: `helm search repo cnpg/cloudnative-pg --versions`
+CNPG_NS="${CNPG_NS:-cnpg-system}"
+CNPG_RELEASE="${CNPG_RELEASE:-cloudnative-pg}"
+CNPG_REPO="${CNPG_REPO:-cnpg}"
+CNPG_REPO_URL="${CNPG_REPO_URL:-https://cloudnative-pg.github.io/charts}"
+CNPG_CHART="${CNPG_CHART:-cloudnative-pg}"
+CNPG_CHART_VERSION="${CNPG_CHART_VERSION:-0.29.0}"
+# 백업·PITR(선택) — Barman Cloud **플러그인**(CNPG-I). in-tree barman-cloud는 CNPG **1.31.0에서 제거 예정**이라
+# 처음부터 플러그인으로 간다. 전제: CNPG ≥ 1.26 + cert-manager(Flink 웹훅과 공용 — ensure_cert_manager가
+# 있으면 재사용·없으면 설치. 2026-08-19 현재 클러스터에는 없다).
+INSTALL_CNPG_BACKUP="${INSTALL_CNPG_BACKUP:-false}"
+CNPG_BARMAN_PLUGIN_VERSION="${CNPG_BARMAN_PLUGIN_VERSION:-v0.14.0}"
+
 # ingress-nginx — UI를 고정 URL로 노출(port-forward 대체).
 # kind provider 매니페스트를 쓴다(hostPort 80/443 사용). v1.15.1부터는 `ingress-ready` 노드 라벨을
 # 요구하지 않는다(구버전 문서와 다르니 릴리스별로 확인할 것).
@@ -58,6 +74,19 @@ export KIND_EXPERIMENTAL_PROVIDER=podman
 # --- 헬퍼 ---
 log() {
     printf '\033[1;34m[k8s]\033[0m %s\n' "$*"
+}
+
+# cert-manager 보장(멱등) — Flink Operator 웹훅과 CNPG barman 플러그인이 **둘 다** 요구한다.
+# 이미 있으면 재사용한다(두 오퍼레이터가 각자 깔아 버전이 갈리는 것을 막는다).
+ensure_cert_manager() {
+    if kubectl get deploy -n cert-manager cert-manager-webhook >/dev/null 2>&1; then
+        log "cert-manager 이미 설치됨 — 재사용"
+        return 0
+    fi
+    log "cert-manager 설치 (${CERT_MANAGER_VERSION})"
+    kubectl apply -f \
+        "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
+    kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
 }
 
 # 필수 CLI 존재 확인, 없으면 종료

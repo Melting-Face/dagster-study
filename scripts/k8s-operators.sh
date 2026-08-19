@@ -47,9 +47,8 @@ kubectl apply -f "${REPO_ROOT}/k8s/spark/spark-workload-cleanup-rbac.yaml"
 
 # 2) Flink Operator (선택) — FlinkDeployment CRD, webhook가 cert-manager 의존
 if [ "${INSTALL_FLINK}" = "true" ]; then
-    log "cert-manager 설치 (${CERT_MANAGER_VERSION}) — Flink Operator 웹훅 의존"
-    kubectl apply -f "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
-    kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+    # Flink Operator 웹훅이 cert-manager를 요구한다(CNPG barman 플러그인과 공용 — k8s-env.sh 헬퍼).
+    ensure_cert_manager
 
     log "Flink Operator 설치 (ns=${FLINK_OPERATOR_NS}, ver=${FLINK_OPERATOR_CHART_VERSION})"
     helm repo add flink-operator-repo \
@@ -75,6 +74,34 @@ else
     log "Flink Operator 건너뜀 (INSTALL_FLINK=true 로 활성화 — Phase 3)"
 fi
 
+# 3) CloudNativePG — Iceberg JDBC 카탈로그 Postgres를 오퍼레이터로 관리
+#    Cluster CR(k8s/catalog-postgres.yaml)은 scripts/k8s-poc-storage.sh가 적용한다.
+#    🔴 chart 0.29.0 = CNPG 1.30.0 (chart 버전 ≠ appVersion — k8s-env.sh 참고)
+log "CloudNativePG 설치 (ns=${CNPG_NS}, chart=${CNPG_CHART_VERSION})"
+helm repo add "${CNPG_REPO}" "${CNPG_REPO_URL}" >/dev/null 2>&1 || true
+helm repo update >/dev/null
+# 컨트롤러 자원 한도 명시(docs/conventions/k8s.md §2, 수치 근거 docs/resource-sizing.md)
+helm upgrade --install "${CNPG_RELEASE}" "${CNPG_REPO}/${CNPG_CHART}" \
+    --version "${CNPG_CHART_VERSION}" \
+    --namespace "${CNPG_NS}" --create-namespace \
+    --set "resources.requests.cpu=100m" \
+    --set "resources.requests.memory=200Mi" \
+    --set "resources.limits.cpu=250m" \
+    --set "resources.limits.memory=384Mi" \
+    --wait
+
+# 3-2) Barman Cloud 플러그인(선택) — 백업·PITR. 백업 대상은 클러스터 내부 SeaweedFS(S3)라 외부 비용 0.
+if [ "${INSTALL_CNPG_BACKUP}" = "true" ]; then
+    ensure_cert_manager
+    log "Barman Cloud 플러그인 설치 (${CNPG_BARMAN_PLUGIN_VERSION}) — 오퍼레이터와 같은 ns(${CNPG_NS})"
+    kubectl apply -f \
+        "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/${CNPG_BARMAN_PLUGIN_VERSION}/manifest.yaml"
+    kubectl rollout status deployment -n "${CNPG_NS}" barman-cloud --timeout=180s
+else
+    log "Barman 플러그인 건너뜀 (INSTALL_CNPG_BACKUP=true 로 활성화)"
+fi
+
 log "설치 완료. 오퍼레이터 상태:"
 kubectl get pods -n "${SPARK_OPERATOR_NS}"
+kubectl get pods -n "${CNPG_NS}"
 [ "${INSTALL_FLINK}" = "true" ] && kubectl get pods -n "${FLINK_OPERATOR_NS}" || true

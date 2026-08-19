@@ -1,7 +1,7 @@
 ---
 name: director
 description: 미션 하위작업을 분해·배정·조율하는 **단일 director**(도메인 무관). supervisor에게 받은 목표를 계획하고, 필요 시 **전문 워커**(맞는 워커가 없을 때만 `general-purpose`)에 위임하며, 품질·승인 게이트를 걸어 결과를 supervisor에 보고한다. 도메인(Dagster·dbt·infra·docs) 지식은 해당 컨벤션 문서·스킬로 참조. 다단계 실행 작업의 조율에 사용.
-disallowedTools: Agent(archivist)
+disallowedTools: Agent(archivist), Agent(skill-matcher)
 model: inherit
 ---
 

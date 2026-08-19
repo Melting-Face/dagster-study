@@ -34,6 +34,7 @@ flowchart TB
 
     SEC[security · 최종 컨펌 게이트<br/>계층 밖 · 읽기 전용]
     ARC[archivist · 기록 전담<br/>계층 밖 · 판단하지 않음]
+    SKM[skill-matcher · 스킬 배선 감사<br/>계층 밖 · 읽기 전용]
 
     subgraph rec[기록 · 볼트]
         JR[(저널<br/>agents/날짜/NN-미션.md)]
@@ -73,9 +74,12 @@ flowchart TB
   같은 날 구조도 검증 미션에서 **최초로 실제 배정**됐다 — 수치는 반드시 시점과 함께 읽어라.
   도입 판단 기준은 §역할 계층 참조.
 - 워커는 **서로를 배정하지 못한다**. 워커→워커 화살표가 없는 것이 규약이다.
-- **`security`·`archivist`는 director 관할 밖**이다 — 배정 주체는 supervisor다.
+- **`security`·`archivist`·`skill-matcher`는 director 관할 밖**이다 — 배정 주체는 supervisor다.
   director는 `security`에게 **허가하지 않고 컨펌을 요청**하며, 그 판정에 **구속**된다(§security 최종 컨펌).
 - `archivist`는 **모든 결정·액션의 기록 주체**다(§기록 주체). `journal_guard`는 넘버링 경합만 막는다.
+- `skill-matcher`는 **워커 자신의 배선을 보는 메타 감사자**다 — 도메인 작업을 하지 않고
+  "어떤 스킬이 어떤 워커에 물려 있고 그 점수가 타당한가"만 본다. 배정 주체가 supervisor인 이유가 이것이다:
+  **감사 대상에 director 자신이 포함**되므로 director 관할에 두면 자기감사가 된다.
 
 ### 워커 배치 — 도메인 × 축
 
@@ -88,6 +92,7 @@ flowchart TB
 | **체계 감사** | `data-qa` | `devops-qa` | ← `data-qa` 재사용 | 재발을 막을 상시 장치가 있는가 |
 | **노출·규제**(도메인 공통) | `security` | `security` | `security` | 새어나가는가 · 규제를 지키는가 |
 | **관측·기록**(계층 밖) | `archivist` | `archivist` | `archivist` | 기록이 사실과 맞는가 |
+| **스킬 배선**(계층 밖) | `skill-matcher` | `skill-matcher` | `skill-matcher` | 워커가 맞는 스킬을 물고 있는가 |
 
 - **분석은 새 축이 아니라 새 도메인**이라 3종 세트를 복제하지 않았다(YAGNI — gold 0개·리포트 0편).
   `analyst`는 **구현 축 1명**이고, 판정은 데이터 도메인의 워커를 **그대로 재사용**한다:
@@ -98,6 +103,9 @@ flowchart TB
   단일 소유자를 흐리지 않기 위함이다. `analyst`의 쓰기는 `notebooks/**`·`docs/analyses/**` 뿐이다.
 - `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성)는 **관점이 다르다** — 중첩 금지.
 - `archivist`는 **계층 밖 관측자**다. 판단·실행을 하지 않고 저널·MOC 정합만 본다.
+- `skill-matcher`(계층 밖)는 `archivist`와 **대칭**이다 — `archivist`가 "저널 정합", `skill-matcher`가 "스킬 배선 정합"을 본다.
+  `*-qa`와의 경계: **`*-qa`는 도메인의 검증 체계**, **`skill-matcher`는 워커에 물린 스킬**을 본다 — 중첩 금지.
+  스킬 **설치·`skills-lock.json` 편집은 하지 않는다**(공급망·비가역) — 계획만 반환하고 `security` 컨펌을 거친다.
 
 ### 프론트매터 — 무엇을 선언할 수 있는가
 
@@ -113,32 +121,36 @@ flowchart TB
 | `permissionMode` | 아니오 | ❌ 미채택 | 🔴 **부모가 auto 모드면 무시**된다 — 이 저장소는 auto로 도는 세션이 있어 **실효 0**. 넣으면 "막았다고 믿는" 상태만 만든다 |
 | `maxTurns` | 아니오 | ❌ 미채택 | 폭주 실측 사례 없음(YAGNI). 관측되면 그때 |
 | `skills` | 아니오 | ❌ 미채택 | 컨벤션은 이미 지시문이 경로로 지시한다. 프리로드는 컨텍스트 비용만 늘린다 |
-| `hooks` | 아니오 | ✅ `analyst` | **워커별 경로 강제의 유일한 수단** — 실발동 확인 완료. 🔴 `command`의 인용 규칙이 `settings.json`과 다르다(§권한 게이트 4층) |
+| `hooks` | 아니오 | 🟡 `analyst`만 배선 유지 · **확대 보류** | **워커별 경로 강제의 유일한 수단**이나 **발동이 재현되지 않는다**(2회 발동 → 같은 조합 6회 미발동, 원인 미확정). 배선은 fail-open이라 두어도 무해하나 **강제로 치지 않는다**(§권한 게이트 4층) |
 | `mcpServers` | 아니오 | ❌ 미채택 | 워커 전용 MCP 서버 없음 |
 
 ### 권한 매트릭스 (실측)
 
 | 에이전트 | `tools` | `disallowedTools` | `model` | 쓰기 | 비가역 작업 |
 | --- | --- | --- | --- | --- | --- |
-| `director` | **미지정 = All tools** | `Agent(archivist)` | `inherit` | O | 워커에 **계획만** 받게 하고 승인 후 실행 배정 |
+| `director` | **미지정 = All tools** | `Agent(archivist)`, `Agent(skill-matcher)` | `inherit` | O | 워커에 **계획만** 받게 하고 승인 후 실행 배정 |
 | `data-engineer`·`devops-engineer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O | **계획만 반환**(커밋·`apply`·`down -v` 금지) |
 | `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) |
 | `security` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `inherit` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
 | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
+| `skill-matcher` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 발견·별점·도입계획만 반환 — **스킬 설치·`skills-lock.json` 편집·워커 정의 수정 금지** |
 | `archivist` | `Read, Write, Edit, Grep, Glob, Bash` | — | `sonnet` | O(저널·MOC **한정**) | 없음 |
 | `general-purpose`(내장) | **`*` = All tools** (정의 파일 없음·런타임 제공) | — | 상속 | O | 제약을 **정의 파일로 못박을 수 없다** → 배정 프롬프트에 명시할 것 |
 
-- 🔴 **`director`의 `Agent(archivist)` 차단은 2026-08-19 실측에서 검증되지 않았다** — 서브에이전트에게는
+- 🔴 **`director`의 `Agent(archivist)`·`Agent(skill-matcher)` 차단은 2026-08-19 실측에서 검증되지 않았다** — 서브에이전트에게는
   **`Agent` 도구 자체가 없어서**(`No such tool available: Agent. Agent is disabled for this session,
   in subagents as well as here`) 세부 규칙까지 도달하지 못했다. 선언은 남기되 **효력은 미확인**이다.
   더 큰 함의는 아래 §3계층의 실측 한계다.
-- **`director`의 `Agent(archivist)` 차단**은 "저널을 직접 쓰지 마라"(`director.md`)를 **기계 강제**로 올리려는 선언이다.
+- **`director`의 `Agent(archivist)`·`Agent(skill-matcher)` 차단**은 "저널을 직접 쓰지 마라"·"스킬 배선은 네 관할이 아니다"
+  (`director.md`)를 **기계 강제**로 올리려는 선언이다. `skill-matcher`를 막는 이유는 **감사 대상에 director 자신이
+  포함**되기 때문이다 — 자기가 자기 배선을 감사시키면 게이트가 아니다.
   🔴 **`Agent(security)`는 막지 않는다** — `security`는 director의 *배정* 대상이 아니지만 **컨펌 질의**
   대상이다(§security 최종 컨펌). 둘을 같이 막으면 승인 절차 자체가 실행 불가능해진다.
   **관할 밖 = 배정 금지이지 질의 금지가 아니다.**
 - 화이트리스트(`tools: Agent(a, b)`)가 아니라 **블랙리스트**를 쓴 이유: ① `tools`를 지정하면 **나열한 것만**
-  갖게 되어 director의 도구 누락 리스크가 크고 ② 규약상 관할 밖은 `archivist` 하나뿐이라
-  **신규 워커는 기본 관할**이 맞다(블랙리스트가 의도와 일치한다).
+  갖게 되어 director의 도구 누락 리스크가 크고 ② 관할 밖 워커는 **소수의 예외**이고 신규 워커는 기본 관할이 맞다
+  (블랙리스트가 의도와 일치한다). 🔴 다만 **관할 밖이 늘면 블랙리스트도 늘어난다** — `archivist` 하나였던
+  전제가 `skill-matcher` 추가로 깨졌다. 관할 밖이 더 늘면 화이트리스트 전환을 재검토한다.
 
 #### `model` 배정 원칙
 
@@ -148,7 +160,7 @@ flowchart TB
 | 배정 | 대상 | 근거 |
 | --- | --- | --- |
 | `inherit` | `director`·`data-engineer`·`devops-engineer`·`analyst`·`security` | **결정을 만드는 쪽**. 구현 워커의 산출물은 저장소에 남고, `security`는 판정 실패 비용(비밀 누출·규제)이 가장 크며 director의 실행·채택을 **구속**한다 |
-| `sonnet` | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa`·`archivist` | **읽고 대조·기록하는 쪽**. 발견이 틀려도 supervisor 검토를 거치고 저장소에 남지 않는다 |
+| `sonnet` | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa`·`archivist`·`skill-matcher` | **읽고 대조·기록하는 쪽**. 발견이 틀려도 supervisor 검토를 거치고 저장소에 남지 않는다 |
 
 - 모델 해결 순서: `CLAUDE_CODE_SUBAGENT_MODEL` → 호출별 `model` 파라미터 → **프론트매터** → 주 대화.
   이 저장소는 환경변수를 설정하지 않으므로 **프론트매터가 실효 지점**이다.
@@ -164,27 +176,28 @@ flowchart TB
 > `general-purpose`는 **정의 파일조차 없어** 경계를 붙일 자리가 없다 — 위 논증이 아예 통하지 않는다.
 > 맞는 전문 워커가 있으면 그쪽을 쓰고, 불가피하게 쓸 때는 **배정 프롬프트에 제약을 명시**한다.
 >
-> ✅ **경로 경계는 규율에서 강제로 올라갔다(2026-08-19 실측 완료).** `analyst`의
-> "`notebooks/`·`docs/analyses/`만 쓰기"를 `permissions`로는 못 건다(세션 전역이라 특정
-> `subagent_type`에 범위를 걸 수 없고, `Edit(<경로>)`를 `deny`에 넣으면 **모든 주체**가 막힌다 —
-> `data-engineer`도 막힌다). **에이전트 정의 안의 `hooks`** 는 **그 subagent에만** 걸리므로
-> 이것이 유일한 수단이고, [`analyst_path_guard.py`](../../scripts/analyst_path_guard.py)로
-> **실발동을 확인했다**(허용 경로 통과 / `defs/` 쓰기 `deny`).
+> 🔴 **경로 경계는 규율이다(2026-08-19 확정).** `analyst`의 "`notebooks/`·`docs/analyses/`만 쓰기"를
+> `permissions`로는 못 건다 — 세션 전역이라 특정 `subagent_type`에 범위를 걸 수 없고,
+> `Edit(<경로>)`를 `deny`에 넣으면 **모든 주체**가 막힌다(`data-engineer`도 막힌다).
 >
-> 🔴 **다만 `Edit`·`Write`·`NotebookEdit` 경로에 한정된다.** `analyst`에는 `Bash`가 있어
-> `sed`·리다이렉트 우회는 이 matcher 밖이다 — 그 층은 여전히 규율 + `protected_paths_guard.py`다.
-> 그리고 **훅 명령이 깨지면 조용히 통과**하므로 배선을 바꿀 때마다 §실발동 확인을 다시 돌린다.
+> **에이전트 정의 안의 `hooks`** 만이 그 subagent에 걸리는 유일한 수단이라 실제로 배선해 봤고,
+> **발동을 2회 확인한 뒤 같은 조합이 6회 미발동**해 **원복했다**(§4층 실측).
+> 재현되기 전까지 이 경계는 **강제가 아니다.** 문서·프롬프트에 "막힌다"고 쓰지 않는다.
+>
+> 설령 재현되더라도 **`Edit`·`Write`·`NotebookEdit`에 한정**된다 — `analyst`에는 `Bash`가 있어
+> `sed`·리다이렉트 우회는 matcher 밖이고, 그 층은 `protected_paths_guard.py`와 경계 지시문이 맡는다.
 
 ### 권한 게이트 (permissions) — 기계 강제층
 
-통제는 5층이고, **아래로 갈수록 강하다.** 위 두 층만 믿으면 안 된다.
+통제는 5층으로 나뉘고 **아래로 갈수록 강하다.** 위 두 층만 믿으면 안 된다.
+🔴 다만 **현재 실제로 서 있는 것은 1·2·3·5층뿐**이다 — 4층은 발동이 재현되지 않아 원복했다.
 
 | 층 | 수단 | 범위 | 성격 | 우회 가능성 |
 | --- | --- | --- | --- | --- |
 | 1 | 프론트매터 `tools` | 그 워커 | 도구 **미부여** | `Bash`가 있으면 사실상 무력 |
 | 2 | 경계 지시문·승인 게이트 | 그 워커 | **규율**(프롬프트) | 모델이 따르지 않으면 끝 |
 | 3 | 프론트매터 `disallowedTools` | 그 워커 | **거부**(상속 목록에서 제거) | `Bash` 경유 쓰기는 남는다 → 4·5층이 받는다 |
-| 4 | 에이전트 정의 내 `hooks` | **그 워커만** | **결정적 강제** | `Bash` 경유는 matcher 밖. 🔴 명령이 깨지면 **조용히 통과**한다 — 아래 |
+| 4 | 에이전트 정의 내 `hooks` | **그 워커만** | 🔴 **불명 — 현재 미사용** | 발동이 재현되지 않아 원복했다. 이 층을 **세어 넣지 않는다** — 아래 |
 | 5 | **`permissions` 규칙** | **세션 전역** | **결정적 강제** | 없음 — 도구 호출 전에 판정. 단 **`bypassPermissions` 모드는 예외**(아래) |
 
 - 🔴 **3층과 5층은 범위가 다르다.** `disallowedTools`는 **워커별**, `permissions`는 **세션 전역**이다.
@@ -194,32 +207,61 @@ flowchart TB
   그쪽이 우선한다. 이 저장소는 auto로 도는 세션이 있어 **선언해도 실효가 없다** → 채택하지 않는다.
   선언해두면 "막았다고 믿는" 상태만 만들어 `Write(<경로>)` 죽은 규칙과 같은 함정이 된다.
 
-#### 4층 실측 — 작동한다. 단, 명령 문자열 하나로 조용히 죽는다 (2026-08-19)
+#### 4층 실측 — 🔴 **재현되지 않는다. 강제로 치지 않는다** (2026-08-19)
 
-`analyst`에 경로 가드를 붙이고 **실발동 확인**(§실발동 확인)을 돌린 결과다.
-**1차는 실패, 원인 교정 후 2차는 성공**했다. 실패 과정 자체가 이 절의 핵심이다.
+`analyst`에 경로 가드를 붙이고 **실발동 확인**(§실발동 확인)을 돌렸다.
+**발동을 2회 확인했으나, 이후 같은 조합이 6회 연속 미발동했다.** 결론은 "작동한다"가 아니라
+**"원인 미확정"** 이다. 이 절은 그 판단 과정 전체를 남긴다 — 두 번 결론을 뒤집었기 때문이다.
+
+**1단계 — 인용 오류를 찾았다(여기까지는 유효하다)**
 
 | 시도 | `command` 값 | 결과 |
 | --- | --- | --- |
-| 1차 | `"\"$CLAUDE_PROJECT_DIR\"/scripts/analyst_path_guard.py"` | 🔴 **미발동** — `analyst`가 `defs/`에 그대로 썼다 |
-| 2차 | `"./scripts/analyst_path_guard.py"` | ✅ **발동** — `deny` 정상 |
-| 3차(채택) | `"$CLAUDE_PROJECT_DIR/scripts/analyst_path_guard.py"` | ✅ **발동** — cwd 비의존이라 이쪽을 쓴다 |
+| 1차 | `"\"$CLAUDE_PROJECT_DIR\"/scripts/analyst_path_guard.py"` | 🔴 미발동 |
+| 2차 | `"./scripts/analyst_path_guard.py"` | ✅ **발동**(`deny` 정상) |
+| 3차 | `"$CLAUDE_PROJECT_DIR/scripts/analyst_path_guard.py"` | ✅ **발동** |
 
-- 🔴 **범인은 이스케이프된 안쪽 따옴표다.** `.claude/settings.json`(JSON)에서는
-  `"\"$CLAUDE_PROJECT_DIR\"/scripts/…"` 가 정상 동작해 **그 형태를 그대로 옮겨온 것이 함정**이었다.
-  프론트매터(YAML)에서는 안쪽 `"`가 벗겨지지 않아 경로가 깨진다.
-  → **배선처가 다르면 인용 규칙도 다르다.** settings.json의 표기를 프론트매터로 복사하지 않는다.
-- 🔴 **훅은 실패해도 조용하다.** 명령이 깨지면 에러가 아니라 **그냥 통과**한다 —
-  "막았다고 믿는데 안 막힌" 상태가 되고, 도구 결과만 봐서는 구분되지 않는다.
-  그래서 §실발동 확인이 **필수**다. 선언·로직 테스트로는 절대 잡히지 않는다.
-- **가설을 실측으로 뒤집은 과정**(기록 가치): 처음 세운 두 가설은 ① 정의 스냅샷 지연
-  ② 프론트매터 `hooks` 미지원이었고 **둘 다 틀렸다.** 판별에 쓴 것은:
-  ⓐ `CLAUDE_CODE_SUBAGENT_MODEL` 미설정 + 같은 세션에서 추가한 `model:`이 즉시 반영됨 → ① 기각
-  ⓑ 버전 2.1.226이 공식 문서의 모든 버전 게이트 상회 + 문서가 "`Agent` 도구로 생성될 때 발동"이라 명시 → ② 약화
-  ⓒ **스크립트에 임시 추적을 심어** "호출조차 안 됨"과 "호출됐으나 판정 무시"를 분리 → 배선 문제로 확정.
-  → **원인 후보가 둘로 좁혀졌을 때 셋째를 의심하는 것**이 실제 해법이었다.
+- 🔴 **이스케이프된 안쪽 따옴표는 확실히 깨진다.** `.claude/settings.json`(JSON)에서는
+  `"\"$CLAUDE_PROJECT_DIR\"/scripts/…"` 가 정상이라 **그 형태를 그대로 옮겨온 것이 함정**이었다.
+  프론트매터(YAML)에서는 안쪽 `"`가 벗겨지지 않는다.
+  → **배선처가 다르면 인용 규칙도 다르다.** settings.json 표기를 프론트매터로 복사하지 않는다.
+- 🔴 **훅은 실패해도 조용하다.** 명령이 깨지면 에러가 아니라 **그냥 통과**한다.
+  도구 결과만 봐서는 "막힌 것"과 구분되지 않는다 → §실발동 확인이 **필수**다.
+
+**2단계 — 그런데 재현되지 않았다 (결론이 뒤집힌 지점)**
+
+| # | 배선 | 워커 | 결과 |
+| --- | --- | --- | --- |
+| 1–2 | `worker_path_guard.py <worker>`(인자형) | data-engineer | 🔴 미차단 · 호출조차 안 됨 |
+| 3 | `worker_path_guard.py`(무인자) | data-engineer | 🔴 호출 안 됨 |
+| 4–5 | 인자형 / 무인자 | analyst | 🔴 호출 안 됨 |
+| 6 | **`analyst_path_guard.py`** — 위 표 3차, **발동을 확인했던 바로 그 조합** | data-engineer | 🔴 미차단 |
+
+- 🔴 **6번이 결정적이다.** 인자도, 스크립트 내용도, 워커도 원인이 아니다 —
+  **성공을 관측했던 조합 그 자체가 몇 시간 뒤 작동하지 않았다.**
+- 유력 가설은 **세션 중 에이전트 정의 재적용이 어느 시점부터 멎는 것**이나 **확정하지 못했다.**
+  🔎 반증도 있다 — 다른 세션이 새로 만든 워커(`skill-matcher`)는 **즉시 인식됐다.**
+  **신규 파일 발견**과 **기존 정의 재적용**이 다른 경로일 수 있다.
+- **그래서 확대를 원복했다** — `data-engineer`·`devops-engineer`·`archivist` 배선을 걷고
+  **`analyst` 하나만 남겼다**(fail-open이라 두어도 무해하고, 재현되면 그대로 작동한다).
+  측정상 작동하지 않는 것을 "미검증" 딱지만 붙여 확대해 두면 §권한 매트릭스를 읽는 사람이
+  **막힌다고 믿는다.** `permissionMode`·`Write(<경로>)`와 같은 함정이다.
+- 일반화 가드(`scripts/worker_path_guard.py`, 워커명을 인자로 받는 단일 스크립트, 로직 24/24)는
+  **커밋하지 않았다.** 재현이 되면 그때 배선과 함께 넣는다.
+- **재검증 절차**: **새 세션에서** `analyst`에 가드를 배선하고 금지 경로 쓰기를 시킨다.
+  거부되면 세션 내 재적용 문제로 확정, 여전히 통과하면 프론트매터 `hooks` 자체를 재평가한다.
+
+**틀렸던 가설들**(기록 가치 — 판별에 쓴 근거가 재사용된다)
+
+- ① 정의 스냅샷 지연 → 같은 세션에서 추가한 `model:`이 즉시 반영돼(`data-qa`=Sonnet) **기각**했었다.
+- ② 프론트매터 `hooks` 미지원 → 버전 2.1.226이 공식 문서의 모든 버전 게이트를 상회하고
+  문서가 "`Agent` 도구로 생성될 때 발동"이라 명시해 **약화**시켰다.
+- ③ `command` 인용 오류 → **1단계는 이것으로 설명된다.** 그러나 **2단계는 설명하지 못한다.**
+- 🔴 세 번 다 "원인을 찾았다"고 생각했고 **두 번 틀렸다.** 판별 도구로 쓸 만한 것은
+  **스크립트에 임시 추적을 심어** "호출조차 안 됨"과 "호출됐으나 판정 무시"를 분리한 것뿐이었다.
 - 로직 테스트는 별개로 버그를 하나 잡았다 — `docs/analyses_fake/`가 통과했다(접두어에 `/` 경계 없음).
-  **로직 통과와 배선 성립은 다른 층**이고, 둘 다 확인해야 강제가 선다.
+  **로직 통과·배선 선언·실발동은 서로 다른 층**이고, 셋 다 확인해야 강제가 선다.
+  → 이 절 전체가 [`philosophy.md`](../philosophy.md) **원칙 7(성공 신호를 의심한다)** 의 사례다.
 - 🔴 **판정자의 거부와 훅의 거부는 다르다.** 판별 도중 `analyst`에게 금지 경로 쓰기를 시켰더니
   **도구를 호출하지 않고 지시문 근거로 거부**했다(규율 층이 먼저 작동). 훅 테스트로는 무효라
   **허용 경로 쓰기**로 바꿔 훅 발동만 관측했다 — 워커의 규율이 강할수록 **강제층 검증이 가려진다.**
@@ -376,9 +418,10 @@ flowchart TB
 | **subagent / agent** | `Agent` 툴 **워커 서브에이전트** | 배정받은 **단일 작업** 수행(코드·조사·테스트) → **director 승인 아래** 실행하고 결과를 반환·보고 | 다른 워커 배정, 무승인 실행 |
 | **security**<br/>(계층 밖) | `Agent` 툴 워커(읽기 전용) | **director 결정의 최종 컨펌** — 실행·채택 결정을 판정해 `[승인]`/`[반려]`. 노출·규제·거버넌스 점검 | 직접 수정·실행 · director의 지휘를 받는 것 |
 | **archivist**<br/>(계층 밖) | `Agent` 툴 워커 | **모든 결정·액션의 기록 주체** — 체크포인트마다 저널 기록, 정합 감사·MOC 유지 | 판단·실행 · 저널 외 파일 수정 |
+| **skill-matcher**<br/>(계층 밖) | `Agent` 툴 워커(읽기 전용) | **스킬↔워커 배선 감사** — 별점 루브릭 채점, 매핑 드리프트·죽은 참조·lock↔디스크 불일치·출처 위반 판정, 미충족 갭의 후보 탐색 | 스킬 설치·lock 편집·워커 정의 수정 · 외부 스킬 **신뢰성 최종 판정**(`security` 몫) |
 
-- **`security`·`archivist`는 director 관할 밖**이다 — **supervisor가 직접 배정**한다.
-  director는 이 둘에게 허가를 내리지 않으며, 반대로 `security`의 컨펌에 **구속**된다.
+- **`security`·`archivist`·`skill-matcher`는 director 관할 밖**이다 — **supervisor가 직접 배정**한다.
+  director는 이 셋에게 허가를 내리지 않으며, 반대로 `security`의 컨펌에 **구속**된다.
 - **director는 우선 1명**(도메인 무관). 도메인 지식(Dagster·dbt·infra·docs)은 해당 [컨벤션 문서](README.md)·스킬로 참조한다.
   부하·전문성 분리가 필요해지면 도메인별 director로 **분화**할 수 있다(YAGNI: 지금은 1명).
 - 규모가 작은 미션은 계층을 접는다 — supervisor가 director/subagent 없이 직접 수행해도 된다(YAGNI).
@@ -844,6 +887,7 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `.claude/agents/devops-qa.md` | subagent/worker (전문) | **데브옵스 품질보증** — 인프라 **선언 파일·게이트 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
 | `.claude/agents/analyst.md` | subagent/worker (전문) | **분석가** — 레이크하우스로 **질문에 답한다**. 노트북·리포트 작성(쓰기 워커, `notebooks/**`·`docs/analyses/**` 한정), gold 승격은 **제안만** |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
+| `.claude/agents/skill-matcher.md` | 스킬 매처 (계층 밖) | **스킬↔워커 배선 감사** — 5축 별점 채점·매핑 드리프트·lock↔디스크 대조·출처 위반(**읽기 전용**), 재배선·도입 계획만 반환 |
 
 - director는 `Agent` 툴로 호출한다(`subagent_type: director`). 워커 위임은 기본 `general-purpose`,
   도메인이 맞으면 **전문 워커**(`security` · `data-*` 3종 · `devops-*` 3종)를 쓴다.
@@ -909,6 +953,8 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
   (워커별 범위가 필요해서다). 그래서 **인용 규칙도 다르다** — `settings.json`의
   `"\"$CLAUDE_PROJECT_DIR\"/…"` 표기를 옮겨오면 조용히 죽는다(§4층 실측). 정본 표기는
   `"$CLAUDE_PROJECT_DIR/scripts/analyst_path_guard.py"`.
+  🔴 **배선은 남아 있으나 발동이 재현되지 않는다** — 이 가드는 **강제로 세지 않는다**(§4층 실측).
+  다른 셋과 달리 **동작이 확인되지 않은 유일한 가드**다.
 - 셋 다 의존성 없음·PEP 723·**fail-open**(가드 실패가 작업을 막지 않는다)
 - 배선: [`.claude/settings.json`](../../.claude/settings.json) (프로젝트 범위, 커밋 대상)
 

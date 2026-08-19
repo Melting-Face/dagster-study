@@ -23,15 +23,10 @@
       "Bash(*psql*TRUNCATE*)",
       "Edit(.env)",
       "Edit(.env.*)",
-      "Write(.env)",
-      "Write(.env.*)",
       "Edit(terraform/**/*.tfstate*)",
-      "Write(terraform/**/*.tfstate*)",
       "Edit(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
-      "Bash(*psql*DELETE*)",
-      "Write(.claude/settings.json)",
-      "Write(.claude/settings.local.json)"
+      "Bash(*psql*DELETE*)"
     ]
   },
   "hooks": {

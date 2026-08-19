@@ -133,6 +133,32 @@ resources:
   최종 상태만으로는 결과를 구분할 수 없다 → **`status.stateTransitionHistory`에 `Succeeded`가 있었는지**로 판정한다.
   오퍼레이터를 갈아끼울 때는 매니페스트·스크립트뿐 아니라 **이 글루 코드까지 함께** 옮긴다
   (2026-08-17 이전 시 누락돼 자산이 죽어 있었다).
+- 🔴 **오퍼레이터 watch는 장시간 후 죽는다 — 상태 필드만 믿지 않는다**(2026-08-19 실측).
+  `SparkApplication`의 `currentStateSummary`가 driver 파드 `Succeeded` 이후에도 **`DriverReady`에
+  영구 고착**하는 현상을 확인했다(최장 **4시간 32분**). 오퍼레이터 파드는 재시작 0에 GC 로그도
+  정상이라 **살아 있는 것처럼 보인다** — 죽은 것은 `SparkApplication` **watch**다.
+
+  | 잡 제출 시점 | 오퍼레이터 기동 후 경과 | 완료 감지 |
+  | --- | --- | --- |
+  | 2026-08-18 16:02 | 5분 | ✅ 2.5분 뒤 `within retention` 로그 |
+  | 2026-08-19 05:43 | 13.7시간 | ❌ 전이 없음 |
+  | 2026-08-19 19:16 · 19:29 | 27시간 | ❌ 전이 없음 |
+  | `rollout restart` 직후 | 20초 | ✅ 2.5분 뒤 정상 전이 |
+
+  **기각한 가설 2개**(둘 다 실측으로): ① `delete`→즉시 `create` 경합 — 간격을 60초 둔 대조군도
+  동일하게 실패했다. ② retain이 전이를 지연시킨다 — `Application is within retention ...`
+  로그는 **이미 완료를 감지한 뒤** GC를 미루는 메시지지 전이 지연이 아니다. retain을 늘려도
+  완료 감지는 늦어지지 않는다(두 요구는 애초에 분리돼 있다).
+
+  **영향**: watch가 죽으면 `timeout_s`(900초)가 통째로 흐른 뒤 `succeeded=False`가 되어
+  **성공한 잡이 `dg.Failure`로 기록**된다. 잡은 성공했고 Iceberg에 행도 들어갔는데
+  오케스트레이터만 모르는 상태다([philosophy.md](../philosophy.md) 원칙 7 사례).
+
+  **대응**: 글루가 `currentStateSummary`와 **driver 파드 `status.phase`를 함께** 본다.
+  파드가 종료 상태(`Succeeded`/`Failed`)가 된 뒤 유예(`pod_terminal_grace_s`, 기본 180초) 안에
+  오퍼레이터 전이가 없으면 **파드 기준으로 판정**한다. 정상 경로(전이 2.5분)는 그대로 두고
+  watch 사멸 시에만 탈출하는 설계다. 회복은 `kubectl -n spark-operator rollout restart deploy`.
+  근본 해결은 업스트림(apache/spark-kubernetes-operator) 몫이다.
 - **검증 상태**: PoC **잡**(`k8s/spark/sparkapplication-poc.yaml`)은 Apache 오퍼레이터에서 **동작 확인됨**
   (2026-08-17 — Iceberg write+read-back `rows=3`, exitCode 0, 정리 오류 0건).
   PoC **자산**(`defs/poc/`, 호스트 Dagster 제출 경로)도 2026-08-18 Apache 스펙 이전 후 **라이브 검증 통과**:

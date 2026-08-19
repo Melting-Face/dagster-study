@@ -19,7 +19,7 @@
       ③ 워킹트리 전역 변경 — 남이 있는데 브랜치를 갈아타거나 stash/reset 하는가
 
     **차단이 아니라 소통이다.** 판정이 휴리스틱이라 오탐이 나올 수 있고,
-    정당한 병렬 작업도 많다. 그래서 실행 중인 충돌은 `escalate`(사용자 확인)로
+    정당한 병렬 작업도 많다. 그래서 실행 중인 충돌은 `ask`(사용자 확인)로
     올리고, 이미 끝난 작업은 결과 요약을 컨텍스트로 흘려 **재호출 대신 재사용**을
     유도한다. 충돌 상대의 **tmux pane·pid**를 함께 주므로(`ListAgents` 행의
     `tmux 0:@0.%5`와 직접 대응), 모델은 상대를 지목해 `SendMessage`로 물어볼 수 있다.
@@ -77,6 +77,29 @@ GLOBAL_GIT_RE = re.compile(
     r"|reset\s+--hard"
     r"|worktree\s+(?:add|remove)"
     r"|clean\s+-\S*[fd]"
+    r")\b"
+)
+
+# **공유 인프라**를 바꾸는 명령. 워킹트리가 아니라 클러스터·컨테이너가 공유 자원이라,
+# git 리스로는 원리적으로 못 잡는다 — 파일을 하나도 안 건드려도 남의 작업이 죽는다.
+# (2026-08-19 실측: 한 세션이 자원 회수로 cert-manager·Flink 오퍼레이터를 지우는 동안
+#  다른 세션이 그 위에 백업 플러그인을 올리고 있었다. 양쪽 다 사용자 승인을 받은
+#  작업이라 누구도 잘못하지 않았고, **서로 뭘 하는지 몰랐던 것**이 유일한 문제였다.)
+# 조회 명령(get·describe·logs·top)은 제외한다 — 상태를 바꾸지 않는다.
+SHARED_INFRA_RE = re.compile(
+    r"\b(?:"
+    # `kubectl -n default delete ...`처럼 **플래그가 값을 따로 받는** 형태를
+    # 놓치지 않으려고, 동사 앞의 토큰은 종류를 가리지 않고 건너뛴다
+    # (2026-08-19 실측으로 잡은 누락).
+    r"kubectl(?:\s+(?!delete\b|apply\b|create\b|patch\b|scale\b|drain\b"
+    r"|cordon\b|replace\b|edit\b|rollout\b)\S+)*"
+    r"\s+(?:delete|apply|create|patch|scale|drain|cordon|replace|edit)"
+    r"|kubectl(?:\s+(?!rollout\b)\S+)*\s+rollout\s+(?:restart|undo)"
+    r"|helm\s+(?:install|upgrade|uninstall|delete|rollback)"
+    r"|(?:docker|podman)\s+compose\s+(?:down|rm|stop|restart|up)"
+    r"|(?:docker|podman)\s+(?:rm|kill|stop|system\s+prune|volume\s+prune)"
+    r"|podman\s+machine\s+(?:stop|rm)"
+    r"|kind\s+(?:delete|create)\s+cluster"
     r")\b"
 )
 
@@ -395,12 +418,20 @@ def emit(payload: dict) -> None:
 
 
 def escalate(event: str, reason: str) -> None:
-    """사용자 확인으로 상신. 차단이 아니라 판단을 사람에게 넘기는 것."""
+    """사용자 확인으로 상신. 차단이 아니라 판단을 사람에게 넘기는 것.
+
+    🔴 와이어 값은 반드시 **`ask`** 다. `permissionDecision`의 유효 enum은
+    `allow`·`deny`·`ask`·`defer`뿐이고(CLI 2.1.226 실측), `hookSpecificOutput`은
+    `hookEventName` 판별 discriminated union이라 값이 어긋나면 **출력 객체 전체가
+    `(root): Invalid input`으로 거부**된다. 그러면 이 훅의 결정이 사라진 채 도구가
+    진행한다 — 함수 이름은 "상신"이지만 실제로는 **fail-open**이었다(2026-08-19 실측).
+    `defer`는 print-mode 전용이라 대화형에서는 무시된다.
+    """
     emit(
         {
             "hookSpecificOutput": {
                 "hookEventName": event,
-                "permissionDecision": "escalate",
+                "permissionDecision": "ask",
                 "permissionDecisionReason": reason,
             }
         }
@@ -641,12 +672,35 @@ def handle_bash_pre(payload: dict) -> None:
     막는다. 근본 해법은 `git worktree` 분리이고, 이 경고는 그때까지의 완충재다.
     """
     command = (payload.get("tool_input") or {}).get("command") or ""
-    if not command or not GLOBAL_GIT_RE.search(command):
+    is_git = bool(command) and bool(GLOBAL_GIT_RE.search(command))
+    is_infra = bool(command) and bool(SHARED_INFRA_RE.search(command))
+    if not is_git and not is_infra:
         sys.exit(0)
 
     others = live_sessions(identity(payload)["session_ref"])
     if not others:
         sys.exit(0)  # 나 혼자면 전역 명령도 안전하다
+
+    if is_infra and not is_git:
+        infra_lines = [
+            "⚠️ 공유 인프라 변경 — 같은 클러스터·컨테이너를 쓰는 다른 세션이 "
+            f"{len(others)}개 살아 있다.",
+            f"  실행하려는 명령: {command.strip()[:200]}",
+        ]
+        infra_lines.extend(f"  · {describe_peer(peer)}" for peer in others)
+        infra_lines.append(
+            "🔴 **실행 전에 그 세션들에게 무엇을 하고 있는지 물어라.** "
+            "`ListAgents`로 상대를 찾고(위 pane과 같은 행) `SendMessage`로 "
+            "**① 내가 무엇을 바꾸려는지 ② 상대가 지금 무엇을 쓰고 있는지** 확인한다. "
+            "클러스터는 파일과 달리 리스로 못 나눈다 — 파일을 하나도 안 건드려도 "
+            "남의 작업이 죽는다(2026-08-19 실측: 한쪽이 자원을 회수하는 동안 다른 쪽이 "
+            "그 위에 오퍼레이터를 올리고 있었고, 둘 다 승인받은 작업이었다). "
+            "🔴 **대기는 기본값이 아니다** — 질의와 함께 "
+            "**기본 진행안과 시한**을 보내고, "
+            "회신이 없으면 통보한 대로 진행한다(무기한 대기는 교착)."
+        )
+        infra_lines.append(PANE_CAVEAT)
+        escalate("PreToolUse", "\n".join(infra_lines))
 
     lines = [
         "⚠️ 워킹트리 전역 변경 — 이 워킹트리를 쓰는 다른 세션이 "

@@ -19,7 +19,7 @@
     판정은 두 갈래다:
       - 저장소 **안**의 허용 밖 경로 → `deny`(차단). 규약이 명확하므로 사람에게
         묻지 않고 막는다. 필요하면 `data-engineer`에 재배정하라는 뜻이다.
-      - 저장소 **밖** 경로(스크래치패드 등) → `escalate`(사용자 확인). 정당한
+      - 저장소 **밖** 경로(스크래치패드 등) → `ask`(사용자 확인). 정당한
         임시 파일도 있고, 홈 설정 파일 쓰기도 여기로 들어오므로 사람이 판단한다.
 
     한계(정직하게): `analyst`에는 `Bash`가 있어 `sed`·리다이렉트 경유 쓰기는
@@ -62,8 +62,10 @@ def main() -> None:
     target = target.resolve()
 
     # 저장소 밖 — 스크래치패드일 수도, 홈 설정일 수도 있다. 사람이 판단한다.
+    # 🔴 값은 `ask`다 — 유효 enum은 allow·deny·ask·defer뿐이고, 벗어나면 출력 전체가
+    #    검증 실패해 **결정이 사라진 채 통과**한다(fail-open). 2026-08-19 실측.
     if not target.is_relative_to(project_dir):
-        decision = "escalate"
+        decision = "ask"
         reason = (
             f"`analyst`가 저장소 밖 경로에 쓰려 한다: {target}. "
             "규약상 `analyst`의 쓰기는 `notebooks/**`·`docs/analyses/**` 한정이다. "

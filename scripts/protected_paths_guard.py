@@ -12,8 +12,15 @@
     권한 게이트를 보강하는 작업 자체가 그 경로로 이뤄졌다).
 
     그래서 `Bash` 명령 문자열을 보고, **보호 경로 + 쓰기 동작**이 함께 나타나면
-    사용자에게 확인을 올린다(`escalate`). 차단이 아니라 확인이다 — 정당한 편집도
+    사용자에게 확인을 올린다(`ask`). 차단이 아니라 확인이다 — 정당한 편집도
     많고, 판단은 사람이 해야 한다.
+
+    🔴 `permissionDecision`의 유효 값은 **`allow`·`deny`·`ask`·`defer`뿐**이다
+    (CLI 2.1.226 실측: zod `Nr(["allow","deny","ask","defer"])`). 예전에 쓰던
+    `escalate`는 스키마에 없어 **훅 출력 전체가 검증 실패**하고, 그 훅의 결정이
+    폐기된 채 도구가 그냥 진행한다 — 에러 배너만 한 번 뜨고 **게이트는 fail-open**
+    이었다(2026-08-19 실측: `cat .env > /dev/null`이 프롬프트 없이 통과).
+    `defer`는 print-mode 전용이라 대화형에서는 무시된다.
 
     보호 경로는 **`.claude/settings.json`의 `ask` 규칙에서 자동 추출**한다.
     목록을 두 곳에 두면 반드시 어긋나므로 단일 출처를 유지한다.
@@ -202,7 +209,7 @@ def main() -> None:
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "permissionDecision": "escalate",
+                    "permissionDecision": "ask",
                     "permissionDecisionReason": reason,
                 },
             },

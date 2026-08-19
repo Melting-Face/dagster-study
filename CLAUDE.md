@@ -152,10 +152,15 @@
   Iceberg snapshot·로그 보존 정책 포함 [`docs/operations.md`](docs/operations.md).
 - **Docker/Compose 규칙**: 로깅·env YAML 앵커, 이미지 `latest` 금지, healthcheck + `depends_on`,
   전 서비스 `deploy.resources` 명시. **옵션 기능은 `profiles`로 분리**(뼈대는 profile
-  없이 항상 실행, `--profile <name>`으로 opt-in) — `monitoring`(prometheus)·`legacy-sql`(trino).
+  없이 항상 실행, `--profile <name>`으로 opt-in) — `monitoring`(prometheus)·`legacy-sql`(trino)·
+  `legacy-storage`(seaweedfs). **뼈대(core)는 `dagster-webserver`·`dagster-daemon`·`postgres` 셋뿐**이다.
   **`profiles`는 "제거 예정"의 중간 단계로도 쓴다** — `trino`는 재설계 제거 대상이나 22모델 방언
   교정이 끝날 때까지 **값 대조의 정본**이라 정의는 남기고 **상시 기동만 끊는다**("중단"과 "삭제"의 분리:
-  자원은 즉시 회수, 롤백 비용 0). 상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
+  자원은 즉시 회수, 롤백 비용 0). `seaweedfs`도 스토리지 정본이 K8s로 이전돼 같은 처리를 했다(2026-08-19).
+  🔴 **의존받는 서비스는 의존하는 쪽의 profile을 전부 물려받는다** — `seaweedfs`에 `legacy-storage`만
+  붙이면 `trino`(legacy-sql)·`prometheus`(monitoring)가 의존 비활성으로 깨져 profile이 3개다.
+  바꾼 뒤 **`docker compose --profile <p> config --services`로 profile별 확인**한다(기동 없이 수초).
+  상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
 - **호스트 노트북(옵션)**: ad-hoc 탐색은 **Jupyter Lab**을 **Dagster와 같은 venv**에서 띄운다
   (`[dependency-groups] notebook`, `uv run --group notebook jupyter lab --port 8889`).
   런타임 의존성은 건드리지 않으며 **포트 8889**를 쓴다(8888은 SeaweedFS filer UI가 점유).
@@ -166,8 +171,25 @@
   로컬 레지스트리 `localhost:5001`. 기동은 `scripts/k8s-up.sh` → `k8s-operators.sh` → `k8s-poc-storage.sh`
   (설정 단일 출처 `scripts/k8s-env.sh`). Dagster는 **호스트 유지**, 컴퓨트·스토리지만 클러스터에 둔다.
   규칙 [`docs/conventions/k8s.md`](docs/conventions/k8s.md), 예산·배분 [`docs/resource-sizing.md`](docs/resource-sizing.md).
-  클러스터에는 **Spark Operator**(배치)·**Flink Operator**(스트림)·**Spark Connect**(dbt-spark 접속용 상주)가 있고,
-  Spark·Flink가 **같은 Iceberg JDBC 카탈로그**를 공유한다. 버전은 **엔진 최신이 아니라 Iceberg가 지원하는 짝**으로
+  클러스터에는 **Spark Operator**(배치)·**Spark Connect**(dbt-spark 접속용 상주)가 있고,
+  Spark·Flink가 **같은 Iceberg JDBC 카탈로그**를 공유한다.
+  **Flink Operator는 채택했으나 현재 미설치**다(2026-08-19) — Phase 0 검증 후 잡 없는 세션 클러스터가
+  **1 CPU/2Gi를 상주 점유**해 "BATCH·STREAM 시분할" 규약을 어겨 내렸다. trino와 같은 **"중단"과 "삭제"의
+  분리**이고, `INSTALL_FLINK=true scripts/k8s-operators.sh`로 복구한다(기본값은 `false`).
+  🔴 **검증용으로 띄운 상주 컴퓨트는 그 자리에서 내린다** — 회수 시점을 트리거하는 주체가 없으면
+  문서에만 있는 규약은 조용히 샌다(실제로 13시간 샜고, 발견 경로는 성능 이상이 아니라 "안 쓰는 것 정리"였다).
+  **카탈로그 Postgres는 CloudNativePG(CNPG) 오퍼레이터**가 관리한다(`Cluster` CR) — 구 `Deployment`+`emptyDir`는
+  재기동만으로 카탈로그가 소멸했다. 🔴 서비스명에 **`-rw`/`-ro`/`-r` 접미사**가 붙고 접미사 없는 이름은 생기지 않는다.
+  자동생성 시크릿(`<cluster>-app`)이 아니라 **선언 시크릿 `catalog-pg-app`**(basic-auth)을 쓴다 —
+  호스트 Dagster가 이 DB에 직접 붙어(`.env`) 오퍼레이터가 만든 비밀번호는 사람이 옮겨야 하고, 그 동기화가
+  어긋나면 앞서 밟은 "부분 성공" 드리프트가 재현된다.
+  🔴 **단 이 선언 시크릿은 "초기화 1회"라 스크립트 재실행으로 비밀번호가 회전되지 않는다** — Secret만 바뀌고
+  DB 롤은 옛 값이라 **성공한 것처럼 보이는데 실제로는 안 바뀐 상태**가 된다("실패가 실패로 안 보이는" 계열).
+  회전은 `ALTER ROLE`(또는 `spec.managed.roles`)·Secret·`.env`·워크로드 재기동을 **한 벌로** 해야 한다.
+  백업은 **Barman Cloud 플러그인**(in-tree는 1.31.0 제거 예정), 대상은 클러스터 내부 SeaweedFS(S3)이며
+  **같은 장애 도메인이라 DR이 아니다**(논리 오류 복구용). **메타 Postgres(Dagster)는 compose에 남긴다**(순환 의존 회피).
+  **SeaweedFS는 오퍼레이터 미채택** — master/volume/filer 분리로 상주 +500m/+1Gi인데 이미 PVC라 급소가 아니다.
+  엔진 버전은 **최신이 아니라 Iceberg가 지원하는 짝**으로
   고정한다(예: `iceberg-flink-runtime`이 2.1까지라 Flink는 2.1). Spark Connect는 유일한 상주 컴퓨트라
   미사용 시 `--replicas=0`으로 내린다.
   **Iceberg 카탈로그 이름은 전 엔진 `iceberg`로 통일**한다 — JDBC 카탈로그는 `catalog_name`으로 레지스트리를
@@ -193,9 +215,14 @@
 - **처리·배포 기술 비교**: 각 기술(trino·docker·spark·flink·k8s·oci)을 **프로젝트 결정 관점**(채택 이유·
   대안 비교)으로 [`docs/architectures/`](docs/architectures/README.md)에 정리(채택 ✅ / 미채택 🔎).
 - **Claude Code 스킬**: 프로젝트가 쓰는 Agent Skills와 사용 규칙(**프로젝트 컨벤션 우선**)은
-  [`docs/skills.md`](docs/skills.md), 단일 출처는 [`skills-lock.json`](skills-lock.json).
+  [`docs/skills.md`](docs/skills.md), 잠긴 스킬의 단일 출처는 [`skills-lock.json`](skills-lock.json).
+  🔴 **lock은 재현성의 정본이지만 현재 실효는 3/24다**(2026-08-19 실측) — 나머지 21개는 `~/.claude/skills/`에
+  **설치돼 있으나 `computedHash` 무결성 고정 밖**이고, 스킬 CLI가 PATH에 없어 §관리 절차를 지금 실행할 수 없다.
+  "런타임이 제공하는 것"이 아니라 **"설치했는데 lock에만 없는 것"** 이다(문서의 분류 자체가 틀렸었다).
+  개인 저장소 출처 2종(`kubernetes-specialist`·`spark-engineer`)이 인프라 워커에 물려 있어 `security` 재판정 대기.
+  배선 감사 주체는 **`skill-matcher`**(계층 밖·읽기 전용).
 - **에이전트 오케스트레이션·기록관**: AI 세션을 **3계층(supervisor→director→subagent)** 으로 나눈다(**director는 우선 1명**,
-  도메인 무관). **director는 업무 성격에 따라 워커를 배정·감독**하고, **권한 밖(비가역·비용·규약변경·범위 밖)이나 특이사항(드리프트·결과충돌·반복실패·비승인변경)은 supervisor에 에스컬레이션**해 **진행 여부를 supervisor가 결정**한다. subagent 실행은 director **승인 게이트**를 거친다. **`security`·`archivist`는 director 관할 밖**(supervisor가 직접 배정)이며, **director의 실행·채택 결정은 `security` 최종 컨펌 후 진행**한다(동일 결정 재컨펌 2회 초과 시 에스컬레이션). 미션 저널의 **기록 주체는 `archivist`** — supervisor가 **체크포인트마다** 이벤트를 전달해 기록시키고(경합 방지 single-writer 유지), 호출 실패·세션 급종료 시에만 supervisor가 **폴백**으로 직접 쓴다. "누가 무엇을 왜
+  도메인 무관). **director는 업무 성격에 따라 워커를 배정·감독**하고, **권한 밖(비가역·비용·규약변경·범위 밖)이나 특이사항(드리프트·결과충돌·반복실패·비승인변경)은 supervisor에 에스컬레이션**해 **진행 여부를 supervisor가 결정**한다. subagent 실행은 director **승인 게이트**를 거친다. **`security`·`archivist`·`skill-matcher`는 director 관할 밖**(supervisor가 직접 배정)이며, **director의 실행·채택 결정은 `security` 최종 컨펌 후 진행**한다(동일 결정 재컨펌 2회 초과 시 에스컬레이션). 미션 저널의 **기록 주체는 `archivist`** — supervisor가 **체크포인트마다** 이벤트를 전달해 기록시키고(경합 방지 single-writer 유지), 호출 실패·세션 급종료 시에만 supervisor가 **폴백**으로 직접 쓴다. "누가 무엇을 왜
   했는가"와 **계층 간 상호작용(배정·보고·질의·반려·승인)**·실행 `agent`/`model`을 **기록관 저널**로 남긴다. 저널은 개인 Obsidian 볼트
   **`$OBSIDIAN_VAULT`(기본 `~/obsidian`, 환경마다 다를 수 있음)** 의 `agents/<YYYY-MM-DD>/<NN>-<mission>.md`(NN=그날 착수 순번)
   (작업일자별·미션당 1파일, 계층 섹션 누적)에 쌓으며 **저장소 커밋 대상 아님**.
@@ -207,9 +234,35 @@
   인프라는 **`devops-engineer`·`devops-verifier`·`devops-qa`**. **판정자(`*-verifier`·`*-qa`·`security`)는 읽기 전용**으로
   발견만 반환하고, 구현 워커(`*-engineer`)만 쓰기를 갖되 비가역 작업(커밋·`terraform/kubectl apply`·`compose down -v`·
   파괴적 변경)은 계획만 반환한다. `security`(노출·규제) ↔ `devops-qa`(운영 신뢰성·재현성) 관점 분리.
+  **스킬↔워커 배선은 계층 밖 `skill-matcher`(읽기 전용)** 가 감사한다 — `archivist`가 "저널 정합"을 보듯
+  "어떤 스킬이 어떤 워커에 물렸나"를 본다. 등재 기준은 **5축 별점 루브릭**(스택 일치·권한 정합·정본 무충돌·
+  호출 빈도·대체 불가)으로 **★4 이상만 등재**하고, **축2·3이 0이면 합계와 무관하게 제외**한다.
+  🔴 **출처 신뢰성은 별점 축이 아니라 별개 게이트**다(섞으면 "★5인데 출처 불명"을 못 잡는다) — `security` 판정.
+  🔴 **스킬 설치·`skills-lock.json` 편집은 하지 않는다** — 외부 코드를 실행 컨텍스트에 주입하는 **공급망·비가역**
+  행위라 계획만 반환하고 `security` 컨펌 → 사용자 승인을 거친다. 정본 [`docs/skills.md`](docs/skills.md).
   **분석은 새 축이 아니라 새 도메인**이라 3종을 복제하지 않고 **구현 축 `analyst` 1명**만 둔다(판정은 `data-*` 재사용).
   `analyst`의 쓰기는 **`notebooks/**`·`docs/analyses/**` 한정**이고 gold 모델은 **제안만**(구현은 `data-engineer`) —
-  🔴 이 경로 경계는 **규율이지 기계 강제가 아니다**(`permissions`는 세션 전역이라 워커별 범위를 못 건다).
+  🔴 이 경로 경계는 **현재 규율이다** — `permissions`는 세션 전역이라 워커별 범위를 못 건다.
+  단 **에이전트 정의 내 `hooks`는 그 워커에만 걸려** 유일한 예외다 — `scripts/analyst_path_guard.py`로
+  `analyst`의 `Edit`/`Write`/`NotebookEdit` 경로를 **기계 강제**한다(실발동 확인 완료).
+  🔴 프론트매터 `command`는 `settings.json`과 **인용 규칙이 다르다** — `"\"$CLAUDE_PROJECT_DIR\"/…"`로
+  쓰면 **조용히 통과**한다(에러 없음). 정본은 `"$CLAUDE_PROJECT_DIR/scripts/….py"`이고,
+  배선을 바꾸면 **§실발동 확인을 다시 돌린다**. `Bash` 경유는 matcher 밖이라 여전히 규율이다.
+  🔴 **3계층은 현행 런타임에서 성립하지 않는다** — 서브에이전트에 `Agent` 도구가 없어 **중첩 위임이 불가**하다.
+  당분간 **supervisor가 직접 워커를 배정**하고, director는 계획·게이트 설계를 반환하는 자문 역할로 쓴다
+  (`security` 컨펌도 supervisor가 수행).
+  **프론트매터는 `model`·`disallowedTools`까지 명시**한다 — `model`은 **생략 시 기본값이 `inherit`**라
+  전원이 최상위 모델로 돌아 비용 제어가 사라진다. 판정·기록 워커(`*-verifier`·`*-qa`·`archivist`·`skill-matcher`)는
+  **`sonnet`**, 결정을 만드는 쪽(`director`·`*-engineer`·`analyst`·`security`)은 **`inherit`**.
+  판정자 6종은 `disallowedTools: Write, Edit, NotebookEdit`으로 **미부여(난이도) → 거부(강제)** 로 올리고,
+  `director`는 `disallowedTools: Agent(archivist), Agent(skill-matcher)`로 "저널을 직접 쓰지 마라"·
+  "스킬 배선은 네 관할이 아니다"를 **선언**한다(후자는 **감사 대상에 director 자신이 포함**되기 때문).
+  🔴 **단 이 두 규칙은 기계 강제가 아니다 — 효력 미확인이다.** 서브에이전트에는 `Agent` 도구 자체가 없어
+  (`No such tool available: Agent`) 세부 규칙까지 **도달하지 못한다**. 선언은 의도 기록으로 남기되
+  "막혔다"고 읽지 말고, **`skill-matcher`·`archivist`는 supervisor가 직접 배정**한다.
+  🔴 **`Agent(security)`는 막지 않는다** — 관할 밖은 *배정* 금지이지 *컨펌 질의* 금지가 아니다.
+  ❌ **`permissionMode`는 쓰지 않는다** — 부모가 auto 모드면 **무시**되어 실효가 없고, 선언해두면
+  "막았다고 믿는" 상태만 만든다(`Write(<경로>)` 죽은 규칙과 같은 함정).
   서브에이전트를 호출하면 **실행 메타**(`subagent_type`·`agent`/`model`·허용 도구·도구 호출 수·토큰·소요·승인 결과)와
   **경계 준수 여부**를 저널에 남긴다(수치 없으면 `미측정` — 추정치 금지).
   저널 **`NN` 넘버링은 hook이 강제**한다(`scripts/journal_guard.py` + `.claude/settings.json`) — `SessionStart`가 다음 번호·열린 미션을 주입하고, `PreToolUse(Write)`가 중복·규약 위반 생성을 차단하며, `Stop`이 저널 누락을 경고한다. 착수 순번의 판정 기준은 **본문 상호작용 로그의 첫 이벤트**.

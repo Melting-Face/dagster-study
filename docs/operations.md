@@ -105,6 +105,52 @@ dg.EnvVar("KEY") / os.environ["KEY"]  (코드에서 참조)
 | Iceberg 유지보수(컴팩션·만료·orphan) | `iceberg_maintenance_job`이 **매주 일요일 03:00 KST**에 대용량 3테이블을 **컴팩션(Spark `rewrite_data_files`) → 스냅샷 만료(pyiceberg, `SNAPSHOT_RETENTION_DAYS` 기본 7일) → orphan 정리(Spark `remove_orphan_files`, `ORPHAN_RETENTION_DAYS` 기본 7일)** 순서로 처리(순서 강제)([`defs/maintenance.py`](../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)) | **부분 구현** | 보존기간(기본 7일)·컴팩션 임계값(기본 100MB)·대상 테이블 범위는 **확정 필요**([security.md §4-1](security.md)) |
 | SeaweedFS(`s3://warehouse`) 용량 | 수명주기 정책 없음 | **논의 필요** | compute-log·중간 산출물 정리 정책 미설정 |
 | Docker 컨테이너 로그 유지 | `max-size: 10m` × `max-file: 20` → 컨테이너당 **최대 200MB** | 설정됨 | [conventions/docker.md](conventions/docker.md) §1-1. 시간 기반 순환은 미설정 |
+| Claude Code 세션 로그(개인 환경) | `~/.claude/settings.json`의 `cleanupPeriodDays: 14` | 설정됨·**실효 확인**(2026-08-20) | 아래 §2-1. 저장소가 아니라 **개인 홈**이라 커밋 대상이 아니다 |
+
+### 2-1. 로컬 세션 로그 정리 (`cleanupPeriodDays`)
+
+AI 세션 로그는 `~/.claude/projects/<프로젝트-경로-슬러그>/`에 `<session-id>.jsonl`로 쌓이고,
+서브에이전트 로그는 그 아래 `<session-id>/subagents/`에 붙는다. 2026-08-20 실측 시 이 저장소 몫만
+**74MB·103파일**이었다.
+
+🔴 **통째로 지우지 않는다 — 같은 디렉터리에 영구 메모리가 산다.**
+
+```
+~/.claude/projects/<프로젝트>/
+├── <session-id>.jsonl     ← 세션 로그 (정리 대상)
+└── memory/                ← ⚠️ 자동 메모리(`MEMORY.md` 포함) — 삭제 금지
+```
+
+`rm -rf <프로젝트>`는 축적된 메모리를 함께 날린다. 수동 삭제가 필요하면 반드시
+**유형을 한정**한다(`-name '*.jsonl'`). 그래야 `.md`인 메모리가 구조적으로 안 걸린다.
+
+**정리 정책**
+
+| 항목 | 값·동작 |
+| --- | --- |
+| 설정 키 | `~/.claude/settings.json`의 `cleanupPeriodDays`(기본 **30**, 이 환경은 **14**) |
+| 실행 시점 | 세션 기동마다가 아니라 **주기적**. 마지막 실행은 `~/.claude/.last-cleanup`(ISO8601, UTC) |
+| 🔴 실행 조건 | **대화형 기동에서만 돈다.** 헤드리스 `claude -p`는 3회 기동해도 마커가 갱신되지 않았다 |
+| 🔴 보존 단위 | **파일이 아니라 세션(부모)**. `subagents/` 하위 로그는 **부모의 수명을 따른다** |
+
+**판정 명령** — 값이 아니라 **단위**를 맞춰야 한다:
+
+```bash
+# ✅ 세션 단위(정책과 같은 단위). N일 초과 세션이 0이면 정상
+find ~/.claude/projects -maxdepth 2 -name '*.jsonl' -mtime +14 | wc -l
+
+# ❌ 재귀 탐색은 *파일*을 센다 — subagents/ 하위가 부모 수명으로 살아남아 0이 안 된다
+find ~/.claude/projects -name '*.jsonl' -mtime +14 | wc -l
+```
+
+🔴 **설정을 넣은 것과 정리가 도는 것은 다른 축이다.** 값을 바꿨으면 **대화형 세션을 한 번 띄운 뒤**
+위 명령으로 확인한다. 실측 결과 기준선 9개 중 8개가 삭제되고 109MB → 104MB로 줄었으며,
+대조군인 `memory/` 8개는 무손상이었다. 남은 1개는 미삭제가 아니라 **위 재귀 명령이 세션이 아니라
+파일을 세고 있었기 때문**이다([philosophy.md](philosophy.md) §계측 단위).
+
+> 즉시 회수가 필요하면 `.last-cleanup`을 과거로 되돌린 뒤 대화형 세션을 띄우면 다음 주기를
+> 기다리지 않는다(마커는 정리 후 정상 값으로 자동 복원된다). 다만 이 파일은 **내부 상태**이므로
+> 원본 값을 먼저 기록해 두고 손댄다.
 
 > Iceberg 유지보수는 `iceberg_maintenance_job`(주간 스케줄, **컴팩션→만료→orphan** 순서)으로
 > 자동화했다. 컴팩션·orphan 정리는 **Spark Iceberg 프로시저**로 실행한다(2026-08-19에 Trino에서 이관 —

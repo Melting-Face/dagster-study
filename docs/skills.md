@@ -43,6 +43,30 @@
 🔴 **분모가 무엇을 세는지 함께 읽는다.** `26`은 **고유 종수**, `30`은 **설치 슬롯**이다.
 둘 다 맞는 값이고 **세는 단위만 다르다** — 단위를 떼면 둘 다 오독된다.
 
+🔴 **`lock 등재 수` ≠ `프로젝트 디스크 설치 수`**(2026-08-21 07:59 병렬 세션 제보 → 재측정 확인).
+lock에 있으나 **프로젝트 디스크에는 없는** 항목이 있다 — `dagster-expert`·`dagster-integrations`·
+`dignified-python` 3종은 **전역에만** 있다. 즉 프로젝트 `skills-lock.json`은
+*"이 프로젝트에 설치된 것의 목록"* 이 아니라 **"이 프로젝트가 고정하려는 것의 목록"** 이고,
+**실체가 어느 스코프에 있는지는 말해주지 않는다.** 두 수를 같은 칸에 적으면 검산을 통과하며 남는다.
+
+##### 🔬 재측정 방법 (수치를 옮기지 말고 다시 재라)
+
+이 절의 수치는 **관측 시각의 스냅샷**이고 실제로 계속 변했다(40분간 프로젝트 0→6, lock 3→9,
+이후 lock 12·디스크 9). **인용 대신 아래를 돌려 그 자리의 값을 쓴다.**
+
+```bash
+python3 - <<'EOF'
+import json, os
+g = set(os.listdir(os.path.expanduser('~/.agents/skills')))   # 전역 실체
+p = set(os.listdir('.agents/skills'))                          # 프로젝트 실체
+lk = json.load(open('skills-lock.json'))['skills']             # 프로젝트 lock
+print(f"전역 {len(g)} / 프로젝트 디스크 {len(p)} / lock {len(lk)} / 고유 {len(g|p)} / 슬롯 {len(g)+len(p)}")
+print("lock에 있으나 프로젝트 디스크에 없음:", sorted(set(lk) - p))
+print("양 스코프 중복(버전 대조 필요):", sorted(g & p))
+EOF
+```
+
+
 #### 🔴 lock 파일은 **세 벌**이고 스키마는 **두 종류**다 (2026-08-21)
 
 | 파일 | 항목 | 해시 필드 | 길이 | 부가 정보 | 커밋 |

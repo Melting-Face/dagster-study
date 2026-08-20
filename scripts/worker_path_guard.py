@@ -46,6 +46,12 @@ from pathlib import Path
 #   allow — 여기 나열된 접두어만 쓸 수 있다(그 외 전부 거부). 좁은 범위의 워커용.
 #   deny  — 여기 나열된 접두어만 막는다(그 외 허용). 넓은 범위의 구현 워커용.
 # 🔴 접두어 끝의 `/`는 필수다 — 없으면 `docs/analyses_fake/`가 통과한다(실측 버그).
+#    `allow`에 **파일 하나**를 열 때만 `/` 없이 적고, 그때는 **완전일치**로 본다 —
+#    `README.md`를 접두어로 두면 `README.md.bak`까지 함께 열린다
+#    (2026-08-20 `security` 지적).
+#    `deny`에는 이 분기를 두지 않는다: 막는 쪽은 넓게 걸리는 편이 안전하고
+#    (`.env` 접두어가 `.env.example`까지 막는 것은 의도된 여유다),
+#    좁히면 경계가 조용히 샌다.
 BOUNDARIES = {
     # 분석가 — 노트북·리포트만. 정의 파일 소유자는 data-engineer다.
     "analyst": {"allow": ("notebooks/", "docs/analyses/")},
@@ -71,9 +77,19 @@ BOUNDARIES = {
     # (§권한 매트릭스 — 선언한 tools가 전부 실재하지는 않는다), 이 워커는 유일하게
     # **외부 네트워크에 접촉**하므로 가져온 내용이 파일로 착지하는 경로를 남기지 않는다.
     "researcher": {"allow": ()},
-    # 테크라이터 — 외부 공개 산출물만. 내부 결론(`docs/analyses/`)은 analyst 소관이고
-    # 파이프라인 정의는 data-engineer 소관이다. 공개물은 정정 비용이 크므로 좁게 연다.
-    "tech-writer": {"allow": ("docs/posts/",)},
+    # 테크라이터 — 저장소의 **문서 소유자**. `docs/` 전체와 최상위 `README.md`를 쓴다.
+    # 🔴 이 경계는 기계가 가르지 못하는 두 가지를 **규율**로 남긴다(지시문 §역할 경계):
+    #   ① `docs/analyses/`는 analyst와 **이중 소유**다 — 내부 결론의 저자는 analyst이고
+    #      tech-writer는 표현만 손본다(수치·결론 변경 금지).
+    #   ② `docs/conventions/`는 **규약 정본**이라 supervisor 결정을 받아적을 뿐,
+    #      스스로 규칙을 만들거나 바꾸지 않는다.
+    # 🔴 `README.md`는 디렉터리가 아니라 **파일 단위**다
+    #    — 접두어로 적으면 `.bak`까지 열린다.
+    "tech-writer": {"allow": ("docs/", "README.md")},
+    # 디렉터 — **판정자**다. 계획·배정·판정만 하고 저장소에 쓰지 않는다.
+    # `disallowedTools`가 1차 방어, 이건 2차(심층 방어)
+    # — archivist·researcher와 같은 형태.
+    "director": {"allow": ()},
 }
 
 # 저장소 **밖**에서 예외로 허용할 절대경로 접두어. 미지정 워커는 사용자 확인(`ask`).
@@ -126,7 +142,14 @@ def main() -> None:
         relative = target.relative_to(project_dir).as_posix()
         if "allow" in boundary:
             scope = boundary["allow"]
-            permitted = relative.startswith(scope)
+            # 🔴 `startswith(scope)` 하나로 두면 파일 항목이 접두어가 된다 —
+            #    `README.md`가 `README.md.bak`·`README.mdx`까지 열어준다
+            #    (2026-08-20 `security` 지적 ⓔ. 주석만 먼저 들어가고 이 분기가
+            #    빠져 있어 "막았다고 믿는" 상태로 한 차례 남았었다).
+            permitted = any(
+                relative.startswith(item) if item.endswith("/") else relative == item
+                for item in scope
+            )
             # 라벨을 붙인다 — 없으면 "…쓸 수 없다. docs/posts/."처럼 읽혀
             # 그 경로가 금지인지 허용인지 뒤집혀 읽힌다(2026-08-20 실발동 로그 관측).
             scope_text = (

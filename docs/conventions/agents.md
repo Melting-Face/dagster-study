@@ -65,8 +65,9 @@ flowchart TB
 
 🔴 **hook 가드는 구현 워커의 쓰기에도 걸리지만 그림에 선을 긋지 않았다** — 그 엣지 하나가
 dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다(실측 후 제거). 대신 여기 적는다:
-**경로 경계는 `Write`·`Edit`만 막는다.** `Bash` 경유 쓰기는 matcher 밖이고,
-`NotebookEdit`은 현재 **도구 자체가 비활성**이라 그 분기는 실행되지 않는다(§NotebookEdit 축).
+**경로 경계는 `Write`·`Edit`만 막는 것으로 실증됐다.** `Bash` 경유 쓰기는 matcher 밖이고,
+`NotebookEdit`은 **그 워커의 `tools`에 선언돼 있어야** 분기가 돈다(§NotebookEdit 축 — 런타임
+에러 문구가 "세션 비활성"이라 **오역**해 보고하므로 그대로 믿지 않는다).
 
 > **이 그림은 렌더까지 확인했다** — `mmdc -i … -o …png -w 1600`으로 PNG를 뽑아 육안 대조했다.
 > 🔴 **구문 통과 ≠ 그림 성립**이다. 첫 판은 파싱·SVG 산출이 모두 정상이었지만 빈 subgraph가
@@ -289,22 +290,71 @@ Error: No such tool available: NotebookEdit.
 NotebookEdit is disabled for this session, in subagents as well as here.
 ```
 
-- 이 문구는 **네 번째 출처**다 — 가드의 `permissionDecisionReason`도, `denied by the Claude Code
-  auto mode classifier`도, `permissions` 일반 거부도 아닌 **도구 레지스트리 단계의 부재 응답**이다.
-  (§hook 결정값의 출처 구분법에 이 항목을 더한다.)
-- 즉 가드의 `notebook_path` 분기는 **한 번도 실행되지 않는다.** 막는지 투명한지 **판별 불가**다
-  (③"투명하다"의 근거가 **아니다** — 판정 불가에 가깝다).
-- 🔴 **핵심**: 지금 이 축이 안 뚫리는 이유는 **가드가 막아서가 아니라 문이 없어서**다.
-  통제 근거로 읽으면 안 된다 — **`NotebookEdit`이 재활성화되는 순간 이 축은
-  미검증 상태 그대로 노출된다.** 그때가 위험한 시점이다.
-- **파생**: 키 불일치를 고친 `5961822`와 전수 감사한 `29fd23c`는 **코드상 옳지만
-  현행 런타임에서 라이브 실증이 불가능**하다. 확정된 것은 여전히 **`file_path` 축뿐**이다.
-- **재개 조건**: `NotebookEdit`이 활성인 세션에서 경계 밖 1셀 + 경계 안 1셀 대조.
-  이 절을 그때 갱신한다.
-- ⚠️ 부수: `analyst`·`tech-writer`는 **노트북을 다루는 워커인데 `NotebookEdit`이 없다.**
-  노트북 수정은 `Write`(전체 덮어쓰기)로만 가능하다 — 현재 문제는 아니나 알고 있어야 한다.
-  6종 판정 워커의 `disallowedTools: … NotebookEdit` 선언도 **지금은 무의미**하다(있는 걸 막는 게 아니다).
-  선언은 이식성 때문에 남긴다(§선언은 그대로 둔다).
+이 문구는 **네 번째 출처**다 — 가드의 `permissionDecisionReason`도, `denied by the Claude Code
+auto mode classifier`도, `permissions` 일반 거부도 아닌 **도구 레지스트리 단계의 부재 응답**이다
+(§hook 결정값의 출처 구분법에 이 항목을 더한다).
+
+##### 🔴 그런데 이 에러 문구는 **두 절 다 거짓이었다** (같은 날 정정)
+
+처음엔 문구를 그대로 믿고 "`NotebookEdit`은 **도구 자체가 비활성**"이라고 적었다. **틀렸다.**
+피어 세션이 반증을 제기했고, 실측 3점으로 확정했다:
+
+| 컨텍스트 | `tools` 선언 | 결과 |
+| --- | --- | --- |
+| `analyst`·`tech-writer` (서브) | `Read, Write, Edit, Bash, Grep, Glob` — **`NotebookEdit` 없음** | 🔴 `No such tool available` |
+| **같은 세션 메인 루프** | 제한 없음 | ✅ **정상 작동**(셀 편집 성공) |
+| **`general-purpose` (서브)** | **`*`** | ✅ **정상 작동**(서브에이전트인데도) |
+
+- `in subagents as well` → **거짓**(`general-purpose`가 서브에이전트에서 성공했다)
+- `disabled for this session` → **거짓**(같은 세션 메인 루프에서 성공했다)
+
+🔴 **진짜 손잡이는 에이전트 정의의 `tools:` 한 줄**이다. 런타임은 **"이 워커의 허용 목록에 없음"** 을
+**"세션 전역 비활성화"** 로 **오역해 보고한다.** 문구를 믿으면 `settings.json`·`disallowedTools`를
+뒤지게 되는데, 거기엔 아무것도 없다.
+
+> **이것은 [원칙 7](../philosophy.md)의 거울상이다.** 원칙 7은 *성공* 신호를 의심하라고 한다.
+> 여기서 배운 것은 **실패 신호가 자기보고한 *원인*도 의심하라**는 것이다.
+> "막혔다"는 사실이었지만 **"왜 막혔는지"에 대한 런타임의 설명이 틀렸고**, 나는 그 설명을
+> 검증 없이 정본에 옮겨 적었다. 에러 메시지도 **데이터이지 결론이 아니다.**
+
+- **파생 정정**: 가드의 `notebook_path` 분기는 **사문이 아니다.** `tools`에 `NotebookEdit`이 있는
+  워커에서는 **살아 있는 경로**이고, 지금 안 도는 건 그런 워커가 없어서일 뿐이다.
+  `5961822`(키 누락 수정)·`29fd23c`(키 전수 감사)는 **죽은 코드가 아니라 미검증**이다.
+- ⚠️ **세 번째 실패 모드**: `NotebookEdit`은 **deferred tool**이라 `tools: *` 워커에서도
+  `ToolSearch("select:NotebookEdit")`로 스키마를 먼저 로드해야 호출된다. 미로드 상태의 직접 호출은
+  `InputValidationError`를 내는데, 이것도 **"도구 없음"으로 오독되기 쉽다.**
+  → 도구 부재를 판정할 때 **세 가지를 갈라야 한다**: ① `tools` 미선언 ② deferred 미로드 ③ 진짜 부재.
+- ⚠️ 부수: `analyst`는 **노트북을 다루는 워커인데 `NotebookEdit`이 없었다**(`Write` 전체 덮어쓰기만 가능).
+  선언에 추가했다(`tools: Read, Write, Edit, NotebookEdit, Bash, Grep, Glob`).
+  6종 판정 워커의 `disallowedTools: … NotebookEdit`은 **미선언 도구를 막는 것**이라 중복이지만,
+  이식성 때문에 남긴다(§선언은 그대로 둔다).
+
+##### 🔴 선언을 고쳐도 그 세션에서는 안 켜졌다 — 그리고 워커가 **같은 오독을 반복**했다
+
+`analyst`의 `tools`에 `NotebookEdit`을 추가한 **직후** 3셀 대조를 시도했으나 결과는 **이전과 동일**했다:
+
+```
+Error: No such tool available: NotebookEdit.
+NotebookEdit is disabled for this session, in subagents as well as here.
+```
+
+- 🔴 **대조군이 성립하지 않았으므로 이번에도 `notebook_path` 분기는 실행 이력 0회다.**
+  (2)(3)이 "막힌" 것은 **가드가 아니라 도구 부재**다 — *"막혔으니 가드가 작동한다"* 로 읽으면
+  정확히 원칙 7의 오독이고, 프로브를 수행한 `analyst`가 이 함정을 스스로 짚어냈다.
+- **원인 후보 둘, 이번 세션에서는 갈리지 않는다**(`미확정`):
+  ① **정의 스냅샷** — `hooks`와 마찬가지로 `tools`도 **로드 시점에 고정**되어 세션 도중 편집이 안 먹는다.
+  ② **`ToolSearch` 미보유** — `analyst`는 `ToolSearch`도 `No such tool available`이었다.
+  `NotebookEdit`이 **deferred tool**로 제공되는 컨텍스트에서는 `ToolSearch`가 있어야 로드되는데
+  (`general-purpose`가 실제로 그 경로를 탔다), `tools` 화이트리스트에 `ToolSearch`가 없으면
+  **deferred 도구에 영영 도달할 수 없다.**
+  → **`tools`를 명시한 워커는 deferred 도구를 못 쓴다**는 뜻이므로, 필요하면 `ToolSearch`도 함께 선언한다.
+- 🔴 **그리고 프로브 워커가 에러 문구를 다시 믿었다** — *"`disabled for this session`이라는 문구는
+  프론트매터보다 상위의 세션 레벨 비활성화를 뜻한다"* 고 추론했는데, **바로 위에서 그 문구가
+  거짓임을 실증**했다(`general-purpose`는 같은 세션 서브에이전트에서 성공했다).
+  **한 번 문서화한 함정도 다음 사람이 다시 밟는다.** 그래서 이 절이 길다.
+- **재개 조건**: **새 세션에서** ① `analyst`에 `NotebookEdit` 스키마가 실제로 잡히는지 확인
+  (안 잡히면 `ToolSearch`를 `tools`에 추가해 후보 ②를 검증) → ② 그 다음에 3셀 대조.
+  **이번 회차는 "가드 미검증"으로 기록하고 검증 완료로 올리지 않는다.**
 - 🔴 **확인된 것은 `Write`·`Edit`·`NotebookEdit` 도구 경로뿐이다.** `Bash` 경유 쓰기는
   matcher 밖이라 **여전히 규율**이다 — 아래 §auto 모드 안내가 이 구멍을 정확히 건드린다.
 

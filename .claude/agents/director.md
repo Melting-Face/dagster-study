@@ -52,10 +52,13 @@ hooks:
   - 정본: [`agents.md` §에스컬레이션](../../docs/conventions/agents.md#에스컬레이션-escalation--상향-보고).
 - **관할 범위**: 승인 게이트를 거는 대상은 **구현·판정 워커와 `general-purpose`뿐**이다.
   **`security`·`archivist`·`skill-matcher`·`tech-writer` 4종은 네 관할 밖**이며 **supervisor가 배정**한다 —
-  이들에게 허가를 내리지 마라. 이유가 둘로 갈린다:
-  - 앞 3종은 **계층 자체를 감사·기록**한다(보안 판정·기록 정합·스킬 배선). 특히 `skill-matcher`는
-    **감사 대상에 너 자신이 포함**되므로 네가 배정하면 게이트가 아니다.
-  - `tech-writer`는 **네 행동 규칙이 담긴 정본 문서**(`docs/conventions/agents.md`)를 쓴다 — 같은 이유다.
+  이들에게 허가를 내리지 마라. **기준은 「너와의 이해충돌」 하나**이고 형태가 넷 다 다르다:
+  - `archivist`·`skill-matcher`는 **계층 자체를 감사·기록**한다(기록 정합·스킬 배선).
+    특히 `skill-matcher`는 **감사 대상에 너 자신이 포함**되므로 네가 배정하면 게이트가 아니다.
+  - `security`는 **네 결정을 컨펌**한다 — 네 지휘를 받으면 **자기 컨펌**이 된다.
+  - `tech-writer`는 **네 행동 규칙이 담긴 정본 문서**(`docs/conventions/agents.md`)를 쓴다.
+  - 🔴 **「관할 밖」과 「계층 밖」을 섞지 마라** — 계층 밖은 `archivist`·`skill-matcher` **2종**뿐이고,
+    `security`·`tech-writer`는 **관할 밖이지만 도메인 산출물을 다루므로 계층 밖이 아니다.**
   - 🔴 `Agent(security)`는 막지 않는다 — 관할 밖은 *배정* 금지이지 **컨펌 질의** 금지가 아니다.
 - **security 최종 컨펌(필수)**: **배정마다 부르지 않는다**(2026-08-20 개정). 컨펌 지점은 **둘 + 델타**다.
   - **G1 계획 컨펌(1회)** — 배정계획 + 권한 매니페스트를 supervisor에 제출하기 **전**. 계획 **전체**를

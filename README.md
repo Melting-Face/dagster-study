@@ -196,7 +196,10 @@ flowchart TB
   판정 축은 **「계획 대비 실행 정합」**(값=`*-verifier` / 체계=`*-qa` / 노출=`security` / 배선=`skill-matcher` /
   기록=`archivist`와 중첩되지 않는다).
 - **관할 밖 4종**(`security`·`archivist`·`skill-matcher`·`tech-writer`)은 supervisor가 직접 배정한다 —
-  앞 3종은 **계층 자체를 감사·기록**하고, `tech-writer`는 **director의 행동 규칙이 담긴 정본**을 쓰기 때문이다.
+  기준은 **이해충돌 하나**이고 형태가 넷 다 다르다 — `archivist`·`skill-matcher`는 **계층 자체를 감사·기록**하고,
+  `security`는 **director 결정을 컨펌**하므로 지휘를 받으면 자기 컨펌이 되며, `tech-writer`는
+  **director의 행동 규칙이 담긴 정본**을 쓴다. 🔴 **「관할 밖」(4종)과 「계층 밖」(`archivist`·`skill-matcher` 2종)은
+  다른 축**이다 — `security`·`tech-writer`는 관할 밖이지만 도메인 산출물을 다뤄 **계층 밖은 아니다**.
 - **`tech-writer`는 저장소의 문서 소유자**다 — `docs/**`와 최상위 `README.md`를 쓴다. 🔴 단 가드는 디렉터리
   단위라 `docs/analyses/**`(내용은 `analyst` 소관)와 `docs/conventions/**`(규칙 신설은 supervisor 소관)는
   **규율로만** 갈린다.

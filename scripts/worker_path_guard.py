@@ -124,7 +124,20 @@ def main() -> None:
         target = project_dir / target
     target = target.resolve()
 
-    if not target.is_relative_to(project_dir):
+    # 🔴 저장소 경계 판정도 **대소문자를 무시**해야 한다(2026-08-20 G2 지적 M6).
+    #    `is_relative_to`는 대소문자를 구분하는데 macOS 파일시스템은 무시한다.
+    #    그래서 `/Users/jin/Dagster-Study/terraform/main.tf`가 **같은 실파일인데
+    #    "밖"으로 판정**돼 `deny`가 아니라 `ask`로 **강등**됐다(실측: inode 동일).
+    #    더 나쁜 것은 아래 문구다 — "저장소 밖 … 임시 파일이면 승인하고"가 뜨는데
+    #    실제로는 **저장소 안 금지 경로**라, 사람을 **승인 쪽으로 유도**한다.
+    #    강등된 게이트보다 **틀린 방향으로 유도하는 게이트**가 더 위험하다.
+    #    길이는 대소문자로 바뀌지 않으므로 접두어 길이로 잘라 **원본 표기를 보존**한다
+    #    (allow 분기는 대소문자를 구분해야 해서 소문자화한 값을 쓰면 안 된다).
+    project_text = project_dir.as_posix()
+    target_text = target.as_posix()
+    inside = target_text.lower().startswith(project_text.lower() + "/")
+
+    if not inside:
         # 저장소 밖 — 워커별 예외 목록에 있으면 통과, 아니면 사람이 판단한다.
         allowed = OUTSIDE_ALLOW.get(worker, ())
         roots = (Path(prefix).expanduser().resolve() for prefix in allowed)
@@ -139,7 +152,7 @@ def main() -> None:
             "임시 파일이면 승인하고, 아니면 거부하라."
         )
     else:
-        relative = target.relative_to(project_dir).as_posix()
+        relative = target_text[len(project_text) + 1 :]
         if "allow" in boundary:
             scope = boundary["allow"]
             # 🔴 `startswith(scope)` 하나로 두면 파일 항목이 접두어가 된다 —

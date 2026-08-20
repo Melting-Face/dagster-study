@@ -117,7 +117,7 @@ skill-matcher ← [요청서 회신 전달] ← supervisor ←────┘
 
 🔴 **질의문에 내부 데이터를 넣지 마라.** `researcher` 규율 ②(**검색 질의 자체가 외부 발신**)가
 릴레이를 타고 너에게도 그대로 온다. 금지: 워커 이름·내부 경로·버킷·테이블·데이터셋명·클러스터명.
-- ❌ `"dagster-study defs/mimic 적재 워커용 스킬"`
+- ❌ `"pipeline-study defs/mimic 적재 워커용 스킬"` (저장소명·내부 경로·데이터셋명이 다 들어갔다)
 - ✅ `"Terraform module authoring skill for Claude Code agent"`
 
 🔴 **이 규율의 실효는 100% 자기 규율이다.** `permissions.ask`의 `WebSearch`·`WebFetch`는

@@ -20,26 +20,43 @@
 > **사실이 아니다.** ⚙️도 대부분 **디스크에 실제 설치된 파일**이다. 즉 "환경이 주는 것"이
 > 아니라 **"설치했는데 lock에만 없는 것"** 이다. 🌐만이 진짜 런타임 제공이다.
 
-### 실측 (2026-08-21 00:53 KST)
+### 실측 (2026-08-21 01:14 KST)
 
-🔴 **이 표는 스냅샷이다 — 관측 시각을 함께 읽는다.** 같은 세션 안에서 15분 만에
-프로젝트 스코프가 1→2, lock이 4→5로 **관측 중에 변했다**(설치가 진행 중이었다).
+🔴 **이 표는 스냅샷이다 — 관측 시각을 함께 읽는다.** 한 세션(약 40분) 안에
+프로젝트 스코프가 **0→1→2→6**, lock이 **3→4→5→9**로 계속 변했다(사용자가 설치 중이었다).
 수치만 옮기고 시각을 떼면 **낡은 값이 검산을 통과하며 남는다**([philosophy.md](philosophy.md) §계측 단위).
+이 문서를 인용할 때는 **"어느 시각의 값인가"** 를 반드시 함께 옮긴다.
 
 | 항목 | 값 | 함의 |
 | --- | --- | --- |
-| **고유 스킬 총수** | **25종** | 전역 24 + 프로젝트 2 − 중복 1 |
-| `~/.agents/skills/`(전역) | **24개** | `~/.claude/skills/`는 여기로 향하는 **심볼릭 링크** |
-| `.claude/skills/`(**프로젝트 스코프**) | **2개** — `brainstorming`·`sql-optimization` | 🔴 **2026-08-19의 "없음"에서 바뀌었다**(§프로젝트 스코프) |
-| `skills-lock.json`(프로젝트) 등재 | **5개** | `computedHash` 필드가 **5/25**에 존재(3/24 → 5/25) |
-| **`~/.agents/.skill-lock.json`(전역)** | **24개** | 🔴 **2026-08-19에 놓쳤던 파일** — 전역 24종 **전부의 출처를 기록**한다. 단 `computedHash` **없음** |
-| 스킬 CLI | **PATH에 여전히 없음** | 설치는 `npx skills` 경유 — §관리 |
-| `computedHash` 재계산 | 🔴 **불가(`미확인`)** | 알고리즘을 모른다 — 아래 §해시 재계산 |
-| **출처 미상(D등급)** | 🔴 **9종 → 0종** | 전역 lock으로 **전부 규명** — §출처 실측 전면 개정 |
+| **고유 스킬 종수** | **26종** | 전역 24 + 프로젝트 6 − 중복 4 |
+| **설치 슬롯 수** | **30** | 같은 스킬이 두 스코프에 있으면 2로 센다 |
+| `~/.agents/skills/`(전역) | **24** | `~/.claude/skills/`는 여기로 향하는 **심볼릭 링크** |
+| `.claude/skills/`(**프로젝트 스코프**) | **6** | 🔴 2026-08-19의 "없음"에서 바뀌었다(§프로젝트 스코프) |
+| ↳ 그중 **전역과 중복** | **4** | `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·`sql-optimization` |
+| ↳ 프로젝트 **전용** | **2** | `brainstorming`·`multi-stage-dockerfile` |
+| `skills-lock.json`(프로젝트) 등재 | **9** | 고유 26종 기준 **35%** |
+| 스킬 CLI | PATH에 없음 | 설치는 `npx skills` 경유 — §관리 |
+| **해시 재계산** | 🔴 **불가(`판정 불가`)** | 두 스키마 **모두** 재현 실패 — 아래 §해시 재계산 |
+| **출처 미상(D등급)** | 🔴 **9종 → 0종** | 전역 lock으로 **전부 규명** — §출처 실측 |
 
-🔴 **분모가 무엇을 세는지 함께 읽는다.** `25`는 **고유 스킬 종수**다.
-설치 **슬롯**으로 세면 `26`(전역 24 + 프로젝트 2)이고, `sql-optimization`이 양쪽에 있어 갈린다.
-"25"와 "26" 중 틀린 값은 없다 — **세는 단위가 다를 뿐**이고, 단위를 떼면 둘 다 오독된다.
+🔴 **분모가 무엇을 세는지 함께 읽는다.** `26`은 **고유 종수**, `30`은 **설치 슬롯**이다.
+둘 다 맞는 값이고 **세는 단위만 다르다** — 단위를 떼면 둘 다 오독된다.
+
+#### 🔴 lock 파일은 **세 벌**이고 스키마는 **두 종류**다 (2026-08-21)
+
+| 파일 | 항목 | 해시 필드 | 길이 | 부가 정보 | 커밋 |
+| --- | --- | --- | --- | --- | --- |
+| `<repo>/skills-lock.json` | **9** | `computedHash` | 64(SHA256 계열) | `skillPath` | ✅ 대상 |
+| `~/.agents/.skill-lock.json` | **24** | `skillFolderHash` | **40(SHA1 계열)** | `sourceUrl`·`skillPath`·`installedAt`/`updatedAt` | ❌ 저장소 밖 |
+| `$HOME/skills-lock.json` | **1** (`docker-expert`만) | `computedHash` | 64 | — | ❌ 저장소 밖 · **미아 파일** |
+
+- ⚠️ **정정**: 이 문서가 앞서 전역 lock을 *"출처만 기록한다"* 고 적은 것은 **부정확**했다.
+  `skillFolderHash`라는 **해시가 있다** — `computedHash` 키만 찾아보고 "없음"으로 읽은 것이다.
+  **키 이름으로 존재를 판정하면 같은 함정을 반복한다**(가드의 `file_path`/`notebook_path` 사례와 같은 계열).
+- `~/.agents/.skill-lock.json`이 **실질 레지스트리**다 — `sourceUrl`·설치 시각까지 있어 출처 추적의 정본이다.
+- `$HOME/skills-lock.json`은 항목 1개짜리 **미아**다. 어느 CLI 실행이 홈 디렉터리를 프로젝트로 착각해
+  만든 것으로 보인다(`판정 불가`). **정리 대상**이며, 남겨두면 다음 감사가 또 "세 번째 lock"을 발견한다.
 
 🔴 **관측 경로가 하나뿐이면 부정 결과를 믿을 수 없다**(원칙 7). 2026-08-19의 "출처 미상 9종"은
 `SKILL.md` frontmatter의 `metadata.author` **한 경로만** 본 결과였다. 같은 정보가
@@ -47,24 +64,31 @@
 **"없다"가 아니라 "안 봤다"** 였다 — 그래서 9종이 "출처 미상"으로 **C등급 통제를 받지 않았다**
 (오분류 시점 2026-08-19, 설치 시점은 2026-02~03. 기간이 아니라 **통제 공백 자체**가 요지다).
 
-- 따라서 **"lock을 커밋해 팀·CI가 동일 스킬 버전을 쓴다"는 재현성 주장은 현재 5/25에만 성립**한다.
+- 따라서 **"lock을 커밋해 팀·CI가 동일 스킬 버전을 쓴다"는 재현성 주장은 9/26에만 성립**하고,
+  그마저 §해시 재계산이 막혀 **"어디서 받아왔는지의 기록"까지**다.
 - 배선·드리프트 감사는 **[`skill-matcher`](../.claude/agents/skill-matcher.md)** 워커가 담당한다(§③).
 
-#### 🔴 해시 재계산은 불가능하다 (2026-08-21 실측)
+#### 🔴 해시 재계산은 불가능하다 — **두 스키마 모두** (2026-08-21 실측)
 
-`computedHash`가 무엇의 해시인지 **모른다.** 기존 A등급 3종으로 후보를 대조한 결과 **전부 불일치**다.
+lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 후보를 대조했고 **전부 불일치**다.
 
-| 후보 알고리즘 | `dagster-integrations` 계산값 | lock 값 |
-| --- | --- | --- |
-| `SKILL.md` raw sha256 | `cb5888c8…` | `9cb14249…` |
-| 전 파일 정렬 후 내용 연결 sha256 | `028c2974…` | 〃 |
-| frontmatter 제외 본문 sha256 | `1fe71c82…` | 〃 |
+| 스키마 | 대상 | 후보 알고리즘 | 결과 |
+| --- | --- | --- | --- |
+| `computedHash`(64) | `dagster-integrations` | `SKILL.md` sha256 / 전 파일 정렬연결 sha256 / frontmatter 제외 sha256 | **3종 전부 불일치** |
+| `skillFolderHash`(40) | `sql-optimization` | `SKILL.md` sha1 / 전 파일 정렬연결 sha1 / `git hash-object` | **3종 전부 불일치** |
 
-- ⚠️ **이 사실을 모른 채 신규 스킬의 raw sha256 불일치를 봤다면 "변조"로 오진했을 것이다.**
+- 병렬 세션의 `skill-matcher`가 **독립적으로 같은 결론**에 도달했다(`tar --sort=name` 포함 5건 전부 실패).
+  서로 다른 관측자·다른 후보 집합이 같은 결과를 냈으므로 **`판정 불가`는 우연이 아니다.**
+- ⚠️ **이 사실을 모른 채 신규 스킬의 sha256 불일치를 봤다면 "변조"로 오진했을 것이다.**
   값 자체는 정확했고 **단위(무엇의 해시인가)만 어긋난** 계열이다 — 틀린 값보다 위험하다.
-- 🔴 파급: §출처 등급별 통제의 *"대안은 해시를 기록하고 감사 시 재계산·대조"* 조항은
-  **현재 실행 불가한 죽은 규칙**이다. 대조 수단이 생기기 전까지 lock의 실효는
-  **"CLI가 같은 것을 받아왔다"** 까지이고, **로컬 파일이 그 뒤 바뀌지 않았음은 검증되지 않는다.**
+- 🔴 **따라서 lock 등재분을 "고정됨"으로 읽지 않는다.** 정확한 표현은
+  **"고정을 주장하나 검증 불가"** 다. lock이 실제로 보장하는 것은
+  **"CLI가 그 출처에서 받아왔다는 기록"** 까지이고, **받아온 뒤 로컬 파일이 바뀌지 않았음은 검증되지 않는다.**
+- 🔴 파급 ①: §출처 등급별 통제의 *"해시를 기록하고 감사 시 재계산·대조"* 조항은 **죽은 규칙**이라 폐기했다.
+- 🔴 파급 ②: 프리로드 조건 *"lock 등재 ∧ `security` 검토 완료"* 의 **첫 항이 실효를 주장할 수 없다.**
+  현재 프리로드의 안전성은 **사실상 `security` 검토 하나에 의존**한다.
+- **재대조 조건**: 스킬 CLI 확보 또는 해시 정규화 규칙(대상 파일 범위·프론트매터 포함 여부·개행 처리) 문서화.
+  그 전까지 이 항목은 `판정 불가`이며, **"확인했더니 문제없었다"로 적지 않는다.**
 
 ## ① 잠긴 스킬 (skills-lock.json — 커밋·재현성)
 
@@ -73,11 +97,16 @@
 | **dagster-expert** | `dagster-io/skills` (github) | Dagster·`dg` CLI 관련 모든 작업 — 프로젝트 구조 파악, 에셋/스케줄/센서/잡 정의·검색, 디버깅, 개념 질의 |
 | **dagster-integrations** | `dagster-io/skills` (github) | `dagster-*` 통합 라이브러리 탐색·이해(S3·Iceberg·dbt·k8s 등 연동) |
 | **dignified-python** | `dagster-io/skills` (github) | 범용 프로덕션 Python 표준(타입 문법·예외·pathlib 등). **본 프로젝트 컨벤션이 우선** — 아래 §충돌 규칙 |
-| **sql-optimization** | `github/awesome-copilot` (github) | 범용 SQL 성능 튜닝(실행계획·인덱스·페이지네이션). ✅ **lock 등재로 출처가 규명**됐다 — 2026-08-19엔 D등급("출처 미상")이었다 |
-| **brainstorming** ⚠️ | `obra/superpowers` (github) | 구현 전 설계·기획 대화. 🔴 **개인 계정(C등급) × 실행 파일 5종** — 정본상 도입 금지 대상인데 lock 등재로 A등급이 됐다(아래 §A등급 허점). **도입 가부 미결** |
+| **sql-optimization** | `github/awesome-copilot` (B) | 범용 SQL 성능 튜닝(실행계획·인덱스·페이지네이션). ✅ **lock 등재로 출처가 규명**됐다 — 2026-08-19엔 D등급("출처 미상")이었다 |
+| **multi-stage-dockerfile** | `github/awesome-copilot` (B) | 멀티스테이지 Dockerfile 작성. 문서 1파일·실행 파일 없음 |
+| **kubernetes-specialist** | `jeffallan/claude-skills` (**C**) | K8s 워크로드·매니페스트. ✅ `security` 검토 완료 — **단서 필수**(§C등급 단서 표) |
+| **spark-engineer** | `jeffallan/claude-skills` (**C**) | Spark 잡 작성·튜닝. ✅ 검토 완료(위험 패턴 0건) |
+| **spark-optimization** | `wshobson/agents` (**C**) | Spark 성능 최적화. 🔴 **미검토** |
+| **brainstorming** ⚠️ | `obra/superpowers` (**C**) | 구현 전 설계·기획 대화. 🔴 **개인 계정 × 실행 파일 4종 × 미검토** — 정본상 도입 금지 대상인데 lock 등재로 A등급이 됐다(§A등급 허점). **도입 가부 미결** · 본문 충돌 단서는 §② |
 
-> `sourceType: github`. `computedHash` 필드는 있으나 🔴 **로컬에서 재계산·대조할 수 없다**(§해시 재계산).
-> 즉 이 표의 "잠김"은 *출처와 버전이 기록됐다*는 뜻이지 *무결성이 검증됐다*는 뜻이 아니다.
+> 🔴 **이 표를 "검증된 스킬 목록"으로 읽지 않는다.** 9건 중 **5건이 C등급**이고 **4건이 `security` 미검토**다.
+> `computedHash` 필드는 있으나 **로컬에서 재계산·대조할 수 없어**(§해시 재계산) 무결성은 검증되지 않는다.
+> 이 표가 말하는 것은 **"어디서 받아왔는지 기록이 있다"** 까지다.
 
 ## ② 작업 유형별 스킬 매핑
 
@@ -98,8 +127,9 @@
 | dbt 모델링·테스트·실행 | `using-dbt-for-analytics-engineering` · `adding-dbt-unit-test` · `running-dbt-commands` · `building-dbt-semantic-layer` · `troubleshooting-dbt-job-errors` · `fetching-dbt-docs` | ⚙️ |
 | dbt 엔진·플랫폼 이행(저빈도) | `migrating-dbt-core-to-fusion` · `migrating-dbt-project-across-platforms` | ⚙️ **★3 이하** — 워커 지시문 미등재(§③ 임계) |
 | dbt MCP 서버 설정 | `configuring-dbt-mcp-server` | ⚙️ **★3 이하** — 본 저장소는 dbt MCP 미사용 |
-| Spark 배치·성능 튜닝 | `spark-engineer` · `spark-optimization` | ⚙️ |
-| SQL 성능 최적화 | `sql-optimization` | 🔒 **(2026-08-21 lock 등재)** — 전역·프로젝트 **중복 설치**(§프로젝트 스코프) |
+| Spark 배치·성능 튜닝 | `spark-engineer` · `spark-optimization` | 🔒 **(C등급)** — 둘 다 2026-08-21 lock 등재. 🔴 **전역/프로젝트 버전 상이**(§프로젝트 스코프) |
+| SQL 성능 최적화 | `sql-optimization` | 🔒 — 전역·프로젝트 중복이나 **내용 동일** |
+| Docker 이미지 빌드 | `multi-stage-dockerfile` | 🔒 **(2026-08-21 신규)** — [conventions/docker.md](conventions/docker.md) 태그 고정 규약이 스킬 예시보다 우선 |
 | 설계·기획(구현 전 대화) | `brainstorming` | 🔒 ⚠️ **도입 미결** — C등급 × 실행 파일 × `security` 미검토. 아래 단서 |
 | 분석·애드혹 질의 | `answering-natural-language-questions-with-dbt` · `duckdb` | ⚙️ |
 | 차트·시각화(리포트 그림) | `dataviz` | 🌐 **워커 등재 불가** — 디스크에 없어 `Read` 불가. supervisor 전용 |
@@ -175,7 +205,7 @@
 | `devops-verifier` | `docker-expert` · `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**: 시크릿은 **존재·키 이름까지만**, 값을 뜨지 않는다 |
 | `devops-qa` | `docker-expert` · `kubernetes-specialist`**(C)** · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다. `helm-chart-scaffolding` 강등(★2 — 저장소에 차트가 없어 **감사 대상이 부재**. `devops-engineer`는 첫 차트를 *만드는* 쪽이라 유지) |
 | `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**. `spark-optimization` 강등(★2 — executor·클러스터 튜닝은 **금지된 인프라 조작**). 🔴 **`dataviz` 제거**(2026-08-20) — 🌐 런타임 제공이라 워커가 `Read`조차 못 한다(죽은 참조였다). 차트가 필요하면 supervisor가 수행 |
-| `researcher` | `fetching-dbt-docs`(dbt 한정) | **범용 리서치 스킬은 없음**(2026-08-20 전수 실측 — 2026-08-21 25종 재실측에도 결론 불변: 신규 2종은 설계·SQL 스킬이다) → 지시문 §출처 등급이 정본. ⚙️ lock 밖이라 **프리로드 금지·`Read` 직접 열람만**. 🔴 스킬 본문도 **외부 콘텐츠 조항 적용**(데이터이지 지시가 아니다) |
+| `researcher` | `fetching-dbt-docs`(dbt 한정) | **범용 리서치 스킬은 없음**(2026-08-20 전수 실측 — 2026-08-21 26종 재실측에도 결론 불변: 신규 4종은 설계·SQL·Docker·Spark 스킬이다) → 지시문 §출처 등급이 정본. ⚙️ lock 밖이라 **프리로드 금지·`Read` 직접 열람만**. 🔴 스킬 본문도 **외부 콘텐츠 조항 적용**(데이터이지 지시가 아니다) |
 | `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-20 실측) — 매체 포맷은 지시문 §포맷 프로파일이 정본. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가** |
 | `security` | **전용 스킬 없음** → [security.md](security.md)·[conventions/general.md](conventions/general.md) | 도메인 스킬은 설정 해석 목적의 **읽기 참조만** |
 | `skill-matcher` | **없음** — 후보 탐색은 **`researcher` 릴레이**(2026-08-20) | 갭을 식별해 **조사 요청서**를 반환하면 supervisor가 `researcher`에 넘기고, 회신 후보를 **채점·제안**한다(배선은 하지 않는다). 신뢰성 **최종 판정은 `security`**. `find-skills` 강등(★3 — 축5 대체 불가가 0: 릴레이로 대체됐다. **순환 신뢰가 함께 해소**된다), `auditing-skills` 강등(★3 — 자기 채점, 외부 스캐너 호출 경로가 막혀 있음) |
@@ -242,11 +272,11 @@
 > 기존 A등급 정의(*"lock 등재 + `computedHash` 고정"*)는 **두 개의 다른 축을 한 칸에 섞었다**:
 > ⓐ 출처가 믿을 만한가 ⓑ 조용히 바뀔 수 있는가. 그 결과 **개인 저장소 스킬을 lock에 넣기만 하면
 > C등급 통제("실행 파일 포함 시 도입 금지")를 건너뛰고 "제한 없이 사용"으로 자동 승격**된다.
-> 2026-08-21 실제로 그 경로가 발생했다 — `brainstorming`(`obra/superpowers`, 개인 계정, 실행 파일 5종)이
+> 2026-08-21 실제로 그 경로가 발생했다 — `brainstorming`(`obra/superpowers`, 개인 계정, 실행 파일 4종)이
 > lock에 등재됐다. **lock은 "안 바뀜"을 보장하지 "안전함"을 보장하지 않는다.**
 > 그래서 축을 갈라 **출처 등급(A~C) × 고정 상태(🔒/⚙️)** 2차원으로 읽는다.
 
-| 등급 | 정의 | 통제 | 현재(25종) |
+| 등급 | 정의 | 통제 | 현재(26종) |
 | --- | --- | --- | --- |
 | **A · 도구 벤더 공식** | 그 스킬이 다루는 **도구 자체의 벤더** | 제한 없이 사용 | `dagster-io/skills` **3** |
 | **B · 준벤더·플랫폼 조직** | 벤더 조직이되 해당 도구의 벤더는 아님 | 사용 가능. **lock 편입 검토**, 실행 파일 포함 시 `security` 검토 | `dbt-labs` **11** · `github`·`vercel-labs` **2** |
@@ -285,7 +315,7 @@
 | `kubernetes-specialist` | `references/helm-charts.md:453` | `image: curlimages/curl:latest` | [docker.md](conventions/docker.md) 태그 고정 규약이 이긴다 |
 | `spark-engineer` | — | 위험 패턴 **0건** | — |
 
-### 출처 실측 (2026-08-21 00:53 KST) — 고유 25종 전수 · **전면 개정**
+### 출처 실측 (2026-08-21 01:14 KST) — 고유 26종 전수 · **전면 개정**
 
 > 🔴 **개정 사유 — "출처 미상 9종"은 사실이 아니었다.**
 > 2026-08-19 실측은 `SKILL.md` frontmatter의 `metadata.author` **한 경로만** 봤다. 같은 정보가
@@ -298,16 +328,19 @@
 | --- | --- | --- | --- | --- | --- |
 | **A** | `dagster-io/skills` | **3** | `dagster-expert`·`dagster-integrations`·`dignified-python` | 🔒 | ✅ |
 | **B** | `dbt-labs/dbt-agent-skills` | **11** | dbt 계열 10종 + **`auditing-skills`**(← D에서 재분류) | ⚙️ | lock 편입 검토 대상 |
-| **B** | `github/awesome-copilot` | **1** | `sql-optimization` | 🔒 | — |
+| **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
 | **B** | `vercel-labs/skills` | **1** | `find-skills` | ⚙️ | — |
-| **C** | `wshobson/agents` | **4** | `github-actions-templates`·`helm-chart-scaffolding`·`shellcheck-configuration`·`spark-optimization` | ⚙️ | 🔴 **미검토** |
-| **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | ⚙️ | ✅ 검토 완료(위 단서 표) |
+| **C** | `wshobson/agents` | **4** | `github-actions-templates`·**`helm-chart-scaffolding`**·`shellcheck-configuration`·`spark-optimization` | 일부 🔒 | 🔴 **미검토** |
+| **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | 🔒 | ✅ 검토 완료(위 단서 표) |
 | **C** | `sickn33/antigravity-awesome-skills` | **1** | `docker-expert` | ⚙️ | 🔴 **미검토** |
 | **C** | `silvainfm/claude-skills` | **1** | `duckdb` | ⚙️ | 🔴 **미검토** |
-| **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 5종** |
+| **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 4종** |
 | **D** | — | **0** | — | — | ✅ 전부 규명 |
 
-- **합계 25종** = A 3 + B 13 + C 9. 설치 **슬롯**으로는 26(전역 24 + 프로젝트 2, `sql-optimization` 중복).
+- **합계 26종** = A 3 + B 14 + C 9. 설치 **슬롯**으로는 30(전역 24 + 프로젝트 6, 중복 4).
+- 🔴 **lock 등재(🔒)가 C등급에도 붙었다** — `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·
+  `brainstorming`이 2026-08-21에 프로젝트 lock에 들어왔다. **9건 중 5건이 C등급**이다.
+  이것이 §A등급 허점의 규모다 — 예외 하나가 아니라 **lock의 과반이 그 경로로 들어왔다.**
 - 🔴 **C등급이 2종 → 9종으로 늘었다.** 규칙이 바뀐 게 아니라 **보이지 않던 7종이 드러난 것**이다.
   그중 **`helm-chart-scaffolding`은 C + 실행 파일**이라 정본상 **도입 금지 대상**인데
   현재 `devops-engineer`에 등재돼 있다 → §③ 재판정 필요.
@@ -317,41 +350,55 @@
 
 2026-08-19 실측의 *"프로젝트 스코프: 없음 — 스킬은 전부 전역"* 은 **더 이상 참이 아니다.**
 
-| 스킬 | 실체 경로 | 전역에도 있나 | git |
+| 스킬 | 전역에도 있나 | 두 벌 비교 | git |
 | --- | --- | --- | --- |
-| `brainstorming` | `<repo>/.agents/skills/brainstorming` | ❌ 프로젝트에만 | untracked |
-| `sql-optimization` | `<repo>/.agents/skills/sql-optimization` | ✅ **중복**(sha256 `d87639de…` 바이트 동일) | untracked |
+| `brainstorming` | ❌ 프로젝트 전용 | — | untracked |
+| `multi-stage-dockerfile` | ❌ 프로젝트 전용 | — | untracked |
+| `sql-optimization` | ✅ 중복 | **동일**(트리 전체) | untracked |
+| `kubernetes-specialist` | ✅ 중복 | 🔴 **상이** — 프로젝트가 +2행(문서 링크) | untracked |
+| `spark-engineer` | ✅ 중복 | 🔴 **상이** — 프로젝트가 +2행(문서 링크) | untracked |
+| `spark-optimization` | ✅ 중복 | 🔴 **상이** — 전역 411행 1파일 / 프로젝트 95행 + `references/details.md` 321행 | untracked |
 
 - `.claude/skills/<name>` → `../../.agents/skills/<name>` **상대 심볼릭 링크**다(전역과 같은 구조).
-- 🔴 **이름 충돌 시 어느 쪽이 로드되는지는 `미확인`**이다. 지금은 두 벌이 **트리 전체 동일**(`diff -r` 무차이)이라
-  무해하지만, 한쪽만 갱신되면 **"고쳤는데 안 바뀐다" 또는 "안 고쳤는데 바뀐다"** 가 된다.
+- 🔴 **중복 4종 중 3종이 실제로 다르다 — 이것은 중복이 아니라 버전 드리프트다.**
+  전역은 2026-02~03 설치분, 프로젝트는 2026-08-21 설치분이다(전역 lock `installedAt` 대조).
+  즉 **프로젝트 쪽이 신판**이고, `spark-optimization`은 본문을 `references/`로 분리한
+  **progressive disclosure 재구성**이다(411행 → 95+321행, 내용은 보존).
+- 🔴 **어느 쪽이 로드되는지는 `판정 불가`**이고, 이제 그 답이 **실제로 갈린다.**
+
+  | 경로 | 무엇을 읽나 | 결과 |
+  | --- | --- | --- |
+  | 세션 스킬 로드(`Skill` 도구) | 스코프 우선순위 `판정 불가` | 신판/구판 미상 |
+  | **워커 `Read`**(§③ 안내) | `~/.claude/skills/<name>/SKILL.md` = **전역 = 구판** | 🔴 **확정적으로 구판을 읽는다** |
+
+  → **워커는 구판을, 세션은 미상판을 볼 수 있다.** 같은 스킬 이름이 **읽는 주체에 따라 다른 내용**을
+  가리키는 상태이며, 어느 쪽도 에러를 내지 않는다(원칙 7 "실패가 실패로 안 보인다" 계열).
 - ✅ `.gitignore`에 **`.superpowers`** 등재(2026-08-21) — `brainstorming` 서버가 `--project-dir` 사용 시
   저장소 안에 세션 파일·**세션 토큰**을 만든다. 게이트 검증: 처리군 4/4 차단 · 대조군 5/5 통과(과차단 0,
   접두어 트랩 `superpowers.md`·`docs/superpowers-notes.md` 포함).
 
-##### `sql-optimization` 중복 해소 계획 (2026-08-21 · **실행은 사용자 승인 후**)
+##### 중복 4종 해소 계획 (2026-08-21 · **실행은 사용자 승인 후**)
 
-🔴 **제거 대상은 전역이 아니라 프로젝트 쪽이다.** 방향을 정하는 근거는 셋이다.
-
-| 근거 | 관측 |
-| --- | --- |
-| 워커 지시문의 참조 경로 | §③은 워커가 **`~/.claude/skills/<name>/SKILL.md`(전역)** 를 `Read`하게 한다 — 전역을 지우면 **죽은 참조**가 되고 지시문 4종 + 정본을 함께 고쳐야 한다 |
-| 머신 내 다른 프로젝트 | 프로젝트 스코프 스킬을 가진 저장소는 **이곳뿐**이다(실측). 다른 프로젝트는 전부 전역에 의존한다 |
-| 재현성 기여 | 프로젝트 사본은 **untracked**라 클론에 따라오지 않는다 → **재현성 이득 0**인데 shadowing 위험만 만든다 |
+> 🔴 **이 계획은 한 번 뒤집혔다.** 초안은 *"프로젝트 사본을 지우고 전역으로 폴백"* 이었고,
+> 근거는 **"두 벌이 바이트 동일이라 동작 무변화"** 였다. 그 전제가 **`sql-optimization` 한 종만
+> 보고 세운 것**이었고, 나머지 3종을 `diff -r`로 확인하자 **전부 달랐다**.
+> 프로젝트 쪽이 **신판**이므로 초안대로 지웠으면 **조용히 구판으로 되돌리는** 작업이 됐을 것이다.
+> — 표본 하나로 세운 전제는 전수 확인 전까지 결론이 아니다([philosophy.md](philosophy.md) 원칙 7).
 
 | 안 | 조치 | 영향 | 평가 |
 | --- | --- | --- | --- |
-| **A(권장)** | 프로젝트 사본 제거 + lock 항목 제거 | 저장소는 전역본으로 폴백(바이트 동일 → **동작 무변화**) | ★★★★★ |
-| B | 전역 사본 제거 | 워커 `Read` 경로 사망 · 타 프로젝트 손실 · 문서 5곳 수정 | ★★☆☆☆ |
-| C | 유지 + 드리프트 감시 | 비용 0이나 함정 존속, 감시 주체 부재 | ★★☆☆☆ |
+| **A(권장)** | **전역을 최신으로 재설치**해 두 벌을 같게 만든다 | 워커 `Read` 경로(전역) 유지 + 신판 확보. 중복 자체는 남지만 **드리프트가 사라져 무해**해진다 | ★★★★★ |
+| B | 프로젝트 사본 제거 | 🔴 **구판으로 되돌아간다**(3종). 초안이었으나 실측으로 기각 | ★☆☆☆☆ |
+| C | 전역 사본 제거 + 워커 참조 경로를 프로젝트로 변경 | 근본적이나 지시문 4종 + 정본 수정, **미결 #1(커밋 여부)이 먼저 정해져야** 한다 | ★★★☆☆ |
+| D | 유지 + 드리프트 감시 | 비용 0이나 **감시 주체가 없다**. 이미 드리프트가 발생한 상태 | ★☆☆☆☆ |
 
-- **A 실행 절차**(비가역 — 승인 후):
-  1. `rm .claude/skills/sql-optimization` (심볼릭 링크만)
-  2. `rm -rf .agents/skills/sql-optimization` (실체)
-  3. `skills-lock.json`에서 `sql-optimization` 항목 제거 — 🔴 **lock 편집은 공급망 행위**라 별도 승인
-- **출처 기록은 잃지 않는다** — `~/.agents/.skill-lock.json`에 `github/awesome-copilot`이 그대로 남는다.
-- 🔴 **선행 확인**: 제거 전 `diff -r`로 **두 벌이 여전히 동일한지 재확인**한다. 동일하지 않다면
-  "어느 쪽이 로드되는가"가 **실제 문제로 승격**되므로 제거가 아니라 판별이 먼저다.
+- **A 실행**(네트워크 접촉 — 승인 후): 전역 스코프에서 `kubernetes-specialist`·`spark-engineer`·
+  `spark-optimization` 3종을 재설치한다. `sql-optimization`은 이미 동일하다.
+- **선행 확인**: 재설치 후 `diff -r ~/.agents/skills/<n> .agents/skills/<n>`로 **4종 전부 무차이**를 확인한다.
+- 🔴 **C안이 진짜 해법이지만 미결 #1에 묶여 있다** — 프로젝트 스코프를 정본으로 삼으려면
+  `.agents/`가 **커밋돼야** 하고(안 그러면 클론에 안 따라온다), 그건 외부 코드를 저장소에 넣는 결정이다.
+  A안은 그 결정이 날 때까지의 **완충재**이지 종착점이 아니다.
+- `$HOME/skills-lock.json`(1항목 미아 파일)도 같이 정리 대상이다.
 
 - 🔴 **미결 2건**(사용자 결정 대기):
   1. `.agents/`·`.claude/skills/` **커밋 여부** — 커밋하면 프로젝트 스킬이 클론에 따라와 재현성이 오르지만,
@@ -391,7 +438,7 @@
 
   | 순위 | 스킬 | 등급 | 사유 |
   | --- | --- | --- | --- |
-  | 1 | `brainstorming` | C | **실행 파일 5종 + 로컬 HTTP 서버 + 저장소 내 산출물**. 미검토 상태로 lock 등재됨 |
+  | 1 | `brainstorming` | C | **실행 파일 4종 + 로컬 HTTP 서버 + 저장소 내 산출물**. 미검토 상태로 lock 등재됨 |
   | 1 | `helm-chart-scaffolding` | C | `scripts/validate-chart.sh` 실행 파일 + **C등급이라 도입 금지 대상**인데 등재 중 |
   | 2 | `docker-expert`·`github-actions-templates` | C | 크리덴셜을 다루는 산출물을 생성 |
   | 3 | `shellcheck-configuration`·`spark-optimization`·`duckdb` | C | 문서 전용 — 관찰 |

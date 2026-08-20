@@ -60,10 +60,16 @@ BOUNDARIES = {
         "deny": ("terraform/", "k8s/", "compose.yml", ".env", ".claude/"),
     },
     # 데브옵스 엔지니어 — 파이프라인 정의·분석 산출물은 남의 소관.
+    # 🔴 `dagster_project/`·`dbt/`로 적혀 있었으나 **둘 다 추적 파일 0건**이었다
+    #    (2026-08-20 `tech-writer` 반환에서 발견 → `git ls-files`로 재확인).
+    #    실제 코드는 `dagster/dockerfile.d/src/` 아래에 있어 **겨냥이 빗나가 있었다** —
+    #    배선을 이어도 이 두 접두어는 아무것도 막지 못했다.
+    #    "배선됨"과 "겨냥이 맞음"은 다른 층이다
+    #    (이번 미션에서 세 번째 "막았다고 믿는" 형태).
+    #    `Dockerfile`·`.dockerignore`는 devops 소관이라 `src/`만 막는다.
     "devops-engineer": {
         "deny": (
-            "dagster_project/",
-            "dbt/",
+            "dagster/dockerfile.d/src/",
             "notebooks/",
             "docs/analyses/",
             ".env",

@@ -253,10 +253,11 @@ flowchart LR
 | [`journal_guard.py`](scripts/journal_guard.py) | `SessionStart` · `PreToolUse(Write)` · `Stop` | 저널 `NN` 넘버링 경합 · 규약 위반 생성 · 기록 누락 경고 |
 | [`session_sync_guard.py`](scripts/session_sync_guard.py) | `PreToolUse(Bash·Agent·Edit\|Write\|NotebookEdit)` | 병렬 세션의 중복 작업 · 워킹트리 전역 git 명령 |
 | [`protected_paths_guard.py`](scripts/protected_paths_guard.py) | `PreToolUse(Bash)` | 보호 경로(`.env`·lock 등) 우회 수정 |
-| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher`·`director` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 (✅ `tech-writer` 3셀 대조로 실발동 확인 — 🔴 단 **2026-08-20 경계 확대·`director` 신규 배선분은 `미확인`**, 새 세션 재대조 필요) |
+| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher`·`director`·`data-engineer`·`devops-engineer`·`archivist` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 + **가드 스크립트 자기보호**(`*_guard.py`는 워커 무관 `deny`) (✅ `tech-writer` 3셀 대조로 실발동 확인 — 🔴 단 **뒤 3종은 2026-08-20 신규 배선분이라 `미확인`**, 새 세션 재대조 필요) |
 | [`analyst_path_guard.py`](scripts/analyst_path_guard.py) | `analyst` 프론트매터 `hooks` | 같은 목적 (✅ 실발동 확인 — 과거 미발동은 **`hooks`가 정의 로드 시점에 스냅샷**되기 때문) |
 
 - 🔴 **`hooks`를 세션 도중 추가·수정하면 그 세션에는 반영되지 않는다** — 배선을 바꾸면 **새 세션에서** 3셀 대조를 다시 돌린다.
+- 🔴 **경계표에 적혀 있다고 막히는 것이 아니다** — `worker_path_guard.py`의 `BOUNDARIES` 7종 중 3종(`data-engineer`·`devops-engineer`·`archivist`)은 2026-08-20까지 **프론트매터 `hooks`가 없어 한 번도 실행되지 않았다**(정의는 있고 호출자가 없던 상태). 강제되는 것은 **배선된 (가드 × 워커) 쌍**이다.
 - 🔴 **`Bash` 경유 쓰기는 파일 가드를 우회**한다 — 그래서 "파일 수정을 `Bash`로 하라"는 지시는 거부한다.
 - 🔴 **발행(업로드)은 어느 워커도 하지 않는다.** 외부 발신은 비가역이라 마지막 게이트는 **사람**이 갖는다
   (자동화하지 않는 것이 설계). 공개 기준은 [`docs/conventions/publishing.md`](docs/conventions/publishing.md).

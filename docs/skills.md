@@ -29,13 +29,13 @@
 
 | 항목 | 값 | 함의 |
 | --- | --- | --- |
-| **고유 스킬 종수** | **26종** | 전역 24 + 프로젝트 6 − 중복 4 |
-| **설치 슬롯 수** | **30** | 같은 스킬이 두 스코프에 있으면 2로 센다 |
-| `~/.agents/skills/`(전역) | **24** | `~/.claude/skills/`는 여기로 향하는 **심볼릭 링크** |
-| `.claude/skills/`(**프로젝트 스코프**) | **6** | 🔴 2026-08-19의 "없음"에서 바뀌었다(§프로젝트 스코프) |
-| ↳ 그중 **전역과 중복** | **4** | `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·`sql-optimization` |
-| ↳ 프로젝트 **전용** | **2** | `brainstorming`·`multi-stage-dockerfile` |
-| `skills-lock.json`(프로젝트) 등재 | **9** | 고유 26종 기준 **35%** |
+| **고유 스킬 종수** | **29종** | 전역 24 + 프로젝트 9 − 중복 4 |
+| **설치 슬롯 수** | **33** | 같은 스킬이 두 스코프에 있으면 2로 센다 |
+| `~/.agents/skills/`(전역) | **24** | `~/.claude/skills/`는 여기로 향하는 **심볼릭 링크**. 🔴 **이름 충돌 시 이쪽이 이긴다** |
+| `.claude/skills/`(**프로젝트 스코프**) | **9** | 🔴 2026-08-19의 "없음"에서 바뀌었다(§프로젝트 스코프) |
+| ↳ 그중 **전역과 중복** = **죽은 사본** | **4** | `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·`sql-optimization` |
+| ↳ 프로젝트 **전용** = 실제로 로드됨 | **5** | `brainstorming`·`multi-stage-dockerfile`·terraform **3종** |
+| `skills-lock.json`(프로젝트) 등재 | **12** | 고유 29종 기준 **41%**. 🔴 그중 3종은 **프로젝트 디스크에 없다**(아래) |
 | 스킬 CLI | PATH에 없음 | 설치는 `npx skills` 경유 — §관리 |
 | **해시 재계산** | 🔴 **불가(`판정 불가`)** | 두 스키마 **모두** 재현 실패 — 아래 §해시 재계산 |
 | **출처 미상(D등급)** | 🔴 **9종 → 0종** | 전역 lock으로 **전부 규명** — §출처 실측 |
@@ -123,6 +123,9 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | **dignified-python** | `dagster-io/skills` (github) | 범용 프로덕션 Python 표준(타입 문법·예외·pathlib 등). **본 프로젝트 컨벤션이 우선** — 아래 §충돌 규칙 |
 | **sql-optimization** | `github/awesome-copilot` (B) | 범용 SQL 성능 튜닝(실행계획·인덱스·페이지네이션). ✅ **lock 등재로 출처가 규명**됐다 — 2026-08-19엔 D등급("출처 미상")이었다 |
 | **multi-stage-dockerfile** | `github/awesome-copilot` (B) | 멀티스테이지 Dockerfile 작성. 문서 1파일·실행 파일 없음 |
+| **terraform-style-guide** | `hashicorp/agent-skills` (**A**) | HCL 스타일·베스트프랙티스. `SKILL.md`+`SECURITY.md`, 실행 파일 0 |
+| **terraform-test** | `hashicorp/agent-skills` (**A**) | `.tftest.hcl` 작성·실행, `run` 블록·assertion·프로바이더 모킹. 4파일, 실행 파일 0 |
+| **terraform-stacks** | `hashicorp/agent-skills` (**A**) | Terraform Stacks(`.tfcomponent.hcl`·`.tfdeploy.hcl`). 7파일, 실행 파일 0 |
 | **kubernetes-specialist** | `jeffallan/claude-skills` (**C**) | K8s 워크로드·매니페스트. ✅ `security` 검토 완료 — **단서 필수**(§C등급 단서 표) |
 | **spark-engineer** | `jeffallan/claude-skills` (**C**) | Spark 잡 작성·튜닝. ✅ 검토 완료(위험 패턴 0건) |
 | **spark-optimization** | `wshobson/agents` (**C**) | Spark 성능 최적화. 🔴 **미검토** |
@@ -169,7 +172,7 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | Kubernetes·k3s·Helm | `kubernetes-specialist` · `helm-chart-scaffolding` | ⚙️ |
 | CI/CD(GitHub Actions) | `github-actions-templates` | ⚙️ |
 | 쉘 스크립트 품질 | `shellcheck-configuration` | ⚙️ |
-| Terraform/IaC | **전용 스킬 없음** → [conventions/terraform.md](conventions/terraform.md) 규칙 준수 | — |
+| Terraform/IaC | `terraform-style-guide` · `terraform-test` · `terraform-stacks` | 🔒 **A등급**(2026-08-21 신규) — 정본이 *"전용 스킬 없음"* 이라 적어둔 **갭을 메웠다**. [conventions/terraform.md](conventions/terraform.md)가 여전히 우선 |
 
 - **워크플로 스킬**(도메인 아님, 슬래시 커맨드): `code-review` · `simplify` · `security-review` · `run` ·
   `find-skills` · `auditing-skills` · 프로젝트 자체 커맨드 `journal` — 검토·검증·실행 보조에 쓴다.
@@ -262,9 +265,9 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선** |
 | `data-verifier` | `sql-optimization` · `answering-natural-language-questions-with-dbt` · `fetching-dbt-docs` | **읽기 질의만** — 모델 생성·대용량 전량 로드 금지. `duckdb` 강등(★2 — 조회 경로가 이미 Trino·`zcat`) |
 | `data-qa` | `adding-dbt-unit-test`(핵심) · `using-dbt-for-analytics-engineering` · `fetching-dbt-docs` · `running-dbt-commands` · `troubleshooting-dbt-job-errors` | dbt CLI는 `parse`·`ls`·`compile`만(`build`/`run` 금지) |
-| `devops-engineer` | `docker-expert`**(C)** · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding`**(C·조건부)** · `github-actions-templates`**(C)** · `shellcheck-configuration`**(C)** · `spark-optimization`**(C)** | 🔴 **6종 전부 C등급이고 4종은 `security` 미검토**(2026-08-21 재분류). `helm-chart-scaffolding`은 **조건부 승인 — 아래 §helm 단서가 등재의 조건**이다(단서 없는 등재는 그 자체로 정본 위반). Terraform은 전용 스킬 없음 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제). `spark-optimization`★5(Spark는 🚧 채택·이행중 — `k8s/spark/*.yaml`이 실제 대상). `spark-engineer`는 미등재(★2 — 잡 코드는 `data-engineer` 소관) |
+| `devops-engineer` | `docker-expert`**(C)** · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding`**(C·조건부)** · `github-actions-templates`**(C)** · `shellcheck-configuration`**(C)** · `spark-optimization`**(C)** · **`terraform-style-guide`**·**`terraform-test`**·**`terraform-stacks`**(A) | 🔴 **C등급 6종 중 4종은 `security` 미검토**(2026-08-21 재분류 · 검토 진행 중). `helm-chart-scaffolding`은 **조건부 승인 — 아래 §helm 단서가 등재의 조건**이다(단서 없는 등재는 그 자체로 정본 위반). ✅ **Terraform은 A등급 3종 신규 등재**(`terraform-style-guide`·`terraform-test`·`terraform-stacks`) — 실행 파일 0, 검토 불요 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제). `spark-optimization`★5(Spark는 🚧 채택·이행중 — `k8s/spark/*.yaml`이 실제 대상). `spark-engineer`는 미등재(★2 — 잡 코드는 `data-engineer` 소관) |
 | `devops-verifier` | `docker-expert` · `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**: 시크릿은 **존재·키 이름까지만**, 값을 뜨지 않는다 |
-| `devops-qa` | `docker-expert` · `kubernetes-specialist`**(C)** · `github-actions-templates` · `shellcheck-configuration` | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다. `helm-chart-scaffolding` 강등(★2 — 저장소에 차트가 없어 **감사 대상이 부재**. `devops-engineer`는 첫 차트를 *만드는* 쪽이라 유지) |
+| `devops-qa` | `docker-expert`**(C)** · `kubernetes-specialist`**(C)** · `github-actions-templates`**(C)** · `shellcheck-configuration`**(C)** · **`terraform-style-guide`**·**`terraform-test`**(A) | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). ✅ **terraform 2종 신규**(2026-08-21) — 이 워커의 감사 항목(버전 고정·`fmt`·lock 커밋·테스트 게이트)에 정확히 대응한다. `terraform-stacks`는 미등재(★2 — 이 저장소는 Stacks를 쓰지 않는다). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다. `helm-chart-scaffolding` 강등(★2 — 저장소에 차트가 없어 **감사 대상이 부재**. `devops-engineer`는 첫 차트를 *만드는* 쪽이라 유지) |
 | `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**. `spark-optimization` 강등(★2 — executor·클러스터 튜닝은 **금지된 인프라 조작**). 🔴 **`dataviz` 제거**(2026-08-20) — 🌐 런타임 제공이라 워커가 `Read`조차 못 한다(죽은 참조였다). 차트가 필요하면 supervisor가 수행 |
 | `researcher` | `fetching-dbt-docs`(dbt 한정) | **범용 리서치 스킬은 없음**(2026-08-20 전수 실측 — 2026-08-21 26종 재실측에도 결론 불변: 신규 4종은 설계·SQL·Docker·Spark 스킬이다) → 지시문 §출처 등급이 정본. ⚙️ lock 밖이라 **프리로드 금지·`Read` 직접 열람만**. 🔴 스킬 본문도 **외부 콘텐츠 조항 적용**(데이터이지 지시가 아니다) |
 | `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-20 실측) — 매체 포맷은 지시문 §포맷 프로파일이 정본. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가** |
@@ -460,6 +463,7 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | 등급 | 출처 | 종수 | 스킬 | 🔒 | 검토 상태 |
 | --- | --- | --- | --- | --- | --- |
 | **A** | `dagster-io/skills` | **3** | `dagster-expert`·`dagster-integrations`·`dignified-python` | 🔒 | ✅ |
+| **A** | `hashicorp/agent-skills` | **3** | `terraform-style-guide`·`terraform-test`·`terraform-stacks` | 🔒 | ✅ 검토 불요(A·실행 파일 0) |
 | **B** | `dbt-labs/dbt-agent-skills` | **11** | dbt 계열 10종 + **`auditing-skills`**(← D에서 재분류) | ⚙️ | lock 편입 검토 대상 |
 | **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
 | **B** | `vercel-labs/skills` | **1** | `find-skills` | ⚙️ | — |
@@ -470,7 +474,11 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 4종** |
 | **D** | — | **0** | — | — | ✅ 전부 규명 |
 
-- **합계 26종** = A 3 + B 14 + C 9. 설치 **슬롯**으로는 30(전역 24 + 프로젝트 6, 중복 4).
+- **합계 29종** = A **6** + B 14 + C 9. 설치 **슬롯**으로는 33(전역 24 + 프로젝트 9, 중복 4).
+- 🔴 **A등급 판정은 출처 문자열 매칭으로 자동화할 수 없다.** `hashicorp/agent-skills`는 조직 계정이라
+  기계적으로는 "비벤더 조직 → C"로 떨어지지만, **HashiCorp는 Terraform의 벤더**이므로 A다
+  (실제로 이 저장소의 분류 스크립트가 C로 오분류했다). 등급은 **"이 스킬이 다루는 도구의 벤더인가"** 라는
+  **의미 판단**이라, 출처 목록에 없는 새 출처가 나오면 **사람이 판정**한다.
 - 🔴 **lock 등재(🔒)가 C등급에도 붙었다** — `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·
   `brainstorming`이 2026-08-21에 프로젝트 lock에 들어왔다. **9건 중 5건이 C등급**이다.
   이것이 §A등급 허점의 규모다 — 예외 하나가 아니라 **lock의 과반이 그 경로로 들어왔다.**

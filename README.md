@@ -1,4 +1,4 @@
-# DAGSTER STUDY
+# PIPELINE STUDY
 
 MIMIC-IV·eICU 중환자 데이터를 **Dagster + dbt + Iceberg 레이크하우스**로 적재·변환하고,
 그 위에서 **SOFA → Sepsis-3 같은 임상 질문에 답하는** 학습·포트폴리오 프로젝트다.

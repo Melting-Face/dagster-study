@@ -1,6 +1,6 @@
 # 테스트 규칙 (testing)
 
-이 문서는 dagster-study 파이프라인의 **테스트 전략·규칙의 단일 출처**다.
+이 문서는 pipeline-study 파이프라인의 **테스트 전략·규칙의 단일 출처**다.
 계층별로 *무엇을 · 어디서 · 어떻게* 테스트하는지 정하고, 각 계층의 세부 규약은
 [`conventions/dbt.md`](conventions/dbt.md)·[`conventions/python.md`](conventions/python.md)·[`conventions/dagster.md`](conventions/dagster.md)와 교차링크한다.
 

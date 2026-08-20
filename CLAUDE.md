@@ -1,4 +1,4 @@
-# 프로젝트 CLAUDE.md (dagster-study)
+# 프로젝트 CLAUDE.md (pipeline-study)
 
 > 이 저장소는 **파이프라인(수단) + 분석(목적)** 두 축이다. 중환자 데이터를 레이크하우스로
 > 적재·변환하는 것은 **임상 질문(SOFA → Sepsis-3 등)에 답하기 위한 준비**이며,

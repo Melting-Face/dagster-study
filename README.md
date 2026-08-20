@@ -152,7 +152,7 @@ dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동
 flowchart TB
     U(["🚦 사용자 · 최종 게이트<br/>커밋 · 발행 · apply는 사람이 승인"])
     SUP["supervisor · 메인 루프<br/>미션 정의 · 배정 · 취합 · 보고"]
-    DIR["director · 자문<br/>계획 · 게이트 설계<br/>🔴 중첩 위임 불가 → 배정은 supervisor가"]
+    DIR["director · 자문<br/>계획 · 게이트 설계<br/>🔴 배정 불가 · Agent 도구 없음"]
 
     subgraph impl["구현 축 · 쓰기 O · model=inherit"]
         DE["data-engineer<br/>Dagster 에셋 · dbt 모델"]

@@ -23,6 +23,7 @@ MIMIC-IV·eICU 중환자 데이터를 **Dagster + dbt + Iceberg 레이크하우�
 - [전체 아키텍처 / 데이터 흐름](docs/architectures/overview.md)
 - [리소스 산정](docs/resource-sizing.md)
 - [분석 컨벤션](docs/conventions/analysis.md) — gold 모델 / 노트북 / 리포트 3층과 결론의 재현 경로
+- [에이전트 오케스트레이션·기록관](docs/conventions/agents.md) — 서브에이전트 계층·권한·저널 규약 (아래 §AI 에이전트 구조)
 - 코딩 규칙: [공통](docs/conventions/general.md) · [Python](docs/conventions/python.md) · [Dagster](docs/conventions/dagster.md) · [dbt](docs/conventions/dbt.md) · [Kubernetes](docs/conventions/k8s.md)
 
 ## 구성 요소
@@ -135,6 +136,99 @@ uv run --group notebook jupyter lab --port 8889 --notebook-dir ../../../notebook
 dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동 반영된다.
 각 데이터셋 subproject가 **`@dbt_assets(select="fqn:<dataset>")`** 로 자기 모델만 소유한다
 (`path:` 셀렉터는 cwd 글롭이라 정의 로드 시 모델이 수집되지 않는다 — [`docs/conventions/dbt.md`](docs/conventions/dbt.md)).
+
+## AI 에이전트 구조 (Claude Code)
+
+이 저장소는 작업 자체도 규약화한다 — **전문 서브에이전트에 역할·권한을 나눠 배정**하고,
+"누가 무엇을 왜 했는가"를 기록관 저널에 남긴다. 규칙 정본은
+[`docs/conventions/agents.md`](docs/conventions/agents.md), 요약은 `CLAUDE.md` 운영 섹션에 있다.
+
+> 🔴 **아래 두 그림은 축약본이다.** 워커 목록·권한·게이트의 **정본은
+> [`docs/conventions/agents.md`](docs/conventions/agents.md) §구조도**이고, 갈리면 그쪽이 사실이다.
+
+### 구조 — 누가 누구를 배정하는가
+
+```mermaid
+flowchart TB
+    U(["🚦 사용자 · 최종 게이트<br/>커밋 · 발행 · apply는 사람이 승인"])
+    SUP["supervisor · 메인 루프<br/>미션 정의 · 배정 · 취합 · 보고"]
+    DIR["director · 자문<br/>계획 · 게이트 설계<br/>🔴 중첩 위임 불가 → 배정은 supervisor가"]
+
+    subgraph impl["구현 축 · 쓰기 O · model=inherit"]
+        DE["data-engineer<br/>Dagster 에셋 · dbt 모델"]
+        OE["devops-engineer<br/>compose · k8s · Terraform"]
+        AN["analyst<br/>notebooks/** · docs/analyses/**"]
+        TW["tech-writer<br/>docs/posts/** · 공개물"]
+    end
+
+    subgraph judge["판정 축 · 읽기 전용 · model=sonnet"]
+        DV["data-verifier<br/>값 실측 대조"]
+        DQ["data-qa<br/>테스트·게이트 감사"]
+        OV["devops-verifier<br/>런타임 실측 대조"]
+        OQ["devops-qa<br/>선언·게이트 감사"]
+    end
+
+    RES["researcher · 외부 1차 출처<br/>저장소의 유일한 외부 네트워크 접점"]
+    SEC["security · 반출 · 규제 컨펌 게이트"]
+    ARC["archivist · 저널 기록 전담"]
+    SKM["skill-matcher · 스킬 배선 감사"]
+    JR[("미션 저널<br/>$OBSIDIAN_VAULT/agents/날짜/NN-미션.md")]
+
+    U <-->|"요청 ⇅ 보고 · 비가역 승인"| SUP
+    SUP <-.->|"자문 질의 ⇅ 계획 · 게이트 설계"| DIR
+    SUP <-->|"배정 ⇅ 산출물"| impl
+    SUP <-->|"배정 ⇅ 발견"| judge
+    SUP <-->|"질의 ⇅ 근거 · 출처등급 A~D"| RES
+    SUP <-->|"컨펌 요청 ⇅ 승인 · 반려"| SEC
+    SUP <-->|"감사 요청 ⇅ 별점 판정"| SKM
+    SUP -->|"체크포인트 이벤트"| ARC
+    ARC -->|기록| JR
+```
+
+- 축(**구현 / 실측 대조 / 체계 감사**)은 도메인이 달라도 **동일**하다 — 판단 규칙을 하나로 유지하려는 것.
+  분석·공개는 **새 축이 아니라 새 도메인**이라 구현 축 1명(`analyst`·`tech-writer`)만 두고 판정은 재사용한다.
+- **판정자는 쓰지 않는다** — `disallowedTools: Write, Edit, NotebookEdit`으로 미부여(난이도)가 아니라 거부(강제).
+- 🔴 **3계층(supervisor→director→subagent)은 현행 런타임에서 성립하지 않는다** — 서브에이전트에 `Agent`
+  도구가 없어 중첩 위임이 불가하다. director는 계획·게이트 설계를 반환하는 **자문**으로 쓰고, 배정은 supervisor가 한다.
+
+### 파이프라인 — 미션 한 건이 흐르는 경로
+
+```mermaid
+flowchart LR
+    A(["사용자 요청"]) --> B{"미션인가?<br/>파일변경 · 위임 · 결정 · 비가역"}
+    B -->|아니오| Z(["단순 응답 · 기록 없음"])
+    B -->|예| C["저널 개시<br/>NN 번호는 journal_guard가 발급"]
+    C --> D["분해 · 배정<br/>도메인 × 축"]
+    D --> E["구현 워커<br/>쓰기 · 경로 한정"]
+    D --> F["판정 워커<br/>실측 대조 · 체계 감사"]
+    D --> R["researcher<br/>외부 1차 출처"]
+    R --> E
+    E --> F
+    F -->|"불일치 · 갭"| E
+    F --> G{"security 컨펌"}
+    G -->|반려| E
+    G -->|승인| H{"비가역인가?<br/>커밋 · apply · 발행 · DROP"}
+    H -->|예| I(["🚦 사람 승인 게이트"])
+    H -->|아니오| J["적용"]
+    I --> J
+    J --> K["archivist 기록<br/>결과 · 상호작용 로그 · 실행 메타"]
+    K --> L(["사용자 보고"])
+```
+
+**기계 강제층(hook)** — 위 흐름의 규율 중 일부만 실제로 강제된다. 결정값은 `allow`·`deny`·`ask`·`defer` 넷뿐이다.
+
+| 가드 | 배선 | 막는 것 |
+| --- | --- | --- |
+| [`journal_guard.py`](scripts/journal_guard.py) | `SessionStart` · `PreToolUse(Write)` · `Stop` | 저널 `NN` 넘버링 경합 · 규약 위반 생성 · 기록 누락 경고 |
+| [`session_sync_guard.py`](scripts/session_sync_guard.py) | `PreToolUse(Bash·Agent·Edit\|Write\|NotebookEdit)` | 병렬 세션의 중복 작업 · 워킹트리 전역 git 명령 |
+| [`protected_paths_guard.py`](scripts/protected_paths_guard.py) | `PreToolUse(Bash)` | 보호 경로(`.env`·lock 등) 우회 수정 |
+| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 (✅ `tech-writer` 3셀 대조로 실발동 확인) |
+| [`analyst_path_guard.py`](scripts/analyst_path_guard.py) | `analyst` 프론트매터 `hooks` | 같은 목적 (✅ 실발동 확인 — 과거 미발동은 **`hooks`가 정의 로드 시점에 스냅샷**되기 때문) |
+
+- 🔴 **`hooks`를 세션 도중 추가·수정하면 그 세션에는 반영되지 않는다** — 배선을 바꾸면 **새 세션에서** 3셀 대조를 다시 돌린다.
+- 🔴 **`Bash` 경유 쓰기는 파일 가드를 우회**한다 — 그래서 "파일 수정을 `Bash`로 하라"는 지시는 거부한다.
+- 🔴 **발행(업로드)은 어느 워커도 하지 않는다.** 외부 발신은 비가역이라 마지막 게이트는 **사람**이 갖는다
+  (자동화하지 않는 것이 설계). 공개 기준은 [`docs/conventions/publishing.md`](docs/conventions/publishing.md).
 
 ## REF
 

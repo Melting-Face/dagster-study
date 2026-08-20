@@ -41,6 +41,8 @@
       "Bash(*psql*DELETE*)",
       "Edit(skills-lock.json)",
       "Edit(.claude/agents/**)",
+      "Edit(scripts/*_guard.py)",
+      "Edit(scripts/**/*_guard.py)",
       "Edit(**/.claude/skills/**)",
       "Edit(**/.agents/skills/**)",
       "Edit(~/.claude/skills/**)",

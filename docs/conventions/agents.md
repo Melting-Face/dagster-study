@@ -341,13 +341,30 @@ NotebookEdit is disabled for this session, in subagents as well as here.
 - 🔴 **대조군이 성립하지 않았으므로 이번에도 `notebook_path` 분기는 실행 이력 0회다.**
   (2)(3)이 "막힌" 것은 **가드가 아니라 도구 부재**다 — *"막혔으니 가드가 작동한다"* 로 읽으면
   정확히 원칙 7의 오독이고, 프로브를 수행한 `analyst`가 이 함정을 스스로 짚어냈다.
-- **원인 후보 둘, 이번 세션에서는 갈리지 않는다**(`미확정`):
-  ① **정의 스냅샷** — `hooks`와 마찬가지로 `tools`도 **로드 시점에 고정**되어 세션 도중 편집이 안 먹는다.
+- **원인 후보 둘을 세웠고, 새 관측 없이 기존 데이터로 갈렸다**:
+  ① **정의 스냅샷** — `hooks`처럼 `tools`도 **로드 시점에 고정**되어 세션 도중 편집이 안 먹는다.
   ② **`ToolSearch` 미보유** — `analyst`는 `ToolSearch`도 `No such tool available`이었다.
-  `NotebookEdit`이 **deferred tool**로 제공되는 컨텍스트에서는 `ToolSearch`가 있어야 로드되는데
-  (`general-purpose`가 실제로 그 경로를 탔다), `tools` 화이트리스트에 `ToolSearch`가 없으면
-  **deferred 도구에 영영 도달할 수 없다.**
-  → **`tools`를 명시한 워커는 deferred 도구를 못 쓴다**는 뜻이므로, 필요하면 `ToolSearch`도 함께 선언한다.
+  deferred 도구는 `ToolSearch`로 스키마를 먼저 로드해야 호출되는데(`general-purpose`가 그 경로를 탔다),
+  화이트리스트에 `ToolSearch`가 없으면 **deferred 도구에 도달할 수 없다.**
+
+  🔴 **②는 반증된다 — `researcher`가 반례다.** 이 환경에서 `WebSearch`·`WebFetch`는 **deferred**인데
+  (supervisor 메인 루프에서 `ToolSearch`로 로드해야 했다), `researcher`는 `tools:`에 둘을 **선언**했고
+  **`ToolSearch` 없이 `WebSearch` 3회 + `WebFetch` 6회를 전부 성공**시켰다.
+  → **`tools:`에 명시한 도구는 deferred여도 직접 부여된다.** ②는 "미선언 도구"에만 해당하는 규칙이지
+  `analyst`의 실패를 설명하지 못한다(`analyst`는 `NotebookEdit`을 **선언했다**).
+  ⇒ **남는 설명은 ①이다.** `hooks`와 같은 층에서 `tools`도 스냅샷된다고 보는 쪽이 정합적이다.
+  단 이건 **교차 워커 비교에 의한 추론**이지 A/B 실측이 아니다 — 아래 확인 실험으로 못 박는다.
+- **확인 실험**(한 번에 둘을 바꾸면 또 못 가른다 — 순서가 중요하다):
+
+  | 셀 | 조건 | ① 참이면 | ② 참이면 |
+  | --- | --- | --- | --- |
+  | 1 | **새 세션** · `analyst` 현 상태(`NotebookEdit` 선언·`ToolSearch` 없음) | ✅ 성공 | 🔴 실패 |
+  | 2 | 셀 1 실패 시에만 · `tools`에 `ToolSearch` 추가 후 **또 새 세션** | — | ✅ 성공 |
+
+  둘 다 실패하면 **세 번째 원인**이 있다. 실험 설계는 피어 세션 제안을 채택했다.
+- ⚠️ **②가 참이었다면 파장이 컸다** — `tools` 미지정은 `director` 하나뿐이고 **나머지 12종이 전부 명시**라,
+  워커 12종이 deferred 계열을 통째로 못 쓰는 상태가 된다. `researcher` 반례 덕에 이 시나리오는 접혔지만,
+  **워커에 새 도구를 물릴 때는 "deferred인가"를 확인**하고 `tools:`에 **명시**한다(암묵 상속을 기대하지 않는다).
 - 🔴 **그리고 프로브 워커가 에러 문구를 다시 믿었다** — *"`disabled for this session`이라는 문구는
   프론트매터보다 상위의 세션 레벨 비활성화를 뜻한다"* 고 추론했는데, **바로 위에서 그 문구가
   거짓임을 실증**했다(`general-purpose`는 같은 세션 서브에이전트에서 성공했다).

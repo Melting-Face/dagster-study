@@ -146,6 +146,10 @@ def main() -> None:
             #    `README.md`가 `README.md.bak`·`README.mdx`까지 열어준다
             #    (2026-08-20 `security` 지적 ⓔ. 주석만 먼저 들어가고 이 분기가
             #    빠져 있어 "막았다고 믿는" 상태로 한 차례 남았었다).
+            # 🔴 여기는 **대소문자를 구분한 채로 둔다**(아래 deny와 반대 방향이다).
+            #    `DOCS/x.md`가 안 걸려 거부되는 쪽이 fail-closed이고, 소문자화하면
+            #    대소문자 구분 파일시스템(Linux CI)에서 **진짜 다른 디렉터리를
+            #    열어주는** fail-open이 된다.
             permitted = any(
                 relative.startswith(item) if item.endswith("/") else relative == item
                 for item in scope
@@ -159,7 +163,18 @@ def main() -> None:
             )
         else:
             scope = boundary["deny"]
-            permitted = not relative.startswith(scope)
+            # 🔴 여기는 **대소문자를 무시한다**(위 allow와 반대 방향이다). macOS
+            #    파일시스템은 대소문자를 무시해 `Terraform/main.tf`·`.CLAUDE/`가
+            #    실제로 금지 경로에 착지하는데, 대소문자를 구분해 비교하면 **통과한다**
+            #    (2026-08-20 `security` 사후 컨펌 M5 — 합성 페이로드로 실측).
+            #    소문자화하면 구분 파일시스템에서 무관한 `Terraform/`까지 막지만,
+            #    막는 쪽의 과잉은 fail-closed라 안전하다.
+            # 🔴 **두 분기의 안전 방향이 반대**라는 것이 이 가드의 핵심이다 —
+            #    `3885700`은 "막는 쪽은 넓게 거는 편이 안전하니 분기를 두지 않는다"고
+            #    적었는데, 대소문자 축에서는 그 `deny`가 오히려 뚫려 있었다.
+            #    넓게 걸려면 **넓게 걸리도록 비교**해야 한다 — 의도만으로는 안 넓어진다.
+            lowered = relative.lower()
+            permitted = not lowered.startswith(tuple(item.lower() for item in scope))
             scope_text = f"금지: {' · '.join(scope)}"
         if permitted:
             sys.exit(0)

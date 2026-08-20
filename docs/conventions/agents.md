@@ -13,60 +13,64 @@ AI 세션에서 작업을 **3계층(supervisor → director → subagent)** 으�
 
 ```mermaid
 flowchart TB
-    U([사용자])
-    SUP[supervisor · 메인 루프<br/>미션 정의·성공조건<br/>취합·충돌조정·사용자 보고]
-    DIR[director · 조율자<br/>하위작업 분해<br/>배정·감독]
+    U(["사용자 · 최종 게이트<br/>커밋 · 푸시 · 발행 · apply 승인"])
+    SUP["supervisor · 메인 루프<br/>미션 정의 · 배정 · 취합 · 보고"]
+    DIR["director · 자문<br/>계획 · 게이트 설계<br/>🔴 배정 불가 · Agent 도구 없음"]
 
-    subgraph impl[워커 · 구현 · 쓰기]
-        DE[data-engineer]
-        OE[devops-engineer]
-        AN[analyst<br/>notebooks · docs/analyses 한정]
+    subgraph impl["구현 · 쓰기 O · inherit"]
+        DE["data-engineer"]
+        OE["devops-engineer"]
+        AN["analyst<br/>notebooks · docs/analyses"]
+        TW["tech-writer<br/>docs/posts · 발행 금지"]
     end
 
-    subgraph judge[워커 · 판정 · 읽기 전용]
-        DV[data-verifier]
-        OV[devops-verifier]
-        DQ[data-qa]
-        OQ[devops-qa]
+    subgraph judge["판정 · 읽기 전용 · sonnet"]
+        DV["data-verifier"]
+        OV["devops-verifier"]
+        DQ["data-qa"]
+        OQ["devops-qa"]
     end
 
-    GP[general-purpose<br/>그 외 조사·잡무]
-
-    SEC[security · 최종 컨펌 게이트<br/>계층 밖 · 읽기 전용]
-    ARC[archivist · 기록 전담<br/>계층 밖 · 판단하지 않음]
-    SKM[skill-matcher · 스킬 배선 감사<br/>계층 밖 · 읽기 전용]
-
-    subgraph rec[기록 · 볼트]
-        JR[(저널<br/>agents/날짜/NN-미션.md)]
-        MOC[(_MOC 대시보드)]
+    subgraph outside["계층 밖 · supervisor 직접 배정"]
+        SEC["security<br/>컨펌 게이트"]
+        ARC["archivist<br/>기록 전담"]
+        SKM["skill-matcher<br/>배선 감사"]
     end
 
-    HOOK{{journal_guard hook<br/>NN 경합 차단}}
+    subgraph common["도메인 공통 · 그 외"]
+        RES["researcher<br/>외부 1차 출처 · 읽기 전용"]
+        GP["general-purpose<br/>정의 파일 없음"]
+    end
 
-    U -->|요청·결정| SUP
-    SUP -->|배정| DIR
-    SUP -->|배정| SEC
-    SUP -->|배정| ARC
-    SUP -.->|계층 접기 · YAGNI| impl
-    SUP -.->|계층 접기 · YAGNI| judge
-    DIR -->|배정·감독| impl
-    DIR -->|배정·감독| judge
-    DIR -->|배정| GP
-    impl -->|산출물 반환| DIR
-    judge -->|발견 반환| DIR
-    DIR -.->|승인·반려| impl
-    DIR -.->|승인·반려| judge
-    DIR -->|컨펌 요청| SEC
-    SEC -->|승인·반려| DIR
-    DIR -->|결과 요약 보고| SUP
-    DIR -.->|에스컬레이션 질의| SUP
-    SUP -->|승인·반려| DIR
-    SUP -->|체크포인트 이벤트 전달| ARC
-    ARC -->|기록| JR
-    ARC -->|감사·유지| MOC
-    SUP -.->|폴백 기록| JR
-    HOOK -.->|번호 발급·중복 차단| JR
+    WEB(["외부 웹"])
+    JR[("저널<br/>agents/날짜/NN-미션.md")]
+    MOC[("_MOC 대시보드")]
+    HOOK{{"hook 가드<br/>저널 NN · 워커 경로 · 세션 동기화"}}
+
+    U <-->|"요청·결정 ↔ 보고·에스컬레이션"| SUP
+    SUP -->|배정| impl
+    SUP -->|배정| judge
+    SUP -->|"배정 · 컨펌 요청 · 체크포인트"| outside
+    SUP -->|배정| common
+    SUP <-.->|"계획·게이트 설계 자문"| DIR
+    RES <-.->|"유일한 외부 접촉"| WEB
+    ARC -->|기록·감사| JR
+    ARC --> MOC
+    HOOK -.->|"번호 발급 · 중복 차단"| JR
 ```
+
+🔴 **화살표가 supervisor에서만 나가는 이유** — **서브에이전트에는 `Agent` 도구가 없어 중첩 위임이
+불가능**하다(실측). 그래서 `director`는 **배정하지 않고** 계획·게이트 설계를 반환하는 **자문**이고,
+`security` 컨펌 요청도 supervisor가 한다. 규약 문서의 3계층은 **의도**이고, 이 그림은 **현행 런타임**이다.
+
+🔴 **hook 가드는 구현 워커의 쓰기에도 걸리지만 그림에 선을 긋지 않았다** — 그 엣지 하나가
+dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다(실측 후 제거). 대신 여기 적는다:
+**경로 경계는 `Write`·`Edit`만 막는다.** `Bash` 경유 쓰기는 matcher 밖이고,
+`NotebookEdit`은 현재 **도구 자체가 비활성**이라 그 분기는 실행되지 않는다(§NotebookEdit 축).
+
+> **이 그림은 렌더까지 확인했다** — `mmdc -i … -o …png -w 1600`으로 PNG를 뽑아 육안 대조했다.
+> 🔴 **구문 통과 ≠ 그림 성립**이다. 첫 판은 파싱·SVG 산출이 모두 정상이었지만 빈 subgraph가
+> 화면 절반을 먹고 긴 엣지가 교차해 **읽을 수 없었다.** mermaid를 고치면 렌더를 다시 본다.
 
 - **하향**(배정·승인)과 **상향**(보고·에스컬레이션)이 서로 다른 경로다. 상향의 판단 주체는 항상 **상위**다.
 - 점선 `supervisor ⇢ 워커`는 **계층 접기**다. 미션이 작으면 director 없이 직접 배정한다(YAGNI).
@@ -275,9 +279,32 @@ docs/conventions/agents.md §권한 매트릭스다``. 워커명·시도 경로�
   반대로 **신설** 워커는 등록만 되면 같은 세션에서 검증할 수 있다.
 - **판정 갱신**: §권한 게이트 4층의 "hook은 규율" 판정을 **`analyst`·`tech-writer` 두 워커에 대해 해제**한다
   (`Write`/`Edit`/`NotebookEdit` 경로 한정). 🔴 `Bash` 경유는 여전히 matcher 밖 = 규율.
-- **미수행(권고 잔여)**: `NotebookEdit`(`notebook_path` 키) 4번째 셀. `analyst_path_guard`는
-  **여러 도구에 걸치고**(①) **키가 갈리는 필드를 읽으므로**(②) §키 불일치 함정의 성립 조건을 **둘 다 만족**한다.
-  로직 층에서는 통과했으나 **라이브 대조는 아직 없다**.
+##### 🔴 `NotebookEdit` 축은 "미검증"이 아니라 **도달 불가**였다 (2026-08-20)
+
+남은 한 축(`notebook_path` 키)을 라이브로 대조하려 했더니 **셋째 답이 나왔다.**
+`analyst`·`tech-writer` **둘 다**, 두 가드 스크립트 **모두**에서 동일했다:
+
+```
+Error: No such tool available: NotebookEdit.
+NotebookEdit is disabled for this session, in subagents as well as here.
+```
+
+- 이 문구는 **네 번째 출처**다 — 가드의 `permissionDecisionReason`도, `denied by the Claude Code
+  auto mode classifier`도, `permissions` 일반 거부도 아닌 **도구 레지스트리 단계의 부재 응답**이다.
+  (§hook 결정값의 출처 구분법에 이 항목을 더한다.)
+- 즉 가드의 `notebook_path` 분기는 **한 번도 실행되지 않는다.** 막는지 투명한지 **판별 불가**다
+  (③"투명하다"의 근거가 **아니다** — 판정 불가에 가깝다).
+- 🔴 **핵심**: 지금 이 축이 안 뚫리는 이유는 **가드가 막아서가 아니라 문이 없어서**다.
+  통제 근거로 읽으면 안 된다 — **`NotebookEdit`이 재활성화되는 순간 이 축은
+  미검증 상태 그대로 노출된다.** 그때가 위험한 시점이다.
+- **파생**: 키 불일치를 고친 `5961822`와 전수 감사한 `29fd23c`는 **코드상 옳지만
+  현행 런타임에서 라이브 실증이 불가능**하다. 확정된 것은 여전히 **`file_path` 축뿐**이다.
+- **재개 조건**: `NotebookEdit`이 활성인 세션에서 경계 밖 1셀 + 경계 안 1셀 대조.
+  이 절을 그때 갱신한다.
+- ⚠️ 부수: `analyst`·`tech-writer`는 **노트북을 다루는 워커인데 `NotebookEdit`이 없다.**
+  노트북 수정은 `Write`(전체 덮어쓰기)로만 가능하다 — 현재 문제는 아니나 알고 있어야 한다.
+  6종 판정 워커의 `disallowedTools: … NotebookEdit` 선언도 **지금은 무의미**하다(있는 걸 막는 게 아니다).
+  선언은 이식성 때문에 남긴다(§선언은 그대로 둔다).
 - 🔴 **확인된 것은 `Write`·`Edit`·`NotebookEdit` 도구 경로뿐이다.** `Bash` 경유 쓰기는
   matcher 밖이라 **여전히 규율**이다 — 아래 §auto 모드 안내가 이 구멍을 정확히 건드린다.
 

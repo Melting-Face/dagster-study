@@ -69,6 +69,13 @@ dagster/dockerfile.d/src/.telemetry/
 dagster/dockerfile.d/src/history/
 dagster/dockerfile.d/src/schedules/
 
+# Claude Code 스킬 산출물 — `brainstorming` 스킬 서버가 `--project-dir` 사용 시
+# `<repo>/.superpowers/brainstorm/<세션>/`에 세션 파일을 만든다(콘텐츠·서버 로그·세션 토큰).
+# 토큰이 들어가고 브레인스토밍 원문이 박제되므로 형상관리 대상이 아니다.
+# 끝 슬래시를 붙이지 않는다 — 슬래시는 디렉터리만 매칭한다(.claude/.claims와 같은 이유).
+# 근거: docs/skills.md §프로젝트 스코프 스킬
+.superpowers
+
 # Jupyter 자동 스냅샷 — 셀 출력이 그대로 들어 있어 **원천 데이터가 박제**된다.
 # 노트북 본문(.ipynb)은 커밋 대상이고, 출력 제거는 nbstripout 훅이 담당한다.
 # 근거: docs/security.md (원천 진료 데이터 커밋 금지)

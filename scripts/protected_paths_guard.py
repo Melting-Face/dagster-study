@@ -28,8 +28,16 @@
     한계(정직하게): 문자열 휴리스틱이라 **완전하지 않다**. 변수 치환·인코딩·별칭으로
     얼마든 우회된다. 목표는 봉쇄가 아니라 **실수와 무심코를 잡는 것**이다.
 
-사용: `PreToolUse`(matcher `Bash`) hook에서 호출한다.
-    scripts/protected_paths_guard.py
+두 축을 갖는다:
+    `bash-pre`(기본, 인자 없음) — 위의 `Bash` 우회 차단.
+    `file-pre` — 도구 경로(`Edit`·`Write`·`NotebookEdit`)로 **규약 정본**을 쓰려 할 때
+        "착수 전 의도 탐색을 거쳤나"를 묻는다. 집행은 `permissions`의 `ask`가 하고
+        이 훅은 **문구**를 붙인다 — `permissions.ask`는 매처 문자열 배열이라
+        커스텀 문구를 담을 자리가 없다(2026-08-21 설계).
+
+사용: `PreToolUse` hook에서 호출한다.
+    scripts/protected_paths_guard.py            # matcher: Bash
+    scripts/protected_paths_guard.py file-pre   # matcher: Edit|Write|NotebookEdit
 """
 
 import json
@@ -103,6 +111,48 @@ GLOB_TO_RE = (
     ("\x00", ".*"),
 )
 
+# 설계 게이트 대상 — **규약 정본**이다.
+# 🔴 위의 "보호 경로"(`.env`·tfstate·settings.json 등)와 **개념이 다르다**:
+#    보호 경로는 "쓰면 위험한가", 여기는 "쓰기 전에 의도 탐색을 거쳤는가"를 묻는다.
+#    겹치는 경로가 있어도 묻는 것이 달라 목록을 나눈다(중복이 아니라 다른 축).
+#    집행은 `permissions`의 `ask`가 하고, 이 목록은 **어떤 문구를 띄울지**만 고른다 —
+#    `permissions.ask`는 매처 문자열 배열이라 커스텀 문구를 담을 자리가 없기 때문이다.
+CANON_PATTERNS = (
+    "CLAUDE.md",
+    "docs/conventions/**",
+    ".claude/agents/**",
+    "scripts/*_guard.py",
+    "scripts/**/*_guard.py",
+    "skills-lock.json",
+)
+
+# 설계 게이트 문구. 차단이 아니라 **소통**이다 — 정당한 편집이 다수라 `deny`가 아니다.
+CANON_REASON = (
+    "[설계 게이트] 규약 정본을 수정하려 한다: {targets}\n"
+    "\n"
+    "착수 전 의도 탐색을 거쳤는가?\n"
+    "  · 무엇을 바꾸는지 한 문장으로 말할 수 있는가\n"
+    "  · 왜 지금인가 — 반복 실적(Rule of Three)이 있는가\n"
+    "  · 이 규칙이 「죽은 규칙」이 되지 않을 근거는 무엇인가\n"
+    "\n"
+    "아니라면 취소하고 brainstorming으로 돌아가라."
+)
+
+
+def compile_globs(raws: tuple[str, ...]) -> list[tuple[str, re.Pattern[str]]]:
+    """글롭 문자열들을 `(원문, 컴파일된 정규식)` 쌍으로 옮긴다.
+
+    `load_protected_patterns`와 설계 게이트가 **같은 변환**을 쓰게 해 두 축의
+    매칭 동작이 갈리지 않도록 한다(치환 순서가 의미를 갖는다 — `GLOB_TO_RE` 주석 참고).
+    """
+    compiled = []
+    for raw in raws:
+        converted = raw
+        for src, dst in GLOB_TO_RE:
+            converted = converted.replace(src, dst)
+        compiled.append((raw, re.compile(converted)))
+    return compiled
+
 
 def load_protected_patterns() -> list[tuple[str, re.Pattern[str]]] | None:
     """`.claude/settings.json`의 `ask` 규칙에서 보호 경로 패턴을 뽑는다.
@@ -137,13 +187,69 @@ def load_protected_patterns() -> list[tuple[str, re.Pattern[str]]] | None:
     return patterns
 
 
-def main() -> None:
-    """Bash 명령이 보호 경로를 쓰려 하면 사용자 확인으로 올린다."""
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
+def emit_ask(reason: str) -> None:
+    """`ask` 결정을 내보내고 종료한다.
+
+    🔴 `permissionDecision`의 유효 값은 `allow`·`deny`·`ask`·`defer`뿐이다.
+    값 하나가 어긋나면 `hookSpecificOutput` 전체가 검증 실패해 **결정이 폐기된 채
+    도구가 진행한다**(fail-open). 두 축이 같은 출력 함수를 쓰게 해 한쪽만 어긋나는
+    일을 막는다.
+    """
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": reason,
+                },
+            },
+            ensure_ascii=False,
+        )
+    )
+    sys.exit(0)
+
+
+def run_file_guard(payload: dict) -> None:
+    """도구 경로(`Edit`·`Write`·`NotebookEdit`)로 규약 정본을 쓰려 하면 설계를 묻는다.
+
+    `permissions`의 `ask`가 집행을 하고, 이 훅은 **왜 묻는지**를 붙인다 —
+    `permissions.ask`는 매처 문자열 배열이라 문구를 담을 자리가 없다.
+    """
+    tool_input = payload.get("tool_input") or {}
+    # 🔴 matcher가 `Edit|Write|NotebookEdit` **3개 도구에 걸치는데 경로 키가 갈린다** —
+    #    `Edit`·`Write`는 `file_path`, **`NotebookEdit`은 `notebook_path`**다.
+    #    하나만 읽으면 그 도구에만 조용히 투명해진다(2026-08-20 `session_sync_guard`
+    #    실측: 같은 배선인데 노트북 편집만 뚫려 있었다).
+    raw_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+    if not raw_path:
         sys.exit(0)
 
+    # 프로젝트 상대경로로 정규화한다. 절대경로·`./` 접두어 어느 쪽으로 와도 같은
+    # 패턴에 걸려야 한다(`GLOB_TO_RE`의 선두 `**/` 주석과 같은 계열의 함정).
+    root = str(Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")).resolve())
+    path = str(Path(raw_path))
+    if path.startswith(root + "/"):
+        path = path[len(root) + 1 :]
+    # 🔴 여기서 `lstrip("./")`를 쓰면 안 된다 — `lstrip`은 접두어가 아니라
+    #    **문자 집합**을 벗겨서 `.claude/agents/x`의 **선두 점까지 먹는다**
+    #    (→ `claude/agents/x`). 그러면 `.claude/agents/**` 축만 조용히 통과한다.
+    #    2026-08-21 실측: 다른 셀 3개가 통과해 하마터면 그대로 갈 뻔했다.
+    #    `Path()`가 이미 `./`를 정규화하므로 이 줄 자체가 불필요했다.
+
+    hits = [
+        raw
+        for raw, compiled in compile_globs(CANON_PATTERNS)
+        if compiled.fullmatch(path)
+    ]
+    if not hits:
+        sys.exit(0)  # 정본이 아니다 — 조용히 통과
+
+    emit_ask(CANON_REASON.format(targets=", ".join(sorted(set(hits)))))
+
+
+def run_bash_guard(payload: dict) -> None:
+    """Bash 명령이 보호 경로를 쓰려 하면 사용자 확인으로 올린다."""
     command = (payload.get("tool_input") or {}).get("command") or ""
     if not command:
         sys.exit(0)
@@ -204,19 +310,25 @@ def main() -> None:
     else:
         sys.exit(0)
 
-    print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "ask",
-                    "permissionDecisionReason": reason,
-                },
-            },
-            ensure_ascii=False,
-        )
-    )
-    sys.exit(0)
+    emit_ask(reason)
+
+
+def main() -> None:
+    """서브커맨드 분기.
+
+    인자가 없으면 기존 `Bash` 축으로 동작한다(**하위 호환** — 기존 hook 배선은
+    인자 없이 이 스크립트를 부른다. 인자를 필수로 만들면 그 배선이 조용히 죽는다).
+    """
+    mode = sys.argv[1] if len(sys.argv) > 1 else "bash-pre"
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        sys.exit(0)
+
+    if mode == "file-pre":
+        run_file_guard(payload)
+    else:
+        run_bash_guard(payload)
 
 
 if __name__ == "__main__":

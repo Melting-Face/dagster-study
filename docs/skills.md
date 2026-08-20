@@ -280,11 +280,39 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 - ✅ **확인함**: 셸 인젝션 0건 · 네트워크 다운로드 0건 · 비밀 하드코딩 0건 · 저장소 오염 경로 0건.
   보안 기본값 권고(`runAsNonRoot`·`drop: ALL`·`seccompProfile`)는 **정본과 같은 방향**이고 스크립트가 이를 감사한다.
 
-🔴 **별건 — 권한 규칙 갭**(`security` O-3, 스킬과 무관): `.claude/settings.json`에
-**`helm install`·`upgrade`·`uninstall`·`rollback` 에 `deny`도 `ask`도 없다**(있는 것은 `ask Bash(helm repo add*)` 하나).
-[devops-engineer.md](../.claude/agents/devops-engineer.md)는 이를 **비가역으로 선언**하므로 **선언과 강제가 어긋난 상태**다.
-규칙을 추가한다면 **변형 2~3개로 반드시 재위반**한다 — `Bash(helm install*)`는 `bash -c '…'`·`cd chart && helm install …`를
-놓치므로 **앞뒤 `*`로 두른다**.
+✅ **별건 해소 — 권한 규칙 갭**(`security` O-3): 2026-08-21 `ask` 규칙 **10종 추가**.
+🔴 **갭은 helm보다 넓었다** — `CLAUDE.md`가 *"`ask`로 못 박는다"* 고 명시한 비가역 작업 중
+**`kubectl apply`·`terraform apply`·`terraform destroy`에는 규칙이 아예 없었다**(감사로 발견).
+`git push`·`DROP`·`.env` 등은 있었으므로, **선언 목록과 구현 목록을 대조한 적이 없었던 것**이다.
+
+추가분: `*helm install*`·`*helm upgrade*`·`*helm uninstall*`·`*helm delete*`·`*helm rollback*`·
+`*helm dependency update*`·`*kubectl apply*`·`*kubectl delete*`·`*terraform apply*`·`*terraform destroy*`.
+전부 **앞뒤 `*`로 두른다** — `Bash(helm install*)` 형태는 선두 앵커라 `bash -c '…'`·`cd chart && helm …`를 놓친다.
+
+##### 🔴 `ask` 규칙은 auto 모드에서 **검증할 수 없다** (2026-08-21 실측)
+
+규약대로 변형 3개로 재위반했는데 **전부 통과**했고, 원인을 가르는 데 실험 설계가 한 번 틀렸다.
+
+| 셀 | 명령 | 규칙 | 결과 |
+| --- | --- | --- | --- |
+| 1 | `helm install --help` | 신규 `ask` | **통과** |
+| 2 (대조) | `git commit --help` | **기존** `ask`(세션 시작 전부터 존재) | **통과** |
+| 3 (판별) | `helm install --help` | **임시 `deny`** | 🔴 **차단** |
+| 4 | `bash -c 'helm install --help'` | 임시 `deny` | 🔴 **차단** |
+| 5 | `cd /tmp && helm install --help` | 임시 `deny` | 🔴 **차단** |
+| 6 (과차단) | `helm version --short` | — | ✅ 통과 |
+
+- **셀 2가 결정적이었다** — 기존 규칙도 통과했으므로 "내 새 규칙이 틀렸다"·"세션이 설정을 안 읽는다"가 **둘 다 기각**된다.
+- 셀 3이 변인 하나(`ask`→`deny`)만 바꿔 차단됐으므로 **`permissions`는 세션 도중 반영된다**
+  (🔴 **`hooks`와 반대다** — hooks는 정의 로드 시점 스냅샷이라 새 세션이 필요하다. **둘을 같이 묶어 기억하면 틀린다**).
+- 따라서 셀 1·2의 통과는 **auto 모드 분류기가 `ask`를 흡수한 것**이다.
+- 🔴 **내 시험 설계가 틀렸다** — 안전하려고 `--help`를 골랐는데, **그 안전함이 바로 분류기가 삼키는 조건**이었다.
+  `ask`를 무해한 프로브로 검증하려는 시도는 **원리상 성립하지 않는다**: 프로브가 위험해야 프롬프트가 뜨고,
+  위험하면 실행할 수 없다. **`ask`의 실효는 `deny` 임시 전환으로만 간접 확인된다.**
+- 🔴 **남는 결론**: 위 10종은 **분류기가 위험하다고 볼 때만** 사람에게 올라온다. 규칙이 있다는 사실이
+  **"반드시 멈춘다"를 뜻하지 않는다.** 확실히 멈춰야 하는 경계는 `deny`로 둔다 —
+  다만 이들은 정당한 운영 명령이라 `deny`는 과하고, **`ask` + 워커 지시문 금지 조항의 이중 방어**로 둔다.
+- 앵커링(변형 2·3)은 `deny` 하에서 **3/3 차단 · 과차단 0**으로 확인됐으므로, 패턴 자체는 유효하다.
 
 - 위 3건은 **`skill-matcher` 채점(5축 루브릭) 대상**이며 이 표는 결과를 옮기는 곳이다.
   등급·검토 상태는 별점 축이 아니라 **별개 게이트**(`security`)라, ★4 이상이어도 미검토면 등재하지 않는다.

@@ -208,7 +208,7 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
 | `director` | `Read, Grep, Glob, Bash, Agent` | `Write, Edit, NotebookEdit`, `Agent(archivist)`, `Agent(skill-matcher)` | `inherit` | **X**(판정자) | 계획·권한 매니페스트 제출 → 승인 후 배정 → **계획 대비 실행 정합** 판정. 🔴 맨이름+인자형 **혼용 파싱 실효는 `미확인`** |
 | `data-engineer`·`devops-engineer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O | **계획만 반환**(커밋·`apply`·`down -v` 금지) |
 | `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) |
-| `tech-writer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`docs/**` · `README.md` — hook 강제, **새 범위는 `미확인`**) | **director 관할 밖** · 🔴 **발행(업로드) 금지**(외부 발신=비가역) · 커밋 금지 · `docs/analyses/`는 표현만(내용은 `analyst`) · `docs/conventions/`는 받아적기만(규칙 신설은 supervisor) |
+| `tech-writer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`docs/**` · `README.md` — hook 강제, ✅ **확대 범위 실발동 확인**) | **director 관할 밖** · 🔴 **발행(업로드) 금지**(외부 발신=비가역) · 커밋 금지 · `docs/analyses/`는 표현만(내용은 `analyst`) · `docs/conventions/`는 받아적기만(규칙 신설은 supervisor) · 🔴 **`docs/security.md`·`docs/skills.md`는 통제·공급망 정본**이라 내용 변경 시 supervisor 결정 + `security` 컨펌(가드가 못 가른다) |
 | `researcher` | `Read, Grep, Glob, Bash, WebSearch, WebFetch` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 근거만 반환 — **저장소의 유일한 외부 네트워크 접촉 지점**, 설치·발신 금지 |
 | `security` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `inherit` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
 | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
@@ -1420,7 +1420,7 @@ updated: <YYYY-MM-DDThh:mm+09:00>    # KST
 | `.claude/agents/devops-verifier.md` | subagent/worker (전문) | **데브옵스 검증자** — 실행 중 인프라의 **런타임 상태**를 선언과 대조(**읽기 전용**), 불일치만 반환 |
 | `.claude/agents/devops-qa.md` | subagent/worker (전문) | **데브옵스 품질보증** — 인프라 **선언 파일·게이트 체계**를 감사(**읽기 전용**), 보강 계획만 반환 |
 | `.claude/agents/analyst.md` | subagent/worker (전문) | **분석가** — 레이크하우스로 **질문에 답한다**. 노트북·리포트 작성(쓰기 워커, `notebooks/**`·`docs/analyses/**` 한정), gold 승격은 **제안만** |
-| `.claude/agents/tech-writer.md` | subagent/worker (전문) | **테크라이터** — 저장소 결론을 **외부 공개물**로 옮긴다(쓰기 워커, `docs/posts/**` 한정). 🔴 **발행(업로드) 금지** — `security` 컨펌 후 **사람이** 올린다 |
+| `.claude/agents/tech-writer.md` | subagent/worker (**director 관할 밖**) | **테크라이터** — 저장소의 **문서 소유자**(쓰기 `docs/**` · `README.md`, 2026-08-20 확대·실발동 확인). 외부 공개물(`docs/posts/**`)도 담당. 🔴 **발행(업로드) 금지** — `security` 컨펌 후 **사람이** 올린다 |
 | `.claude/agents/researcher.md` | subagent/worker (전문) | **리서처** — 외부 **1차 출처**를 찾아 제목·URL·절과 함께 반환(**읽기 전용**). 저장소의 **유일한 외부 네트워크 접촉 지점**, 결론은 내지 않는다 |
 | `.claude/agents/archivist.md` | 기록관 | 저널 정합성·누락 점검, MOC 유지(관측·기록만) |
 | `.claude/agents/skill-matcher.md` | 스킬 매처 (계층 밖) | **스킬↔워커 배선 감사** — 5축 별점 채점·매핑 드리프트·lock↔디스크 대조·출처 위반(**읽기 전용**), 재배선·도입 계획만 반환 |

@@ -100,7 +100,8 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | 실행 산출물 잔류 차단 | `nbconvert --execute` 사본을 **검증 직후 삭제** | 🟡 규칙 | [test.md §6](test.md) |
 | 개별 행 노출 차단 | 리포트에 개별 환자 행 금지, **소규모 셀(관례상 5 미만) 마스킹** | 🟡 규칙 | 3.3 · DUA |
 | 재식별 금지 | 외부 데이터 결합은 심의 없이 하지 않는다 | 🟡 규칙 | 제28조의5 · DUA |
-| **공개물 반출 차단** | `tech-writer` 쓰기 `docs/posts/**` 한정 + **`security` 컨펌 게이트** + **사람이 발행**(워커 발행 금지) + 컨펌 전 커밋 금지 | 🟡 규칙 | [publishing.md §5](conventions/publishing.md) · DUA 재배포 제한 |
+| **공개물 반출 차단** | `tech-writer` 쓰기 **`docs/**` · `README.md`**(2026-08-20 확대, `worker_path_guard.py` hook 강제 — 실발동 확인) + **`security` 컨펌 게이트** + **사람이 발행**(워커 발행 금지) + 컨펌 전 커밋 금지 | 🟡 규칙 | [publishing.md §5](conventions/publishing.md) · DUA 재배포 제한 |
+| ↳ 🔴 **확대의 잔여 위험 — 정본 개찬** | 확대로 **이 문서(`docs/security.md`)와 [skills.md](skills.md)가 `tech-writer` 쓰기 범위 안**에 들어왔다. 즉 **통제·규제 매핑과 공급망 정책을 그 워커가 고칠 수 있다.** 가드는 디렉터리 단위라 못 가르고 **규율로만** 막는다(지시문 §역할 경계: 내용 변경은 supervisor 결정 + `security` 컨펌, 문안 정합만 워커 몫) | 🔴 규율 | [agents.md §권한 매트릭스](conventions/agents.md) · 2026-08-20 `security` 사후 컨펌 ④ |
 | **외부 질의 유출 차단** | `researcher` 질의 규율(내부 데이터 금지) | 🔴 **규율뿐** — `permissions.ask`의 맨이름 `WebFetch`·`WebSearch`는 **죽은 규칙**(실측: 9회 호출·프롬프트 0회). 기계 검사도 **사람 관측점도 없다** | [researcher.md](../.claude/agents/researcher.md) · [publishing.md §7](conventions/publishing.md) |
 | **외부 발신(egress) 차단** | `permissions.deny`의 `curl`/`wget` 발신 동사 · `ask`의 `gh api`·`git push`·`scp`/`rsync` | 🟡 부분 — `python`/`node` 경유·GET+쿼리스트링은 **못 막는다**(실측) | [publishing.md §7](conventions/publishing.md) |
 

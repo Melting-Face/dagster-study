@@ -118,9 +118,9 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 
 | 스킬 | 출처 | 언제 쓰나 |
 | --- | --- | --- |
-| **dagster-expert** | `dagster-io/skills` (github) | Dagster·`dg` CLI 관련 모든 작업 — 프로젝트 구조 파악, 에셋/스케줄/센서/잡 정의·검색, 디버깅, 개념 질의 |
-| **dagster-integrations** | `dagster-io/skills` (github) | `dagster-*` 통합 라이브러리 탐색·이해(S3·Iceberg·dbt·k8s 등 연동) |
-| **dignified-python** | `dagster-io/skills` (github) | 범용 프로덕션 Python 표준(타입 문법·예외·pathlib 등). **본 프로젝트 컨벤션이 우선** — 아래 §충돌 규칙 |
+| **dagster-expert** | `dagster-io/skills` (**A**) | Dagster·`dg` CLI 관련 모든 작업 — 프로젝트 구조 파악, 에셋/스케줄/센서/잡 정의·검색, 디버깅, 개념 질의 |
+| **dagster-integrations** | `dagster-io/skills` (**A**) | `dagster-*` 통합 라이브러리 탐색·이해(S3·Iceberg·dbt·k8s 등 연동) |
+| **dignified-python** | `dagster-io/skills` (**B**) | 범용 프로덕션 Python 표준. 🔴 **A가 아니다** — 본문이 *"Not Dagster-specific"* 이라 명시하고 Dagster Labs는 Python의 벤더가 아니다(§등급은 스킬 단위). **본 프로젝트 컨벤션이 우선** |
 | **sql-optimization** | `github/awesome-copilot` (B) | 범용 SQL 성능 튜닝(실행계획·인덱스·페이지네이션). ✅ **lock 등재로 출처가 규명**됐다 — 2026-08-19엔 D등급("출처 미상")이었다 |
 | **multi-stage-dockerfile** | `github/awesome-copilot` (B) | 멀티스테이지 Dockerfile 작성. 문서 1파일·실행 파일 없음 |
 | **terraform-style-guide** | `hashicorp/agent-skills` (**A**) | HCL 스타일·베스트프랙티스. `SKILL.md`+`SECURITY.md`, 실행 파일 0 |
@@ -412,12 +412,34 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 > lock에 등재됐다. **lock은 "안 바뀜"을 보장하지 "안전함"을 보장하지 않는다.**
 > 그래서 축을 갈라 **출처 등급(A~C) × 고정 상태(🔒/⚙️)** 2차원으로 읽는다.
 
-| 등급 | 정의 | 통제 | 현재(26종) |
+🔴 **등급은 출처가 아니라 「스킬」 단위로 매긴다** (2026-08-21 재재개정 — 병렬 세션 지적으로 발견).
+
+`hashicorp/agent-skills`를 A로 올린 논리가 `dbt-labs`를 B에 두는 것과 **양립하지 않았다.**
+dbt Labs는 **dbt의 벤더**이므로 `running-dbt-commands` 같은 것은 A여야 하는데 B로 분류돼 있었다.
+원인은 표를 **출처 단위**로 짜고 등급을 **출처에 붙인 것**이다 — 정의는 처음부터
+*"그 **스킬이 다루는** 도구 자체의 벤더"* 라는 **스킬 단위** 문장이었다.
+
+**같은 출처에서 등급이 갈린다**(경계 사례가 실제로 있다):
+
+| 스킬 | 출처 | 다루는 대상 | 등급 |
 | --- | --- | --- | --- |
-| **A · 도구 벤더 공식** | 그 스킬이 다루는 **도구 자체의 벤더** | 제한 없이 사용 | `dagster-io/skills` **3** |
-| **B · 준벤더·플랫폼 조직** | 벤더 조직이되 해당 도구의 벤더는 아님 | 사용 가능. **lock 편입 검토**, 실행 파일 포함 시 `security` 검토 | `dbt-labs` **11** · `github`·`vercel-labs` **2** |
+| `dagster-expert` | `dagster-io` | **Dagster** = 그 벤더의 제품 | **A** |
+| `dignified-python` | `dagster-io` | **범용 Python** — 본문이 *"Not Dagster-specific"* 이라 명시 | **B** |
+| `running-dbt-commands` | `dbt-labs` | **dbt** = 그 벤더의 제품 | **A** |
+| `auditing-skills` | `dbt-labs` | **Agent Skills** — dbt가 아니다 | **B** |
+
+| 등급 | 정의 | 통제 | 현재(29종) |
+| --- | --- | --- | --- |
+| **A · 벤더가 자기 제품을 다룸** | 스킬이 다루는 도구 = 출처의 제품 | 제한 없이 사용 | **15** (dbt 10 · terraform 3 · dagster 2) |
+| **B · 벤더 조직이나 자기 제품 아님** | 조직 계정이되 그 도구의 벤더는 아님 | 사용 가능. **lock 편입 검토**, 실행 파일 포함 시 `security` 검토 | **5** (`dignified-python`·`auditing-skills`·`sql-optimization`·`multi-stage-dockerfile`·`find-skills`) |
 | **C · 개인·커뮤니티** | 개인 GitHub 계정 | 🔴 도입 전 **`security` 본문 검토 필수** + 워커 지시문 **단서 문구 필수**. **실행 파일 포함 시 도입 금지** | **9** (§출처 실측) |
 | **D · 출처 미상** | 어느 lock에도 출처가 없음 | 실행 파일 포함이면 **검토 전 사용 금지**, 문서 전용이면 **관찰** | ✅ **0** (전부 규명) |
+
+- ⚠️ **A↔B의 실무 차이는 작다**(둘 다 사용 가능). 그래서 이 정정의 값은 통제 변화가 아니라
+  **판정 근거의 일관성**이다 — 근거가 갈린 채로 두면 **다음 사람이 기계 판정으로 돌아간다.**
+- 🔴 **그래서 등급은 자동화할 수 없다.** 출처 문자열만 보면 `hashicorp/agent-skills`는 "조직 계정 → C"로,
+  `dignified-python`은 "dagster-io → A"로 **둘 다 틀리게** 떨어진다(실제로 분류 스크립트가 그랬다).
+  **"이 스킬이 다루는 것이 그 출처의 제품인가"** 는 사람이 읽어야 판정된다.
 
 **고정 상태는 별개 축이다** — 🔒 lock 등재(출처·버전 기록) / ⚙️ lock 밖.
 🔴 **🔒는 C등급을 면제하지 않는다.** `brainstorming`·`sql-optimization`은 🔒이면서 C다.
@@ -460,11 +482,15 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 > **"출처가 없다"가 아니라 "출처를 안 봤다"** 였다 — 부정 결과를 낼 때는 **관측 경로가 살아 있었는지**를
 > 함께 확인해야 한다([philosophy.md](philosophy.md) 원칙 7). 그 9종은 그동안 **C등급 통제를 받지 않았다.**
 
+🔴 **등급은 스킬 단위**다(위 §재재개정). 같은 출처가 A행·B행에 함께 나온다 — 오타가 아니다.
+
 | 등급 | 출처 | 종수 | 스킬 | 🔒 | 검토 상태 |
 | --- | --- | --- | --- | --- | --- |
-| **A** | `dagster-io/skills` | **3** | `dagster-expert`·`dagster-integrations`·`dignified-python` | 🔒 | ✅ |
-| **A** | `hashicorp/agent-skills` | **3** | `terraform-style-guide`·`terraform-test`·`terraform-stacks` | 🔒 | ✅ 검토 불요(A·실행 파일 0) |
-| **B** | `dbt-labs/dbt-agent-skills` | **11** | dbt 계열 10종 + **`auditing-skills`**(← D에서 재분류) | ⚙️ | lock 편입 검토 대상 |
+| **A** | `dbt-labs/dbt-agent-skills` | **10** | dbt 자체를 다루는 10종(`running-dbt-commands`·`adding-dbt-unit-test` 등) | ⚙️ | ✅ 벤더 제품 |
+| **A** | `hashicorp/agent-skills` | **3** | `terraform-style-guide`·`terraform-test`·`terraform-stacks` | 🔒 | ✅ 검토 불요(실행 파일 0) |
+| **A** | `dagster-io/skills` | **2** | `dagster-expert`·`dagster-integrations` | 🔒 | ✅ |
+| **B** | `dagster-io/skills` | **1** | **`dignified-python`** — 범용 Python(*"Not Dagster-specific"*) | 🔒 | — |
+| **B** | `dbt-labs/dbt-agent-skills` | **1** | **`auditing-skills`** — dbt가 아니라 *스킬*을 감사 | ⚙️ | 🔴 `skill-matcher`가 로드하면 **순환 신뢰**(등급과 무관한 별개 논점) |
 | **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
 | **B** | `vercel-labs/skills` | **1** | `find-skills` | ⚙️ | — |
 | **C** | `wshobson/agents` | **4** | `github-actions-templates`·**`helm-chart-scaffolding`**·`shellcheck-configuration`·`spark-optimization` | 일부 🔒 | 🔴 **미검토** |
@@ -474,11 +500,14 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 4종** |
 | **D** | — | **0** | — | — | ✅ 전부 규명 |
 
-- **합계 29종** = A **6** + B 14 + C 9. 설치 **슬롯**으로는 33(전역 24 + 프로젝트 9, 중복 4).
-- 🔴 **A등급 판정은 출처 문자열 매칭으로 자동화할 수 없다.** `hashicorp/agent-skills`는 조직 계정이라
-  기계적으로는 "비벤더 조직 → C"로 떨어지지만, **HashiCorp는 Terraform의 벤더**이므로 A다
-  (실제로 이 저장소의 분류 스크립트가 C로 오분류했다). 등급은 **"이 스킬이 다루는 도구의 벤더인가"** 라는
-  **의미 판단**이라, 출처 목록에 없는 새 출처가 나오면 **사람이 판정**한다.
+- **합계 29종** = A **15** + B **5** + C 9. 설치 **슬롯**으로는 33(전역 24 + 프로젝트 9, 중복 4).
+- 🔴 **등급 판정은 자동화할 수 없다.** 출처 문자열만 보면 `hashicorp/agent-skills`는 "조직 계정 → C",
+  `dignified-python`은 "`dagster-io` → A"로 **둘 다 틀리게** 떨어진다(분류 스크립트가 실제로 그랬다).
+  판정 문장은 **"이 스킬이 다루는 것이 그 출처의 제품인가"** 이고, 이는 **본문을 읽어야** 답이 나온다.
+- 🔴 **갭 17종은 전부 이미 전역에 있다**(2026-08-21 병렬 세션 실측). 즉 프로젝트에 "도입"하면
+  **중복이 되고, §전역 우선에 따라 새로 깐 쪽이 죽은 사본이 된다.**
+  → 도입 절차에는 **"설치 후 실제 로드해 base directory 확인"** 이 반드시 들어간다.
+  안 하면 **"도입했다"는 기록과 "무엇이 도는가"가 갈린다.**
 - 🔴 **lock 등재(🔒)가 C등급에도 붙었다** — `kubernetes-specialist`·`spark-engineer`·`spark-optimization`·
   `brainstorming`이 2026-08-21에 프로젝트 lock에 들어왔다. **9건 중 5건이 C등급**이다.
   이것이 §A등급 허점의 규모다 — 예외 하나가 아니라 **lock의 과반이 그 경로로 들어왔다.**

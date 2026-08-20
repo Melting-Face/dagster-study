@@ -152,13 +152,12 @@ dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동
 flowchart TB
     U(["🚦 사용자 · 최종 게이트<br/>커밋 · 발행 · apply는 사람이 승인"])
     SUP["supervisor · 메인 루프<br/>미션 정의 · 배정 · 취합 · 보고"]
-    DIR["director · 자문<br/>계획 · 게이트 설계<br/>🔴 배정 불가 · Agent 도구 없음"]
+    DIR["director · 판정자 · 쓰기 X<br/>계획 · 권한 매니페스트 · 배정<br/>판정축: 계획 대비 실행 정합<br/>🔴 Agent 도구 실재 미확인"]
 
     subgraph impl["구현 축 · 쓰기 O · model=inherit"]
         DE["data-engineer<br/>Dagster 에셋 · dbt 모델"]
         OE["devops-engineer<br/>compose · k8s · Terraform"]
         AN["analyst<br/>notebooks/** · docs/analyses/**"]
-        TW["tech-writer<br/>docs/posts/** · 공개물"]
     end
 
     subgraph judge["판정 축 · 읽기 전용 · model=sonnet"]
@@ -169,9 +168,13 @@ flowchart TB
     end
 
     RES["researcher · 외부 1차 출처<br/>저장소의 유일한 외부 네트워크 접점"]
-    SEC["security · 반출 · 규제 컨펌 게이트"]
-    ARC["archivist · 저널 기록 전담"]
-    SKM["skill-matcher · 스킬 배선 감사"]
+
+    subgraph outside["director 관할 밖 · supervisor 직접 배정"]
+        SEC["security · 반출 · 규제 컨펌 게이트<br/>계획 1회 · 작업내용 1회 · 델타 조건부"]
+        ARC["archivist · 저널 기록 전담"]
+        SKM["skill-matcher · 스킬 배선 감사"]
+        TW["tech-writer · 쓰기 O<br/>docs/** · README.md · 발행 금지"]
+    end
     JR[("미션 저널<br/>$OBSIDIAN_VAULT/agents/날짜/NN-미션.md")]
 
     U <-->|"요청 ⇅ 보고 · 비가역 승인"| SUP
@@ -181,6 +184,7 @@ flowchart TB
     SUP <-->|"질의 ⇅ 근거 · 출처등급 A~D"| RES
     SUP <-->|"컨펌 요청 ⇅ 승인 · 반려"| SEC
     SUP <-->|"감사 요청 ⇅ 별점 판정"| SKM
+    SUP <-->|"배정 ⇅ 문서 · 원고"| TW
     SUP -->|"체크포인트 이벤트"| ARC
     ARC -->|기록| JR
 ```
@@ -188,8 +192,21 @@ flowchart TB
 - 축(**구현 / 실측 대조 / 체계 감사**)은 도메인이 달라도 **동일**하다 — 판단 규칙을 하나로 유지하려는 것.
   분석·공개는 **새 축이 아니라 새 도메인**이라 구현 축 1명(`analyst`·`tech-writer`)만 두고 판정은 재사용한다.
 - **판정자는 쓰지 않는다** — `disallowedTools: Write, Edit, NotebookEdit`으로 미부여(난이도)가 아니라 거부(강제).
-- 🔴 **3계층(supervisor→director→subagent)은 현행 런타임에서 성립하지 않는다** — 서브에이전트에 `Agent`
-  도구가 없어 중첩 위임이 불가하다. director는 계획·게이트 설계를 반환하는 **자문**으로 쓰고, 배정은 supervisor가 한다.
+  **`director`도 판정자다**(2026-08-20) — 도구로 직접 작업하지 않고 계획·배정·판정만 하며,
+  판정 축은 **「계획 대비 실행 정합」**(값=`*-verifier` / 체계=`*-qa` / 노출=`security` / 배선=`skill-matcher` /
+  기록=`archivist`와 중첩되지 않는다).
+- **관할 밖 4종**(`security`·`archivist`·`skill-matcher`·`tech-writer`)은 supervisor가 직접 배정한다 —
+  앞 3종은 **계층 자체를 감사·기록**하고, `tech-writer`는 **director의 행동 규칙이 담긴 정본**을 쓰기 때문이다.
+- **`tech-writer`는 저장소의 문서 소유자**다 — `docs/**`와 최상위 `README.md`를 쓴다. 🔴 단 가드는 디렉터리
+  단위라 `docs/analyses/**`(내용은 `analyst` 소관)와 `docs/conventions/**`(규칙 신설은 supervisor 소관)는
+  **규율로만** 갈린다.
+- **워커가 워커를 못 부르니 supervisor가 릴레이한다** — `skill-matcher`는 새 스킬 후보를 **직접 검색하지 않고**
+  `researcher`에 보낼 **조사 요청서**를 반환한다(`skill-matcher`→supervisor→`researcher`→supervisor→채점·제안
+  →`security`→🚦사람). 찾기는 `researcher`, 배선 판정은 `skill-matcher`, 출처 신뢰성은 `security`로 **셋이 갈린다** —
+  🔴 **감사자가 배선까지 하면 자기가 배선한 것을 자기가 감사**하게 되어 이 워커의 존재 이유가 사라진다.
+- ⚠️ **3계층(supervisor→director→subagent) 성립 여부는 `미확인`이다** — 2026-08-19엔 서브에이전트에 `Agent`
+  도구가 없어 중첩 위임 불가로 봤으나, 그 에러 문구가 자기모순(같은 세션의 supervisor는 `Agent`를 썼다)이라
+  **원인이 프론트매터 선언일 가능성**이 남는다. 새 세션에서 재측정할 때까지 배정은 supervisor가 대행한다.
 
 ### 파이프라인 — 미션 한 건이 흐르는 경로
 
@@ -198,14 +215,19 @@ flowchart LR
     A(["사용자 요청"]) --> B{"미션인가?<br/>파일변경 · 위임 · 결정 · 비가역"}
     B -->|아니오| Z(["단순 응답 · 기록 없음"])
     B -->|예| C["저널 개시<br/>NN 번호는 journal_guard가 발급"]
-    C --> D["분해 · 배정<br/>도메인 × 축"]
+    C --> P["분해 · 계획<br/>권한 매니페스트"]
+    P --> G1{"security 컨펌 ①<br/>계획 · 미션당 1회"}
+    G1 -->|반려| P
+    G1 -->|승인| D["배정<br/>도메인 × 축"]
     D --> E["구현 워커<br/>쓰기 · 경로 한정"]
+    E -.->|"계획 밖 경로 · 비가역 · 외부발신"| GD{"Δ 델타 컨펌<br/>해당 항목만"}
+    GD -.->|승인| E
     D --> F["판정 워커<br/>실측 대조 · 체계 감사"]
     D --> R["researcher<br/>외부 1차 출처"]
     R --> E
     E --> F
     F -->|"불일치 · 갭"| E
-    F --> G{"security 컨펌"}
+    F --> G{"security 컨펌 ②<br/>작업내용 · 미션당 1회"}
     G -->|반려| E
     G -->|승인| H{"비가역인가?<br/>커밋 · apply · 발행 · DROP"}
     H -->|예| I(["🚦 사람 승인 게이트"])
@@ -215,6 +237,12 @@ flowchart LR
     K --> L(["사용자 보고"])
 ```
 
+- **`security` 컨펌은 배정마다가 아니라 2점 + 델타다**(2026-08-20 개정) — ①**계획 전체** 1회
+  ②**미션 전체 작업내용** 1회 Δ계획 밖(쓰기 경로·비가역·외부 발신) 발생 시 그 항목만. 배정 시점엔
+  산출물이 없어 **읽기 전용 `security`가 볼 재료가 없기** 때문이고, 비용 절감이 목적이 아니다(호출 `2N+`→`2+Δ`).
+  🔴 둘 다 **"한 벌"이 단위**다 — 워커별로 쪼개면 **파일 사이의 조합에서 생기는 노출**을 못 본다.
+  🔴 **비가역은 Δ/①에서 실행 *전에* 판정**하며 ②로 미루지 않는다. 개정 효력은 3셀 대조 전까지 **`미확인`**이다.
+
 **기계 강제층(hook)** — 위 흐름의 규율 중 일부만 실제로 강제된다. 결정값은 `allow`·`deny`·`ask`·`defer` 넷뿐이다.
 
 | 가드 | 배선 | 막는 것 |
@@ -222,7 +250,7 @@ flowchart LR
 | [`journal_guard.py`](scripts/journal_guard.py) | `SessionStart` · `PreToolUse(Write)` · `Stop` | 저널 `NN` 넘버링 경합 · 규약 위반 생성 · 기록 누락 경고 |
 | [`session_sync_guard.py`](scripts/session_sync_guard.py) | `PreToolUse(Bash·Agent·Edit\|Write\|NotebookEdit)` | 병렬 세션의 중복 작업 · 워킹트리 전역 git 명령 |
 | [`protected_paths_guard.py`](scripts/protected_paths_guard.py) | `PreToolUse(Bash)` | 보호 경로(`.env`·lock 등) 우회 수정 |
-| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 (✅ `tech-writer` 3셀 대조로 실발동 확인) |
+| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher`·`director` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 (✅ `tech-writer` 3셀 대조로 실발동 확인 — 🔴 단 **2026-08-20 경계 확대·`director` 신규 배선분은 `미확인`**, 새 세션 재대조 필요) |
 | [`analyst_path_guard.py`](scripts/analyst_path_guard.py) | `analyst` 프론트매터 `hooks` | 같은 목적 (✅ 실발동 확인 — 과거 미발동은 **`hooks`가 정의 로드 시점에 스냅샷**되기 때문) |
 
 - 🔴 **`hooks`를 세션 도중 추가·수정하면 그 세션에는 반영되지 않는다** — 배선을 바꾸면 **새 세션에서** 3셀 대조를 다시 돌린다.

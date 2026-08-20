@@ -127,7 +127,7 @@ security 컨펌  ← 필수. 지적 있으면 초안으로 되돌린다
 
 | 층 | 수단 | 실효 |
 | --- | --- | --- |
-| 경로 경계 | `scripts/worker_path_guard.py tech-writer` (`allow: docs/posts/`) | ✅ **실발동 확인**(2026-08-20 3셀 대조 — 가드 원문·즉시 `deny`). 🔴 단 **`Write`/`Edit`/`NotebookEdit` 경로 한정** — `Bash` 경유는 matcher 밖이라 규율 |
+| 경로 경계 | `scripts/worker_path_guard.py tech-writer` (`allow: docs/` · `README.md`) | ✅ **실발동 확인**(2026-08-20 3셀 대조 — 가드 원문·즉시 `deny`). 🔴 단 확인된 것은 **이전 범위**(`docs/posts/` 한정)이고, 같은 날 **`docs/` 전체로 확대한 뒤의 대조는 `미확인`**이다(새 세션 재대조 필요 — 접두어 트랩 셀 포함). 🔴 **`Write`/`Edit`/`NotebookEdit` 경로 한정** — `Bash` 경유는 matcher 밖이라 규율 |
 | 읽기 전용(researcher) | `disallowedTools: Write, Edit, NotebookEdit` | ✅ **실발동 확인** — `No such tool available: Write … disabled for this session`. 🔴 `Bash` 경유는 미차단 |
 | 외부 접촉 | ~~`permissions.ask`의 `WebFetch`·`WebSearch`~~ | 🔴 **죽은 규칙(실측)** — `WebSearch` 3회·`WebFetch` 6회 **전부 프롬프트 없이 통과**(허용목록 밖 도메인 포함). 맨이름은 `ask`에서 매칭되지 않는다. **질의 유출의 사람 관측점은 없다** |
 | 발신(egress) 차단 | `permissions.deny`의 `curl`/`wget` **발신 동사** | 🟡 **동사만 본다.** 🔴 못 막는 것: `python`/`node` 경유(`urlopen(data=…)` 실측 통과) · GET+쿼리스트링+명령치환 · 변수 조립(`-X${M}`) · `scp`/`ssh`/`nc` |

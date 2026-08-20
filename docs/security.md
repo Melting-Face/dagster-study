@@ -78,12 +78,20 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 > **재식별 금지(제28조의5·DUA)**: 어떤 파이프라인·분석도 특정 개인 재식별을 시도하지 않는다.
 > 외부 데이터와의 결합은 DUA·가이드라인 심의 없이는 수행하지 않는다.
 
-### 2-3. 분석 산출물 통제 (노트북·리포트)
+### 2-3. 분석·공개 산출물 통제 (노트북·리포트·공개물)
 
 파이프라인은 데이터를 **저장소 밖**(SeaweedFS)에 두지만, **분석 산출물은 저장소 안으로 들어온다.**
-`.ipynb` 셀 출력과 리포트의 표·그림은 **조회 결과를 그대로 박제**하므로, 여기가 이 프로젝트에서
-원천 데이터가 저장소로 새는 **유일한 실질 경로**다. 작업 규칙 정본은
-[conventions/analysis.md](conventions/analysis.md), 이 절은 그 거버넌스 근거다.
+`.ipynb` 셀 출력과 리포트의 표·그림은 **조회 결과를 그대로 박제**한다.
+~~여기가 원천 데이터가 새는 **유일한 실질 경로**다.~~
+
+🔴 **2026-08-20부로 이 문장은 사실이 아니다.** 경로가 둘 늘었고, 방향이 **반대**다 —
+앞의 것이 "저장소 **안으로** 들어오는" 경로라면 새로 생긴 둘은 **저장소 밖으로 나가는** 경로다.
+
+1. **공개물** — `docs/posts/**`(블로그·공유 자료). 작성 워커 `tech-writer`.
+2. **외부 질의** — `researcher`의 `WebSearch`·`WebFetch`. **질의문 자체가 외부 발신**이다.
+
+작업 규칙 정본은 [conventions/analysis.md](conventions/analysis.md)(분석)와
+[conventions/publishing.md](conventions/publishing.md)(공개)이고, 이 절은 그 거버넌스 근거다.
 
 | 통제 | 수단 | 상태 | 근거 |
 | --- | --- | --- | --- |
@@ -92,6 +100,9 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | 실행 산출물 잔류 차단 | `nbconvert --execute` 사본을 **검증 직후 삭제** | 🟡 규칙 | [test.md §6](test.md) |
 | 개별 행 노출 차단 | 리포트에 개별 환자 행 금지, **소규모 셀(관례상 5 미만) 마스킹** | 🟡 규칙 | 3.3 · DUA |
 | 재식별 금지 | 외부 데이터 결합은 심의 없이 하지 않는다 | 🟡 규칙 | 제28조의5 · DUA |
+| **공개물 반출 차단** | `tech-writer` 쓰기 `docs/posts/**` 한정 + **`security` 컨펌 게이트** + **사람이 발행**(워커 발행 금지) + 컨펌 전 커밋 금지 | 🟡 규칙 | [publishing.md §5](conventions/publishing.md) · DUA 재배포 제한 |
+| **외부 질의 유출 차단** | `researcher` 질의 규율(내부 데이터 금지) | 🔴 **규율뿐** — `permissions.ask`의 맨이름 `WebFetch`·`WebSearch`는 **죽은 규칙**(실측: 9회 호출·프롬프트 0회). 기계 검사도 **사람 관측점도 없다** | [researcher.md](../.claude/agents/researcher.md) · [publishing.md §7](conventions/publishing.md) |
+| **외부 발신(egress) 차단** | `permissions.deny`의 `curl`/`wget` 발신 동사 · `ask`의 `gh api`·`git push`·`scp`/`rsync` | 🟡 부분 — `python`/`node` 경유·GET+쿼리스트링은 **못 막는다**(실측) | [publishing.md §7](conventions/publishing.md) |
 
 - 🔴 **`gitleaks`는 크리덴셜 패턴을 잡지 헬스 데이터를 잡지 못한다.** 자동 검사 통과를 안전으로 읽지
   않는다 — 분석 산출물의 위험은 **비밀값이 아니라 데이터 그 자체**다.
@@ -112,7 +123,8 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 | --- | --- | --- | --- |
 | ★★★★★ | 원천 데이터·`.env`·크리덴셜 **저장소 커밋 금지** 준수·점검 | DUA · 2.7 · 3.1 | [general.md](conventions/general.md#비밀정보-secrets) |
 | ★★★★☆ | Iceberg **보존·파기** 자동화 — 🟡 잡 구현(만료+orphan 정리, [defs/maintenance.py](../dagster/dockerfile.d/src/src/dagster_project/defs/maintenance.py)), 보존기간·대상 범위 확정 잔여 | 3.4 · 2.9 | [operations.md §2](operations.md) |
-| ★★★★☆ | **분석 산출물 반출 통제** — ✅ 셀 출력 훅·스냅샷 무시 구현, 🟡 소규모 셀 마스킹·실행 산출물 삭제는 **규칙 단계**(기계 강제 없음) | 3.2 · 3.3 · DUA | [§2-3](#2-3-분석-산출물-통제-노트북리포트) · [analysis.md](conventions/analysis.md) |
+| ★★★★☆ | **분석·공개 산출물 반출 통제** — ✅ 셀 출력 훅·스냅샷 무시 구현, 🟡 소규모 셀 마스킹·실행 산출물 삭제는 **규칙 단계**(기계 강제 없음), 🟡 **공개물(`docs/posts/**`)·외부 질의 축 추가**(2026-08-20) — 게이트는 **전부 사람** | 3.2 · 3.3 · DUA | [§2-3](#2-3-분석공개-산출물-통제-노트북리포트공개물) · [analysis.md](conventions/analysis.md) · [publishing.md](conventions/publishing.md) |
+| ★★★★★ | **외부 발신(egress) 통제** — 🟡 `permissions.deny`(발신 동사)·`ask`(`gh`·`git push`) 구현. 🔴 미비: `WebFetch`/`WebSearch` `ask`가 **죽은 규칙**(실측 9회 프롬프트 0회) · `python`/`node` 경유·GET+쿼리스트링·변수 조립 **미커버**(실측) · `researcher` 인젝션 사정거리(`.env`·`tfvars`·`gh` 토큰 **읽기 무통제**) | 2.6 · 2.7 · 3.3 | [publishing.md §7](conventions/publishing.md) · [researcher.md](../.claude/agents/researcher.md) |
 | ★★★★☆ | **저장/전송 암호화**(at-rest·TLS) — 실서비스 확장 전제 | 2.7 | [docker.md](conventions/docker.md) |
 | ★★★☆☆ | 서비스 **RBAC·최소권한** 매트릭스 문서화 | 2.5 · 2.6 | [operations.md](operations.md) |
 | ★★★☆☆ | Postgres·SeaweedFS **백업·복구** 정책 | 2.12 | [operations.md](operations.md) |
@@ -125,7 +137,8 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 
 - **읽기 전용**이다 — 발견을 심각도(높음·중간·낮음)로 **반환만** 하고, 수정·커밋은 승인 후 별도 워커가 한다(승인 게이트).
 - 점검 범위는 이 문서(ISMS-P 매핑·§0 철칙)와 [general.md](conventions/general.md)·[operations.md](operations.md)·
-  인프라 컨벤션(terraform·k8s·docker)이며, **규칙을 새로 만들지 않고 정본을 집행**한다.
+  [publishing.md](conventions/publishing.md)(외부 공개)·인프라 컨벤션(terraform·k8s·docker)이며,
+  **규칙을 새로 만들지 않고 정본을 집행**한다.
 - 보고 시 **비밀값 원문은 마스킹**한다. 내장 `/security-review`(변경분 취약점 중심)와 병행 — 이 워커는 **거버넌스·컨벤션 준수**를 본다.
 - 권장 시점: 커밋 전, 인프라 변경(terraform·k8s·docker) 리뷰 시, §2 매핑표 갱신 시.
 

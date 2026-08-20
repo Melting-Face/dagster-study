@@ -64,7 +64,16 @@ def main() -> None:
     # 저장소 밖 — 스크래치패드일 수도, 홈 설정일 수도 있다. 사람이 판단한다.
     # 🔴 값은 `ask`다 — 유효 enum은 allow·deny·ask·defer뿐이고, 벗어나면 출력 전체가
     #    검증 실패해 **결정이 사라진 채 통과**한다(fail-open). 2026-08-19 실측.
-    if not target.is_relative_to(project_dir):
+    # 🔴 경계 판정은 **대소문자를 무시**한다(2026-08-20 G2 지적 M6 — 같은 버그가
+    #    `worker_path_guard.py`에도 있었다). macOS는 대소문자를 무시하므로
+    #    `/Users/jin/Dagster-Study/defs/x.py`가 **같은 실파일인데 "밖"으로 판정**돼
+    #    `deny`가 아니라 `ask`로 강등되고, 아래 문구가 "임시 파일이면 승인하고"라
+    #    **사람을 승인 쪽으로 유도**한다.
+    #    길이는 대소문자로 바뀌지 않으므로 접두어 길이로 잘라 원본 표기를 보존한다
+    #    (`ALLOWED_PREFIXES` 비교는 대소문자를 구분해야 fail-closed다).
+    project_text = project_dir.as_posix()
+    target_text = target.as_posix()
+    if not target_text.lower().startswith(project_text.lower() + "/"):
         decision = "ask"
         reason = (
             f"`analyst`가 저장소 밖 경로에 쓰려 한다: {target}. "
@@ -72,7 +81,7 @@ def main() -> None:
             "임시 파일이면 승인하고, 아니면 거부하라."
         )
     else:
-        relative = target.relative_to(project_dir).as_posix()
+        relative = target_text[len(project_text) + 1 :]
         if relative.startswith(ALLOWED_PREFIXES):
             sys.exit(0)  # 허용 경로 — 통과
         decision = "deny"

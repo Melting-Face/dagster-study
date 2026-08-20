@@ -100,6 +100,15 @@ OUTSIDE_ALLOW = {
 # PreToolUse 입력에서 대상 경로가 담기는 키 — 도구마다 이름이 다르다.
 PATH_KEYS = ("file_path", "notebook_path", "path")
 
+# 🔴 가드 스크립트 자신은 **어느 워커도 고치지 못한다**
+#    (2026-08-20 `data-engineer`의 Δ 반환에서 발견).
+#    경계를 강제하는 스크립트가 정작 경계에 없었다 — `data-engineer`의 deny에는
+#    `scripts/`가 빠져 있고, `devops-engineer`는 `scripts/`를 정당하게 소유하므로
+#    디렉터리를 통째로 막을 수도 없다.
+#    그래서 **접두어가 아니라 접미어**로 건다(`deny`/`allow` 분기보다 먼저 평가).
+#    `permissions.ask`의 `Edit(scripts/*_guard.py)`가 2층에 있지만 1층이 비어 있었다.
+GUARD_SUFFIX = "_guard.py"
+
 
 def main() -> None:
     """워커의 파일 쓰기가 경계 밖이면 차단하거나 사용자 확인으로 올린다."""
@@ -150,6 +159,18 @@ def main() -> None:
         reason = (
             f"`{worker}`가 저장소 밖 경로에 쓰려 한다: {target}. "
             "임시 파일이면 승인하고, 아니면 거부하라."
+        )
+    elif relative_guard := (
+        target_text[len(project_text) + 1 :]
+        if target_text.lower().endswith(GUARD_SUFFIX)
+        else ""
+    ):
+        # 가드 자신 — 워커 종류와 무관하게 막는다(위 GUARD_SUFFIX 주석).
+        decision = "deny"
+        reason = (
+            f"`{worker}`는 가드 스크립트 `{relative_guard}`를 고칠 수 없다. "
+            "경계를 강제하는 스크립트는 어느 워커의 소관도 아니다 — "
+            "변경안을 반환해 supervisor가 `security` 컨펌 후 반영한다."
         )
     else:
         relative = target_text[len(project_text) + 1 :]

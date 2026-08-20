@@ -66,6 +66,14 @@ BOUNDARIES = {
     },
     # 기록관 — 저널은 저장소 **밖** 볼트에 쓴다. 저장소 안에는 쓸 것이 없다.
     "archivist": {"allow": ()},
+    # 리서처 — 읽기 전용. `disallowedTools`가 1차 방어이고 이건 2차(심층 방어)다.
+    # 둘 다 두는 이유: `disallowedTools`의 실효는 워커마다 실측해야 확정되는데
+    # (§권한 매트릭스 — 선언한 tools가 전부 실재하지는 않는다), 이 워커는 유일하게
+    # **외부 네트워크에 접촉**하므로 가져온 내용이 파일로 착지하는 경로를 남기지 않는다.
+    "researcher": {"allow": ()},
+    # 테크라이터 — 외부 공개 산출물만. 내부 결론(`docs/analyses/`)은 analyst 소관이고
+    # 파이프라인 정의는 data-engineer 소관이다. 공개물은 정정 비용이 크므로 좁게 연다.
+    "tech-writer": {"allow": ("docs/posts/",)},
 }
 
 # 저장소 **밖**에서 예외로 허용할 절대경로 접두어. 미지정 워커는 사용자 확인(`ask`).
@@ -119,7 +127,13 @@ def main() -> None:
         if "allow" in boundary:
             scope = boundary["allow"]
             permitted = relative.startswith(scope)
-            scope_text = " · ".join(scope) if scope else "(저장소 안 쓰기 범위 없음)"
+            # 라벨을 붙인다 — 없으면 "…쓸 수 없다. docs/posts/."처럼 읽혀
+            # 그 경로가 금지인지 허용인지 뒤집혀 읽힌다(2026-08-20 실발동 로그 관측).
+            scope_text = (
+                f"쓸 수 있는 곳: {' · '.join(scope)}"
+                if scope
+                else "이 워커는 저장소 안에 쓸 수 있는 경로가 없다"
+            )
         else:
             scope = boundary["deny"]
             permitted = not relative.startswith(scope)

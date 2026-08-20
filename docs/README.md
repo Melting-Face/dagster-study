@@ -50,6 +50,7 @@
 | [Dagster](conventions/dagster.md)   | 에셋 정의(함수형), 메타데이터, 서브프로젝트 체크리스트, 잡·스케줄 |
 | [dbt](conventions/dbt.md)           | 모델 레이어링, 네이밍, 테스트, sqlfluff, Trino/Iceberg, dbt-spark 타깃, **방언 흡수(내장 vs dispatch 매크로·의미론 검증)** |
 | [**분석**](conventions/analysis.md) | **3층 분리**(gold 모델 / 노트북 / 리포트)와 배치 기준, gold 실행 규칙(grain·네이밍·테스트), 노트북 재현성·셀 출력 커밋 금지, **결론 수치는 모델 경유**·코호트 attrition·엔진 병기, 리포트 구성 |
+| [**외부 공개**](conventions/publishing.md) | **공개는 커밋보다 강한 기준**(커밋해도 되지만 공개하면 안 되는 것), 소규모 셀(<5) 마스킹·DUA 재배포 제한, 수치의 엔진 병기, 출처 등급(A~D), 산출물 규약(`docs/posts/<NN>-<slug>.md`), **발행은 사람이**(워커 금지)·`security` 컨펌 게이트, 강제 수단의 한계 |
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
 | [테스트](test.md)                   | 테스트 계층(피라미드)·우선순위, dbt 스키마/단위/singular·Dagster pytest·스모크 |
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |

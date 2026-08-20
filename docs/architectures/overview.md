@@ -2,27 +2,38 @@
 
 ## 개요
 
-`dagster-study`는 **Dagster로 오케스트레이션하고, Iceberg 테이블 포맷을 SeaweedFS(S3 호환) 위에
+`pipeline-study`는 **Dagster로 오케스트레이션하고, Iceberg 테이블 포맷을 SeaweedFS(S3 호환) 위에
 적재하는** 로컬 레이크하우스 학습 프로젝트다.
 
 > ⚠️ **이 문서는 `compose.yml` 기준의 "현행 스택"이다.** 재설계로 컴퓨트·스토리지는
 > **로컬 Kubernetes로 이전 중**이고 Dagster는 호스트로 나갔다. 목표 토폴로지와 진행 단계는
 > [../redesign.md](../redesign.md), 클러스터 규칙은 [../conventions/k8s.md](../conventions/k8s.md).
-> **2026-08-19 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
-> kind 클러스터(Spark Operator·Flink Operator·Spark Connect·SeaweedFS·카탈로그 Postgres·ingress-nginx).
+> **2026-08-20 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
+> kind 클러스터(Spark Operator·Spark Connect·SeaweedFS·카탈로그 Postgres·ingress-nginx).
+> **Flink Operator는 ⏸ 미설치**다 — 채택은 했으나 잡 없는 세션 클러스터가 상주 자원을 점유해
+> 내렸고, `INSTALL_FLINK=true scripts/k8s-operators.sh`로 복구한다(기본값 `false` —
+> [`scripts/k8s-env.sh`](../../scripts/k8s-env.sh)). trino와 같은 **"중단"과 "삭제"의 분리**다.
 > 클러스터 UI는 `*.localtest.me:8080` 고정 URL, 데이터 접속은 `port-forward`
 > ([../conventions/k8s.md](../conventions/k8s.md) §10).
 
 ## 구성 요소
 
-| 서비스               | 이미지 / 위치              | 역할                                                                  |
-| -------------------- | -------------------------- | --------------------------------------------------------------------- |
-| `dagster-webserver`  | `dagster/dockerfile.d/`    | Dagster UI/GraphQL. `workspace.yaml`로 코드 로케이션 로드             |
-| `dagster-daemon`     | `dagster/dockerfile.d/`    | 스케줄·센서·런큐 처리 + run 실행(`DefaultRunLauncher` 서브프로세스)   |
-| `trino`              | `trinodb/trino:468`        | 분산 SQL 쿼리 엔진. dbt가 접속하는 대상                               |
-| `postgres`    | `postgres:15`              | ① Dagster 메타데이터 저장소 ② Iceberg **JDBC 카탈로그** 저장소        |
-| `seaweedfs`   | `chrislusf/seaweedfs`      | S3 호환 오브젝트 스토리지. Iceberg 데이터 파일(`s3://warehouse`) 저장 |
-| `prometheus`  | `prom/prometheus:v2.21.0`  | 메트릭 수집                                                           |
+**뼈대(core)는 profile이 없어 항상 뜨고, 나머지는 `--profile <name>`으로 opt-in**한다
+(규칙 [../conventions/docker.md](../conventions/docker.md) §profiles).
+
+| 서비스               | 이미지 / 위치              | profile                                      | 역할                                                                  |
+| -------------------- | -------------------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| `dagster-webserver`  | `dagster/dockerfile.d/`    | — (core)                                     | Dagster UI/GraphQL. `workspace.yaml`로 코드 로케이션 로드             |
+| `dagster-daemon`     | `dagster/dockerfile.d/`    | — (core)                                     | 스케줄·센서·런큐 처리 + run 실행(`DefaultRunLauncher` 서브프로세스)   |
+| `postgres`           | `postgres:15`              | — (core)                                     | ① Dagster 메타데이터 저장소 ② Iceberg **JDBC 카탈로그** 저장소        |
+| `trino`              | `trinodb/trino:468`        | `legacy-sql`                                 | 분산 SQL 쿼리 엔진. dbt가 접속하는 대상 — **재설계로 제거 대상**      |
+| `seaweedfs`          | `chrislusf/seaweedfs`      | `legacy-storage`·`legacy-sql`·`monitoring`   | S3 호환 오브젝트 스토리지. Iceberg 데이터 파일(`s3://warehouse`) 저장 |
+| `prometheus`         | `prom/prometheus:v2.21.0`  | `monitoring`                                 | 메트릭 수집                                                           |
+
+> 🔴 **의존받는 서비스는 의존하는 쪽의 profile을 전부 물려받는다** — `seaweedfs`에 profile이 3개인
+> 이유다(`trino`=legacy-sql·`prometheus`=monitoring이 의존). 바꾼 뒤에는
+> `docker compose --profile <p> config --services`로 profile별 구성을 확인한다.
+> 스토리지 정본은 **K8s SeaweedFS**로 이전됐고 compose 쪽은 대피로로 남긴 것이다.
 
 ## 데이터 흐름
 
@@ -100,7 +111,7 @@ flowchart LR
 flowchart TB
     subgraph host[호스트 머신]
         U1([:3000 Dagster UI])
-        U2([:8080 Trino])
+        U2([":8081 Trino<br/>컨테이너 8080"])
         U3([:8333 S3 API])
         U4([:8888 filer UI])
         U5([:9333 master UI])
@@ -138,6 +149,11 @@ flowchart TB
     class U1,U2,U3,U4,U5,U6 ext
 ```
 
+> ⚠️ **이 구성도는 `compose.yml`에 정의된 전체**이고, 기본 `up`으로 뜨는 것은 **뼈대 3개**
+> (`dagster-webserver`·`dagster-daemon`·`postgres`)뿐이다. `trino`(`legacy-sql`)·
+> `seaweedfs`(`legacy-storage`·`legacy-sql`·`monitoring`)·`prometheus`(`monitoring`)는 **profile opt-in**이라
+> 해당 profile을 켜야 위 포트가 열린다.
+>
 > `dagster-webserver`·`dagster-daemon`·`trino`는 `postgres` 헬스체크 통과 후 기동된다(`depends_on: condition: service_healthy`).
 > webserver와 daemon은 같은 이미지·`dagster.yaml`을 쓰고 **Postgres 공유 storage**(run/event/schedule)로 상태를 협조한다. `trino`는 `seaweedfs`도 의존한다.
 
@@ -293,32 +309,39 @@ def admissions(s3: S3Resource) -> pa.Table:
 
 ## 실행 방법
 
-자세한 환경변수·실행 절차는 루트 [`README.md`](../../README.md) 참고.
+🔴 **절차의 정본은 루트 [`README.md`](../../README.md) §실행방법**이다. 여기서는 순서만 요약하고
+명령을 중복 정의하지 않는다(단일 출처 — [`../doc-sync.md`](../doc-sync.md)).
 
-```bash
-# 1. .env 작성 (POSTGRES_*, AWS_* 등)
+재설계 이후 기동은 **"전체 스택 `compose up`" 하나가 아니라 세 단계**다.
 
-# 2. 전체 스택 기동
-docker compose up -d --build      # docker
-podman-compose up -d --build      # podman
+1. **`.env` 작성** — `.env.example` 복사([`../operations.md`](../operations.md) §1-2)
+2. **로컬 K8s 기동**(컴퓨트·스토리지) — `scripts/k8s-up.sh` → `k8s-operators.sh` → `k8s-poc-storage.sh`
+3. **compose는 메타 Postgres만** — `docker compose up -d postgres`
+4. **Dagster는 호스트에서** — `DAGSTER_HOME` 지정 후 `uv run dg dev` → http://localhost:3000
 
-# 3. Dagster UI
-#    http://localhost:3000
+> 컨테이너로 통째 띄우는 `docker compose up -d --build`(webserver·daemon 분리)도 남아 있으나,
+> 이 경우 Dagster가 클러스터를 트리거하는 경로는 별도 배선이 필요하다.
+> `trino`·`seaweedfs`·`prometheus`는 **profile opt-in**이라 기본 `up`에 포함되지 않는다
+> (예: `docker compose --profile legacy-sql up -d trino`).
 
-# 4. dbt 모델 추가 — 스캐폴딩 불필요(pythonic @dbt_assets로 코드 정의)
-#    models/<dataset>/ 에 .sql 추가 → 데이터셋 subproject의 @dbt_assets(select)가 자동 반영
-```
+dbt 모델 추가는 스캐폴딩이 필요 없다 — `models/<dataset>/`에 `.sql`을 넣으면 데이터셋 subproject의
+`@dbt_assets(select="fqn:<dataset>")`가 자동 반영한다.
 
-### 주요 포트
+### 주요 포트 (compose)
 
-| 포트 | 서비스                          |
-| ---- | ------------------------------- |
-| 3000 | Dagster UI                      |
-| 8080 | Trino                           |
-| 8333 | SeaweedFS S3 API                |
-| 8888 | SeaweedFS filer UI              |
-| 9333 | SeaweedFS master UI             |
-| 9000 | Prometheus (컨테이너 9090 매핑) |
+| 포트 | 서비스                          | profile                                    |
+| ---- | ------------------------------- | ------------------------------------------ |
+| 3000 | Dagster UI                      | — (core, 호스트 `dg dev`도 동일 포트)      |
+| 8081 | Trino (컨테이너 8080 → 호스트 8081) | `legacy-sql`                           |
+| 8333 | SeaweedFS S3 API                | `legacy-storage`·`legacy-sql`·`monitoring` |
+| 8888 | SeaweedFS filer UI              | `legacy-storage`·`legacy-sql`·`monitoring` |
+| 9333 | SeaweedFS master UI             | `legacy-storage`·`legacy-sql`·`monitoring` |
+| 9000 | Prometheus (컨테이너 9090 매핑) | `monitoring`                               |
+
+> 🔴 **호스트 8080은 kind ingress-nginx가 점유**한다(`k8s/kind-cluster.yaml`의 `extraPortMappings`).
+> 그래서 Trino 게시 포트를 8081로 옮겼다 — 컨테이너 내부 포트는 8080 그대로라
+> `dbt_pipelines/profiles.yml`(`host: trino`, `port: 8080`)은 영향받지 않는다([trino.md](trino.md)).
+> 클러스터 UI(`*.localtest.me:8080`)와 노트북 Jupyter Lab(:8889)은 compose 밖이다.
 
 ## 참고
 

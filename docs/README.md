@@ -1,4 +1,4 @@
-# dagster-study 문서
+# pipeline-study 문서
 
 이 프로젝트의 아키텍처와 코딩 규칙을 정리한 문서 모음입니다.
 (GitHub Wiki로 이식 가능하도록 평면 구조로 작성)
@@ -14,7 +14,7 @@
 기술별 **개요 + 프로젝트 결정 관점**(채택 이유·대안 비교). 채택 ✅ / 채택·이행중 🚧 / 미채택·향후 🔎.
 
 - **[재설계 로드맵](redesign.md) 🚧 — 호스트 Dagster + K8s(kind on Podman)로의 이행. 컴퓨트=Spark(배치)+Flink(스트림), Trino 제거·dbt→dbt-spark. 목표 토폴로지·급소·자원(6/16 시분할)·PoC 우선 PDCA**
-- [전체 아키텍처 / 데이터 흐름](architectures/overview.md) — ✅ 현행 Dagster · dbt · Trino · Iceberg · SeaweedFS 스택, **bronze 적재 템플릿(S3→Iceberg)**
+- [전체 아키텍처 / 데이터 흐름](architectures/overview.md) 🚧 — 현행 Dagster · dbt · Iceberg · SeaweedFS 스택 **스냅샷**(재설계 이행 중 — Trino 경로는 제거 대상), **bronze 적재 템플릿(S3→Iceberg)**
 - [Docker/Compose](architectures/docker.md) ✅ — 현행 채택
 - [Spark](architectures/spark.md) 🚧 · [Flink](architectures/flink.md) 🚧 · [Kubernetes](architectures/k8s.md) 🚧 — 재설계로 이행중
 - [OCI + Terraform + k3s](architectures/oci.md) 🔎 — 클라우드 이행 경로(Always Free A1 ARM, IaC로 k3s 부트스트랩)
@@ -32,13 +32,21 @@
 - [`notebooks/README.md`](../notebooks/README.md) — 호스트 Jupyter Lab(포트 8889) 실행·Spark Connect 접속·셀 출력 통제
 - 리포트는 `docs/analyses/<NN>-<slug>.md`에 쌓는다(**아직 없음** — 첫 분석 때 생성)
 
+### 외부 공개 (publishing)
+
+같은 결론이라도 **독자가 다르면 기준이 다르다** — `analyses/`는 저장소를 **아는 사람**이,
+`posts/`는 **모르는 사람**이 읽는다. 공개는 커밋보다 강한 기준이고, 발행은 **사람**이 한다.
+
+- [외부 공개 컨벤션](conventions/publishing.md) — 규칙 정본
+- [`docs/posts/README.md`](posts/README.md) — 공개 산출물 디렉터리(블로그 원고·공유 자료·발표 자료) 규약과 `analyses/`와의 차이
+
 ### 철학
 
-- [코딩 철학](philosophy.md) — 단순함·명시적·가독성·비밀정보 참조·재사용 추출 (PEP 20 / 12-Factor / Rule of Three)
+- [코딩 철학](philosophy.md) — 단순함·명시적·가독성·비밀정보 참조·재사용 추출·추적 용이성 (PEP 20 / 12-Factor / Rule of Three), 그리고 🔴 **원칙 7 「성공 신호를 의심한다」** — "통과"가 *검사했다*인지 *실행됐다*뿐인지 구분, 부정 결과는 **관측 경로가 살아 있었음을 함께 확인**, 새 게이트는 **일부러 위반시켜** 본다. 층이 쌓여 있다: 관측 *범위*의 편향 · 관측이 *경쟁 가설을 분리하는가* · 기록의 *시간축* · **수치가 그 문장의 대상을 세고 있는가**(계측 *단위* — 🔴 틀린 값보다 **단위가 어긋난 정답**이 위험하다. 검산을 통과하며 남는다)
 
 ### 도구 (tooling)
 
-- [Claude Code 스킬](skills.md) — Agent Skills 카탈로그: **잠긴 스킬**(skills-lock.json)과 **작업 유형별 매핑**(dbt·Spark·K8s·CI 등 런타임 제공 포함), 사용 규칙(프로젝트 컨벤션 우선)
+- [Claude Code 스킬](skills.md) — Agent Skills 카탈로그: **잠긴 스킬**(skills-lock.json)과 **작업 유형별 매핑**(dbt·Spark·K8s·CI 등), 사용 규칙(프로젝트 컨벤션 우선). 🔴 스킬은 **세 축으로 갈린다** — 🔒 lock 등재 / ⚙️ **디스크 설치·lock 밖** / 🌐 **런타임 제공(디스크에 없음)**. 워커에는 `Skill` 도구가 없어 ⚙️는 `Read`로 쓸 수 있지만 🌐는 파일이 없어 **워커 지시문에 적으면 죽은 참조**다
 
 ### 코딩 규칙 (conventions)
 
@@ -57,11 +65,11 @@
 | [Kubernetes](conventions/k8s.md)    | (이행) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm + **Spark/Flink Operator·호스트 Dagster 트리거(Pipes)·kind on Podman/레지스트리·러너 이미지 빌드·Ingress(UI 고정 URL)·컴퓨트 시분할** |
 | [Terraform/IaC](conventions/terraform.md) | (도입) 스택 구조, 버전 고정·lock 커밋, `terraform fmt`(2-space) 고정, state·비밀 커밋 금지, cloud-init 선언형, templatefile 주의 |
 | [**컨벤션 인덱스**](conventions/README.md) | `docs/conventions/` 전체 목차·읽는 순서·정본 원칙 |
-| [에이전트 오케스트레이션](conventions/agents.md) | AI 세션 **3계층**(supervisor→director→subagent, director 우선 1명) 역할·경계, **상호작용 로그·승인 게이트·단일 기록자**, **기록관 저널** 규약(개인 Obsidian 볼트 `$OBSIDIAN_VAULT/agents/<날짜>/<미션>.md`, 작업일자별·미션당 1파일, repo 커밋 금지), **구조도**(계층·배정·상향 보고·권한 매트릭스), **기록 시점(체크포인트)**·미션 판단 기준·수동 보정 `/journal`, **에스컬레이션**(권한 밖·특이사항 → supervisor), **`security` 최종 컨펌**(director 실행·채택 결정), **`archivist` 전담 기록**(single-writer 유지·supervisor 폴백), 전문 워커 **8종**(데이터·인프라 각 3종 + `security` + 분석 도메인 `analyst`) + 계층 밖 `archivist`, **정합성 가드 hook**(`scripts/journal_guard.py` — `NN` 넘버링 경합 차단·저널 누락 경고) |
+| [에이전트 오케스트레이션](conventions/agents.md) | AI 세션 **3계층**(supervisor→director→subagent, director 우선 1명) 역할·경계, **상호작용 로그·승인 게이트·단일 기록자**, **기록관 저널** 규약(개인 Obsidian 볼트 `$OBSIDIAN_VAULT/agents/<날짜>/<미션>.md`, 작업일자별·미션당 1파일, repo 커밋 금지), **구조도**(계층·배정·상향 보고·권한 매트릭스), **기록 시점(체크포인트)**·미션 판단 기준·수동 보정 `/journal`, **에스컬레이션**(권한 밖·특이사항 → supervisor), **`director`는 판정자**(도구로 직접 작업하지 않고 계획·배정·「계획 대비 실행 정합」 판정), **`security` 컨펌은 G1(계획 1회)+G2(작업내용 1회)+Δ(계획 밖 조건부)**, **`archivist` 전담 기록**(single-writer 유지·supervisor 폴백), **정합성 가드 hook**(`scripts/journal_guard.py` — `NN` 넘버링 경합 차단·저널 누락 경고).<br/>`.claude/agents/` **13종** — 판정자 `director` / 데이터 `data-engineer`·`data-verifier`·`data-qa` / 인프라 `devops-engineer`·`devops-verifier`·`devops-qa` / 도메인 `analyst`·`tech-writer` / 도메인 공통 `researcher`(외부 근거)·`security`(노출·규제) / 계층 밖 `archivist`(관측·기록)·`skill-matcher`(스킬 배선). 🔴 이 중 **`security`·`archivist`·`skill-matcher`·`tech-writer` 4종은 `director` 관할 밖**(supervisor 직접 배정)이며, 「계층 밖」과는 **다른 축**이다 — 앞 3종은 계층 자체를 감사·기록해서, `tech-writer`는 director의 행동 규칙이 담긴 정본을 써서다(이해충돌 기준). 🔴 **각 워커의 경계·권한·가드 세부는 여기 복제하지 않는다 — 정본은 [`conventions/agents.md`](conventions/agents.md) §구조도·권한 매트릭스이고, 갈리면 그쪽이 사실이다** |
 
 ### 운영 (operations)
 
-- [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책
+- [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책, **§2-1 로컬 세션 로그 정리**(`cleanupPeriodDays` — 🔴 **대화형 기동에서만** 돌고 보존 단위는 파일이 아니라 **세션**(`subagents/`는 부모 수명을 따른다). 같은 디렉터리의 자동 메모리가 함께 지워지지 않도록 **수동 삭제는 `-name '*.jsonl'`로 유형 한정**)
 - [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino 3파일 결합·daemon OOM 계산·Postgres·SeaweedFS)
 
 ### 보안 (security)

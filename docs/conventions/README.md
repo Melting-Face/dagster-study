@@ -21,7 +21,7 @@
 | [`k8s.md`](k8s.md) | Kubernetes(이행) | kind on Podman · requests/probe · 로컬 레지스트리 |
 | [`terraform.md`](terraform.md) | IaC(도입) | 스택 단위 · 버전 고정 + lock 커밋 · `terraform fmt`(2-space 예외) |
 | [`timezone.md`](timezone.md) | 타임존 | **저장 UTC · 표시/스케줄 KST** · tz-aware 강제(ruff `DTZ`) |
-| [`agents.md`](agents.md) | 에이전트 오케스트레이션·기록관 | 3계층 · 승인 게이트 · **에스컬레이션** · **security 최종 컨펌** · **archivist 전담 기록** · 권한 게이트 · 정합성 가드 hook |
+| [`agents.md`](agents.md) | 에이전트 오케스트레이션·기록관 | 3계층 · **`director`=판정자**(직접 작업 X) · **`security` 컨펌 = G1(계획)+G2(작업내용)+Δ(계획 밖)** · **`tech-writer`=문서 소유자**(`docs/**`·`README.md`, 발행 금지) · **에스컬레이션** · **archivist 전담 기록** · 권한 게이트 · 정합성 가드 hook |
 
 ## 읽는 순서
 

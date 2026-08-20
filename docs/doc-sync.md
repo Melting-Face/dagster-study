@@ -25,7 +25,9 @@
 | 환경변수 추가 | `.env.example` | `compose.yml`(앵커) → 코드(`EnvVar`) → `docs/operations.md` 전파 체인 |
 | 데이터셋 스키마·피처 | `docs/dataset_schema.md` | 해당 `models/<dataset>/source.yml` · `schema.yml` |
 | 분석 규칙(gold·노트북·리포트) | `docs/conventions/analysis.md` | `CLAUDE.md` 분석 섹션 · `docs/conventions/dbt.md`(gold 레이어) · `docs/test.md`(grain 테스트) · `notebooks/README.md` |
-| 에이전트 오케스트레이션·기록관 | `docs/conventions/agents.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `.claude/agents/*.md` · `.claude/commands/journal.md` · **`scripts/journal_guard.py`·`scripts/protected_paths_guard.py`·`scripts/session_sync_guard.py`·`scripts/analyst_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/analyst.md` 프론트매터)·`.claude/settings.json`(기계 강제 가능한 규약은 hook·권한 규칙에 반영)·`docs/conventions/git.md`(커밋 대상·금지)·`.gitignore`** (저널 원문은 볼트 `$OBSIDIAN_VAULT/agents/`, repo 미커밋) |
+| 외부 공개(블로그·공유 자료) | `docs/conventions/publishing.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `docs/posts/README.md` · `.claude/agents/tech-writer.md`(포맷 프로파일·경계) · `docs/security.md`(반출 통제) |
+| Claude Code 스킬 | `docs/skills.md` | `skills-lock.json`(등재·`computedHash`) · `.claude/agents/*.md` 프론트매터 `skills:`(프리로드는 **lock 등재분만**) · `.claude/agents/skill-matcher.md`(채점 루브릭) · `CLAUDE.md` 운영 섹션 |
+| 에이전트 오케스트레이션·기록관 | `docs/conventions/agents.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `.claude/agents/*.md` · `.claude/commands/journal.md` · **`scripts/journal_guard.py`·`scripts/protected_paths_guard.py`·`scripts/session_sync_guard.py`·`scripts/analyst_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/analyst.md` 프론트매터)·`scripts/worker_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/{director,tech-writer,researcher}.md` 프론트매터)·`.claude/settings.json`(기계 강제 가능한 규약은 hook·권한 규칙에 반영)·`.claude/settings.json`의 가드 스크립트 보호 규칙(`Edit(scripts/*_guard.py)`·`Edit(scripts/**/*_guard.py)`)·`docs/conventions/git.md`(커밋 대상·금지)·`.gitignore`** (저널 원문은 볼트 `$OBSIDIAN_VAULT/agents/`, repo 미커밋)<br/>🔴 **가드 배선을 바꿨으면 3셀 대조**(위반 2 + 대조군 1)로 실발동을 확인한다 — 프론트매터 `hooks`는 **정의 로드 시점 스냅샷**이라 편집한 세션의 음성 결과는 근거가 아니고 **새 세션에서** 돌린다(§실무 규칙 5). |
 
 ## 실무 규칙
 
@@ -33,6 +35,11 @@
 2. 코드·설정과 문서가 어긋나면 **코드/설정이 사실**이다. 문서를 코드에 맞춘다(반대 아님).
 3. 새 규칙·결정은 근거(왜)와 함께 남긴다. 외부 표준은 [`references.md`](references.md)에 등록하고 링크한다.
 4. 문서는 한국어로 쓰고, 코드 식별자·명령어·경로는 원문 그대로 표기한다.
+5. 🔴 **체인에 항목을 추가하는 것과 그 항목이 집행되는지는 다른 축이다.** 가드·권한 규칙을 체인에
+   넣을 때는 **어떻게 위반시켜 확인하는지**(위반 2 + 대조군 1의 3셀 대조)를 같은 행·문단에 함께
+   적는다. 안 적으면 "설정은 넣었는데 실효가 없는" 상태가 조용히 남는다 — 2026-08-20까지 실측된
+   계열이 이미 셋이다(존재하지 않는 hook 결정값 `escalate`·매칭기가 무시하는 `Write(<경로>)` 규칙·
+   헤드리스 세션에서 판정 불가인 `cleanupPeriodDays`).
 
 ## 참고
 

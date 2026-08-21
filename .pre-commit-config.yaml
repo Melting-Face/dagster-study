@@ -9,11 +9,12 @@
 # 규칙(룰)의 단일 출처는 pyproject.toml / .yamllint.yaml / .gitleaks.toml 이며,
 # 이 파일은 '언제 무엇을 실행할지'만 정의한다. (훅은 스테이징된 파일만 검사)
 #
-# 미포함(마찰·의존성으로 당분간 수동/CI 운용):
-#   - sqlfluff : dbt 모델 부재 + dbt templater 의존성 → 모델 생기면 추가
-#   - mypy     : 의존성 환경 필요 → repo 루트에서
-#                `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`
-#   - hadolint : 로컬 바이너리/도커 필요 → `brew install hadolint` 후 추가 가능
+# 사전 준비(hadolint만): `brew install hadolint` — 로컬 바이너리를 직접 호출한다.
+#   업스트림의 `hadolint-docker` 훅은 `docker` CLI를 요구하는데 이 머신은 podman만 있다.
+#
+# 미포함(마찰·의존성으로 당분간 수동 운용):
+#   - mypy : 의존성 환경 필요 → repo 루트에서
+#            `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`
 default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
@@ -27,6 +28,12 @@ repos:
       - id: check-toml
       - id: check-yaml
         args: [--allow-multiple-documents]  # k8s 매니페스트(--- 다중 문서) 허용
+      # skills-lock.json·.mcp.json·.claude/settings.json은 손으로 고치는 JSON이라
+      # 문법이 깨지면 hook 배선·스킬 재현성이 조용히 죽는다(로드 실패가 에러로 안 보인다).
+      - id: check-json
+      # gitleaks는 '크리덴셜 패턴'을 잡지 키 파일 자체를 잡지 못한다.
+      # .gitignore의 `**/*.pem`·`**/*.key`가 1차, 이 훅이 2차 방어다(확장자 없이 들어온 키).
+      - id: detect-private-key
 
   # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff])
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -41,6 +48,35 @@ repos:
     rev: v1.38.0
     hooks:
       - id: yamllint
+
+  # SQL 린트 (규칙은 pyproject.toml [tool.sqlfluff.*])
+  # templater=jinja + 스텁 매크로/library_path 라 **오프라인**으로 돈다(dbt·Spark Connect 불필요).
+  # exclude를 훅에도 거는 이유: pre-commit은 스테이징 경로를 명시 전달하므로
+  # .sqlfluffignore만으로 걸러진다는 보장이 없다(ruff force-exclude와 같은 계열).
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.3.0
+    hooks:
+      - id: sqlfluff-lint
+        exclude: '^initdb/'
+      - id: sqlfluff-fix
+        exclude: '^initdb/'
+
+  # 셸 스크립트 린트 — scripts/*.sh (k8s 기동·worktree 생성 등 운영 진입점)
+  # shellcheck-py는 바이너리를 wheel로 배포해 격리 venv에 들어간다(로컬 설치 불필요).
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # Dockerfile 린트 (규칙은 .hadolint.yaml)
+  # 업스트림 `hadolint-docker`는 `docker` CLI를 요구하는데 이 머신은 podman뿐이라
+  # 로컬 바이너리를 직접 부르는 `hadolint` 훅을 쓴다 → `brew install hadolint` 선행.
+  # rev를 설치 바이너리와 같은 2.15.1로 맞춘다(훅 정의와 실제 실행본의 버전 혼동 방지).
+  # types:[dockerfile]이 Dockerfile.spark-runner·Dockerfile.flink-runner도 잡는 것을 실측 확인.
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.15.1
+    hooks:
+      - id: hadolint
 
   # 시크릿 스캔 (규칙은 .gitleaks.toml)
   - repo: https://github.com/gitleaks/gitleaks

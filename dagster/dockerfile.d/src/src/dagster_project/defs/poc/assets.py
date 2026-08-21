@@ -34,7 +34,7 @@ def poc_spark_ingest(
     manifest = yaml.safe_load(Path(SPARKAPP_MANIFEST).read_text())
     name = manifest["metadata"]["name"]
     context.log.info(
-        f"SparkApplication 제출: {name} (context={spark_operator.kube_context})"
+        "SparkApplication 제출: %s (context=%s)", name, spark_operator.kube_context
     )
 
     run = spark_operator.submit_and_wait(manifest)

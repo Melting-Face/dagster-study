@@ -83,9 +83,10 @@ def table_exists(catalog: Catalog, identifier: str) -> bool:
 
     try:
         catalog.load_table(identifier)
-        return True
     except NoSuchTableError:
         return False
+    else:
+        return True
 
 
 def ensure_table(catalog: Catalog, identifier: str, schema: pa.Schema) -> Table:
@@ -164,7 +165,11 @@ def load_heavy_csv_gz_to_iceberg(
     flush()
 
     context.log.info(
-        f"{identifier} ← {source_uri} 적재 완료 ({total_rows} rows, mode={mode})"
+        "%s ← %s 적재 완료 (%d rows, mode=%s)",
+        identifier,
+        source_uri,
+        total_rows,
+        mode,
     )
     return dg.MaterializeResult(
         metadata={

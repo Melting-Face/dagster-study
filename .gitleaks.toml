@@ -1,5 +1,5 @@
 # gitleaks 설정 (시크릿 스캐너)
-# 트렁크가 로컬에서 이 설정을 자동 탐지해 사용한다.
+# pre-commit `gitleaks` 훅이 이 설정을 자동 탐지한다(트렁크는 폐기됨).
 title = "dagster-study gitleaks config"
 
 # 기본 규칙셋을 확장 사용

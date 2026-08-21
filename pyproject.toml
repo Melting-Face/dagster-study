@@ -24,11 +24,21 @@ select = [
     "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
     "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
     "Q", "ARG",
+    # ── 2026-08-21 확장 (data-pipeline 룰셋과 정렬) ────────────────────────────
+    "N",    # pep8-naming (클래스·함수·변수 네이밍)
+    "FURB", # refurb (최신 Python 관용 표현)
+    "PERF", # perflint (성능 안티패턴) ← 대용량 의료 데이터 처리
+    "PT",   # flake8-pytest-style (pytest 스타일 통일)
+    "TRY",  # tryceratops (예외 처리 패턴)
+    "G",    # flake8-logging-format (지연 포매팅 강제)
+    "LOG",  # flake8-logging (logging 사용 규칙)
+    "T20",  # flake8-print (print 금지 — 실행 경로 한정)
 ]
 # docstring 미요구(D100/D104), 동적 Any 허용(ANN401),
 # 포매터와 충돌하는 COM812/COM819 제외
 # (df 변수명 검사 PD901은 ruff 0.13에서 제거됨 → 별도 ignore 불필요)
-ignore = ["D100", "D104", "ANN401", "COM812", "COM819"]
+# TRY003: 예외 메시지를 클래스 밖에 인라인 작성 허용 — 파이프라인 디버깅 메시지 가독성 우선
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819", "TRY003"]
 # flake8-type-checking(TC)은 Dagster 런타임 타입 introspection과 충돌해 계속 보류
 
 # docstring 컨벤션: Google 스타일
@@ -46,11 +56,17 @@ max-complexity = 10
 "**/tests/**" = ["ANN", "D", "S101", "ARG"]
 # scripts/: 절차형(단일 main·함수화 최소화) 스타일이라 순환 복잡도(C901)를 면제한다.
 # 근거·컨벤션은 docs/conventions/python.md '스크립트 스타일'.
-"scripts/**" = ["C901"]
+# T201: 실행형 유틸리티는 **stdout이 인터페이스**다(로거가 아니다) — hook 가드는 결정 사유를
+# stdout으로 내보내고 하네스가 그것을 읽는다. print를 로거로 바꾸면 기능이 깨진다.
+"scripts/**" = ["C901", "T201"]
 # notebooks/: 탐색용 노트북은 조회 대상(카탈로그·네임스페이스·테이블)을 변수로 바꿔가며 쓰는 게
 # 본질이라 f-string SQL 조립(S608)이 불가피하다. **외부 입력이 아니라 작성자가 직접 쓰는 리터럴**이라
 # 주입 경로가 없다. 실행 경로에 놓이는 코드(defs/·common/·scripts/)에는 면제하지 않는다.
-"notebooks/**" = ["S608"]
+# T201: 노트북 셀의 출력 수단이 print다.
+"notebooks/**" = ["S608", "T201"]
+# k8s/spark/poc_ingest.py: Spark 드라이버로 제출돼 executor 로그를 stdout으로 내는 잡 스크립트다.
+# Dagster 프로세스가 아니라 컨테이너 안에서 단독 실행되므로 context.log가 없다.
+"k8s/spark/poc_ingest.py" = ["T201"]
 
 [tool.ruff.format]
 indent-style = "space"
@@ -66,11 +82,55 @@ disallow_untyped_defs = true    # 함수에 타입 강제 (ruff ANN과 짝)
 no_implicit_optional = true
 # 전체 강화가 필요하면 strict = true
 
-# --- SQL 린터/포매터: sqlfluff (dbt-trino) ---
+# --- SQL 린터/포매터: sqlfluff (dbt-spark / Spark Connect) ---
+# dialect = "sparksql"은 2026-08-21 dbt-spark 이행 미션의 산출물이다(trino에서 전환).
+#   근거는 dbt 기본 타깃이 `spark_connect`로 바뀐 것이고(profiles.yml), 되돌릴 계획은 없다.
+#   `DBT_TARGET=dev`로 Trino 경로도 살아 있으나 **값 대조용 예외 경로**다.
+# 🔴 단 이 값은 **실행으로 검증된 적이 없다**. 아래 jinja 전환으로 `sqlfluff lint`가 처음
+#   돌게 됐고 24/24 파일이 파싱을 통과했지만, 그건 **구문이 sparksql 파서에 맞았다**는 뜻이지
+#   **같은 SQL이 Spark에서 같은 값을 낸다**는 뜻이 아니다. 후자는 여전히 미검증이다.
+#   ("파싱 통과"를 "dialect 검증 완료"로 읽지 않는다 — docs/philosophy.md §계측 단위)
+#
+# templater를 dbt → jinja로 바꾼 이유 (2026-08-21):
+#   dbt templater는 모델을 **실제로 컴파일**하려고 Spark Connect에 접속한다. 즉 커밋이
+#   port-forward 가용성에 묶여 pre-commit 게이트로 쓸 수 없었고, 그래서 22개 모델이
+#   **설정만 있고 아무 검사도 받지 않는 상태**로 남아 있었다. jinja templater는 오프라인·수초라
+#   게이트로 쓸 수 있다. 대신 dbt 런타임 객체(`adapter.dispatch`·`dbt.*`)를 모르므로
+#   아래 스텁으로 대체한다.
+#
+# 🔴 이 게이트가 검사하지 않는 것(계측 단위):
+#   린트 대상은 **실제 컴파일 SQL이 아니라 스텁 치환 SQL**이다. 따라서 보증 범위는
+#   **스타일·구문**(대소문자·들여쓰기·줄길이·참조)까지이고, 매크로 dispatch가 엔진별로
+#   **같은 값**을 내는지는 검사하지 않는다 — 그건 scripts/spark_connect_smoke.py 몫이다.
+#   `sqlfluff` 통과를 값 정합의 근거로 읽지 않는다(docs/philosophy.md 원칙 7).
 [tool.sqlfluff.core]
-templater = "dbt"
-dialect = "trino"
-max_line_length = 88
+templater = "jinja"
+dialect = "sparksql"
+# 88 → 100. Python(ruff line-length=88)과 숫자를 맞추던 값인데, SQL은 한 줄이 길어지는 게
+# 자연스러워 LT05(줄길이) 위반의 주원인이었다. Python의 88은 그대로 둔다.
+max_line_length = 100
+# 🔴 CWD 기준 상대경로다(config 파일 기준이 아니다 — sqlfluff 4.3.0 소스 실측:
+#    _extract_libraries_from_config가 값을 그대로 os.path에 넘긴다).
+#    mypy와 같은 이유로 **repo 루트에서 실행**해야 한다.
+library_path = "sqlfluff_libs"
+
+# 프로젝트 dispatch 매크로(dbt_pipelines/macros/cross_engine.sql)의 린트용 스텁.
+# 원본은 `adapter.dispatch`를 쓰는데 그건 dbt 런타임 객체라 jinja templater가 해석하지 못한다
+# (미설정 시 `TMP: Undefined jinja template variable: 'elapsed'`로 9개 파일이 죽는다).
+#
+# 출력은 위 dialect(sparksql)에 맞춘 **Spark 형태**다 — `cross_engine.sql`의 `spark__*` 구현과
+#    같은 계열이다. (trino·sparksql 양쪽에서 파싱되는 교집합 형태도 가능하지만, dialect가 확정된
+#    이상 선언된 값과 어긋난 SQL을 린터에 먹이지 않는다. dialect를 되돌리면 여기도 함께 되돌린다.)
+#
+# 🔴 스텁은 **파싱만 되면 되고 의미론은 무관**하다(위 §계측 단위). 단 **길이는 무관하지 않다** —
+#    치환 결과의 길이가 LT05(줄길이) 판정에 직접 들어가므로, 원본 dispatch 구현을 그대로 옮기지 않고
+#    **짧은 등가 호출**로 둔다. 긴 수식을 넣으면 있지도 않은 줄길이 위반을 만든다.
+#
+# 🔴 macros/에 새 dispatch 매크로를 추가하면 여기에도 스텁을 함께 추가해야 한다.
+#    빠뜨리면 조용히 통과하지 않고 `TMP`로 시끄럽게 깨진다(의도한 결합).
+[tool.sqlfluff.templater.jinja.macros]
+elapsed = "{% macro elapsed(datepart, from_ts, to_ts) %}timestampdiff({{ datepart }}, {{ from_ts }}, {{ to_ts }}){% endmacro %}"
+unnest_array = "{% macro unnest_array(array_expr, table_alias, column_alias) %}lateral view explode({{ array_expr }}) {{ table_alias }} as {{ column_alias }}{% endmacro %}"
 
 [tool.sqlfluff.indentation]
 tab_space_size = 4

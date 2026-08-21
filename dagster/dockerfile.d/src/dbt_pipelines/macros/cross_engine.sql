@@ -53,7 +53,8 @@
 -#}
 
 {% macro unnest_array(array_expr, table_alias, column_alias) -%}
-    {{ return(adapter.dispatch('unnest_array', 'dbt_pipelines')(array_expr, table_alias, column_alias)) }}
+    {%- set impl = adapter.dispatch('unnest_array', 'dbt_pipelines') -%}
+    {{ return(impl(array_expr, table_alias, column_alias)) }}
 {%- endmacro %}
 
 {% macro default__unnest_array(array_expr, table_alias, column_alias) -%}

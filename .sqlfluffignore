@@ -1,0 +1,14 @@
+# sqlfluff 린트 제외 대상
+#
+# initdb: Postgres 부트스트랩 SQL(create database)이다. sqlfluff의 dialect는 레이크하우스
+#   엔진(trino/sparksql)에 맞춰져 있어 대상이 아니다.
+#   pre-commit 훅에는 같은 범위를 `exclude:`로도 건다 — 훅은 스테이징 경로를 **명시 전달**하므로
+#   ignore 파일만으로 걸러진다는 보장이 없다(ruff가 force-exclude를 필요로 한 것과 같은 계열).
+initdb/
+
+# dbt 벤더 산출물: 우리 코드가 아니다. git 추적 대상이 아니라 pre-commit 훅은 애초에 보지 않지만,
+#   문서가 안내하는 **수동 실행**(`sqlfluff lint`)은 디렉터리를 훑어 잡는다.
+#   그대로 두면 남의 패키지 매크로(`dbt_date` 등)가 TMP로 뜨고, 그 소음이 우리 위반을 덮는다.
+#   → 훅과 수동 실행의 대상 범위를 일치시킨다.
+dbt_packages/
+target/

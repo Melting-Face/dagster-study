@@ -1,0 +1,35 @@
+# EOL 정규화 — 저장소는 LF로 통일한다.
+#
+# 왜 필요한가: 포매터(ruff format·sqlfluff fix)와 위생 훅(end-of-file-fixer)은
+# 줄바꿈을 손대는데, 체크아웃 EOL이 플랫폼마다 갈리면 **내용이 같은데 diff가 뜨는**
+# 상태가 된다. 도입 시점(2026-08-21) 추적 파일 중 CRLF 포함분은 0건이라 재정규화
+# diff가 발생하지 않는다.
+
+* text=auto eol=lf
+
+# 명시적 텍스트 파일 (확장자로 판정이 갈리지 않도록 못 박는다)
+*.py    text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.cfg   text eol=lf
+*.tf    text eol=lf
+*.tftpl text eol=lf
+*.hcl   text eol=lf
+
+# 노트북은 nbstripout이 셀 출력을 지우고 다시 쓰므로 EOL을 고정해야 한다.
+*.ipynb text eol=lf
+
+# 바이너리 — 변환하지 않는다
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.whl  binary
+*.gz   binary
+*.parquet binary

@@ -1,10 +1,20 @@
 # hadolint 설정 (Dockerfile 린터)
-# 대상: dagster/dockerfile.d/Dockerfile
-# 트렁크가 로컬에서 이 설정을 자동 탐지해 사용한다.
+# 대상 3개: dagster/dockerfile.d/Dockerfile · k8s/spark/Dockerfile.spark-runner
+#           · k8s/flink/Dockerfile.flink-runner
+# pre-commit `hadolint` 훅(로컬 바이너리)이 이 설정을 자동 탐지한다.
+# info 이하는 출력만 하고 실패시키지 않는다(예: DL3066 — 베이스 이미지가 정한
+# 비수치 사용자 `spark`·`flink`를 수치 UID로 바꾸는 편이 더 깨지기 쉽다).
 failure-threshold: warning
 
 trustedRegistries:
     - docker.io
 
-# 필요 시 무시할 규칙을 추가한다 (예: DL3008 apt 버전 미고정)
-ignored: []
+ignored:
+    # DL3003 "Use WORKDIR to switch to a directory" — 이 저장소에서는 오탐이다.
+    #   `WORKDIR`은 **이후 레이어와 런타임 CWD까지** 바꾸는데, 세 Dockerfile의 `cd`는
+    #   모두 단일 `RUN` 안에서만 유효해야 한다:
+    #     - Dockerfile:14        `cd dbt_pipelines && dbt parse` (ENTRYPOINT는 $DAGSTER_HOME에서 돌아야 함)
+    #     - spark-runner:26      `cd /opt/spark/jars` (런타임 WORKDIR은 /opt/spark/work-dir 유지)
+    #     - flink-runner:26      `cd /opt/flink/lib`
+    #   WORKDIR로 바꾸면 되돌리는 레이어가 추가로 필요하고, 빠뜨리면 조용히 오작동한다.
+    - DL3003

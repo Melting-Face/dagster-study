@@ -179,7 +179,7 @@ worktree A의 `git switch`는 worktree B의 HEAD를 움직이지 않는다 — *
 위험한 만큼, 항상 뜨면 무시하는 법을 배운다.** 같은 채널로 나오는 인프라 축 진짜 경고의
 신호 대 잡음비가 깎인다.
 
-✅ **해소됨 (2026-08-20)** — `live_sessions(me, worktree=None)`로 **축별 필터**를 넣었다.
+✅ **해소됨 (2026-08-20 · 커밋 `adfba1b`)** — `live_sessions(me, worktree=None)`로 **축별 필터**를 넣었다.
 git 축만 `worktree`를 넘겨 같은 트리로 한정하고, 인프라 축은 인자를 주지 않아 전체를 유지한다.
 판정 키는 `cwd`가 아니라 **`git rev-parse --show-toplevel`** 이다 — 세션을 하위 디렉터리에서 열면
 `cwd`가 달라져 같은 트리인데도 다르게 보이기 때문이다. 루트와 브랜치는 **한 번의 git 호출**로 받는다

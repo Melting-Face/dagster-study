@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Spark Operator(필수) + Flink Operator(선택, INSTALL_FLINK=true) 설치
+# Spark Operator + Flink Operator(기본 설치, INSTALL_FLINK=false로 제외) 설치
 # 사용: ./scripts/k8s-operators.sh
-#       INSTALL_FLINK=true ./scripts/k8s-operators.sh   # Phase 3
+#       INSTALL_FLINK=false ./scripts/k8s-operators.sh   # Flink 제외
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,9 +75,27 @@ if [ "${INSTALL_FLINK}" = "true" ]; then
     # watchNamespaces를 반드시 지정한다 — 비우면 감시는 전 네임스페이스로 열리지만
     # 잡 SA(`flink`)와 Role/RoleBinding이 **오퍼레이터 ns에만** 생겨 잡 ns에서 파드가 못 뜬다
     # (Spark 차트의 workloadResources.namespaces와 같은 함정, 2026-08-18 실측).
+    #
+    # 🔴 컨트롤러·웹훅 자원은 **반드시 --set으로 명시**한다(docs/conventions/k8s.md §2).
+    #    차트 1.15.0은 `operatorPod.resources: {}` / `operatorPod.webhook.resources: {}`로
+    #    자원을 **아예 선언하지 않는다**(2026-08-21 `helm show values` 실측 — 92행·101행).
+    #    안 넣으면 파드가 **BestEffort**가 되어 `describe node`의 requests 합계에 **0으로 잡히는
+    #    유령**이 된다(예약은 0인데 실제로는 먹는다 → 예산이 조용히 어긋난다).
+    #    Spark 오퍼레이터에서 **거울상 함정**을 이미 겪었다(선언이 없어 차트 기본값 1000m/2048Mi가
+    #    무자각 적용, 실사용 196Mi — 10.7배 과예약). 방향만 반대일 뿐 원인은 같다: **미선언**.
+    #    수치 근거는 docs/resource-sizing.md(동시 기동 예산). 키 경로는 위 실측으로 확인했다 —
+    #    helm은 **모르는 --set 키를 조용히 무시**하므로 경로를 추측하지 않는다.
     helm upgrade --install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-operator \
         --namespace "${FLINK_OPERATOR_NS}" --create-namespace \
         --set "watchNamespaces={${FLINK_JOB_NS}}" \
+        --set "operatorPod.resources.requests.cpu=200m" \
+        --set "operatorPod.resources.requests.memory=512Mi" \
+        --set "operatorPod.resources.limits.cpu=500m" \
+        --set "operatorPod.resources.limits.memory=1Gi" \
+        --set "operatorPod.webhook.resources.requests.cpu=100m" \
+        --set "operatorPod.webhook.resources.requests.memory=256Mi" \
+        --set "operatorPod.webhook.resources.limits.cpu=200m" \
+        --set "operatorPod.webhook.resources.limits.memory=512Mi" \
         --values "${REPO_ROOT}/k8s/flink/operator-values.yaml" \
         --version "${FLINK_OPERATOR_CHART_VERSION}" --wait
 
@@ -89,7 +107,7 @@ if [ "${INSTALL_FLINK}" = "true" ]; then
     log "Flink workload 보완 RBAC 적용 (ns=${FLINK_JOB_NS})"
     kubectl apply -f "${REPO_ROOT}/k8s/flink/flink-workload-rbac.yaml"
 else
-    log "Flink Operator 건너뜀 (INSTALL_FLINK=true 로 활성화 — Phase 3)"
+    log "Flink Operator 건너뜀 (INSTALL_FLINK=false 로 비활성화됨 — 기본값은 true)"
 fi
 
 # 3) CloudNativePG — Iceberg JDBC 카탈로그 Postgres를 오퍼레이터로 관리

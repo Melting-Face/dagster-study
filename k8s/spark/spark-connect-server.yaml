@@ -25,7 +25,7 @@ spec:
             serviceAccountName: spark
             containers:
                 - name: spark-connect
-                  image: localhost:5001/spark-runner:0.4.0
+                  image: localhost:5001/spark-runner:0.5.0
                   imagePullPolicy: Always
                   # `spark.hadoop.fs.*` 가 따로 필요한 이유:
                   #   Iceberg의 S3FileIO(`io-impl`)는 **카탈로그가 아는 파일**만 읽고 쓴다.
@@ -34,7 +34,15 @@ spec:
                   #   설정이 없으면 `UnsupportedFileSystemException: No FileSystem for scheme "s3"`로 죽는다
                   #   (2026-08-19 실측). warehouse가 `s3://`라 `fs.s3.impl`도 S3A로 매핑해야 한다.
                   #   jar(hadoop-aws·aws-java-sdk-bundle)는 러너 이미지에 이미 구워져 있다.
-                  #   S3A는 AWS SDK **v1**이라 SeaweedFS의 aws-chunked 문제(SDK v2 flexible checksum)와 무관하다.
+                  #
+                  # 🔴 이 파드에는 S3 접근 경로가 **둘**이고, aws-chunked 체크섬 영향이 서로 다르다.
+                  #   ① S3A(`spark.hadoop.fs.s3*`) → aws-java-sdk-bundle = AWS SDK **v1**(1.12.262)
+                  #      → flexible checksum이 없어 SeaweedFS의 aws-chunked 문제와 **무관**하다.
+                  #   ② S3FileIO(Iceberg `io-impl`, iceberg-aws-bundle) → AWS SDK **v2**
+                  #      → **영향받는다.** 아래 env 2종이 없으면 PUT 객체가 손상된 채 저장된다.
+                  #   이전 주석은 ①만 보고 "무관"으로 닫아 ②의 설정 누락이 잠복했다.
+                  #   2026-08-21 실측 — aws-bundle 1.6.1(SDK v2 2.26.20)에서는 문제없었으나
+                  #   1.11.0(SDK v2 2.44.4)에서 PUT 객체가 aws-chunked 프레이밍인 채 저장됨.
                   command: ["/bin/bash", "-c"]
                   args:
                       - |
@@ -71,6 +79,10 @@ spec:
                         value: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
                       - {name: S3_ENDPOINT, value: "http://seaweedfs:8333"}
                       - {name: AWS_REGION, value: "us-east-1"}
+                      # SeaweedFS는 AWS SDK v2의 aws-chunked 프레이밍을 풀지 못해 객체가 조용히 손상된다.
+                      # S3FileIO(위 주석 ②)가 SDK v2를 타므로 필수다(CLAUDE.md 운영 §K8s).
+                      - {name: AWS_REQUEST_CHECKSUM_CALCULATION, value: "when_required"}
+                      - {name: AWS_RESPONSE_CHECKSUM_VALIDATION, value: "when_required"}
                       # PG 크리덴셜은 CNPG bootstrap 시크릿(basic-auth라 키 이름이 username/password 고정)
                       - name: PG_USER
                         valueFrom: {secretKeyRef: {name: catalog-pg-app, key: username}}

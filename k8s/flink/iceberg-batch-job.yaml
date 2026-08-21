@@ -1,0 +1,79 @@
+# ConfigMap — Flink SQL **배치** 잡 (Spark가 쓴 Iceberg 테이블을 읽고, Flink가 다시 쓴다)
+#
+# 목적: Spark·Flink가 **같은 Iceberg JDBC 카탈로그 + SeaweedFS**를 공유함을 "읽기"뿐 아니라
+#   **쓰기까지** 실증한다(2026-08-18 검증은 읽기까지였다 — docs/conventions/k8s.md §Flink).
+#
+# 🔴 이 파일에는 **비밀값이 없다.** 값은 전부 `${VAR}` 플레이스홀더이며, 이름은
+#   `flinkdeployment-session.yaml`의 podTemplate이 Secret→env로 넣는 것과 동일하다.
+#   확장은 **파드 안에서** 한다(호스트로 크리덴셜을 가져오지 않는다):
+#
+#     kubectl exec -n default <jm-pod> -- sh -c '
+#       envsubst < /opt/flink/sql/01-catalog.sql > /tmp/01-catalog.sql
+#       /opt/flink/bin/sql-client.sh -i /tmp/01-catalog.sql -f /opt/flink/sql/02-batch-job.sql
+#     '
+#
+#   `envsubst`는 러너 이미지에 존재한다(/usr/bin/envsubst, 2026-08-21 실측).
+#
+# 🔴 **키를 둘로 나눈 이유** — `sql-client`는 실행문을 **그대로 echo**해 터미널·로그에 평문이 남는다
+#   (2026-08-18 실측, docs/conventions/k8s.md §Flink). S3 키는 표준 env로 빼서 DDL에서 없앨 수 있지만
+#   **JDBC 카탈로그의 `jdbc.password`는 DDL에 들어갈 수밖에 없다**. 그래서 크리덴셜을 품는
+#   `01-catalog.sql`(init, `-i`)과 **크리덴셜이 0인** `02-batch-job.sql`(job, `-f`)을 분리했다 —
+#   init 출력만 버리고 잡 출력은 그대로 관측할 수 있다(출력 전체를 필터링하면 관측 경로가 사라진다).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: iceberg-batch-job
+    namespace: default
+    labels:
+        app: flink-session
+data:
+    # --- init 파일(-i): 카탈로그 등록. 🔴 크리덴셜 플레이스홀더를 포함한다 ---
+    01-catalog.sql: |
+        -- Iceberg JDBC 카탈로그. 이름은 전 엔진 공통 `iceberg`여야 한다 —
+        -- JDBC 카탈로그는 catalog_name으로 레지스트리를 분할해, 이름이 다르면
+        -- 같은 DB를 봐도 서로의 테이블이 보이지 않는다(k8s.md §11).
+        --
+        -- S3 키는 여기에 쓰지 않는다: S3FileIO(AWS SDK v2)가 기본 자격증명 체인을 타므로
+        -- 파드 env(AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)만으로 충분하다.
+        CREATE CATALOG `iceberg` WITH (
+            'type' = 'iceberg',
+            'catalog-impl' = 'org.apache.iceberg.jdbc.JdbcCatalog',
+            'uri' = '${ICEBERG_JDBC_URI}',
+            'jdbc.user' = '${PG_USER}',
+            'jdbc.password' = '${PG_PASSWORD}',
+            'warehouse' = '${ICEBERG_WAREHOUSE}',
+            'io-impl' = 'org.apache.iceberg.aws.s3.S3FileIO',
+            's3.endpoint' = '${S3_ENDPOINT}',
+            's3.path-style-access' = 'true'
+        );
+
+    # --- 잡 파일(-f): 크리덴셜 0. 출력을 그대로 관측해도 안전하다 ---
+    02-batch-job.sql: |
+        -- Flink는 스트림이 기본이라 명시하지 않으면 INSERT가 **끝나지 않는 잡**이 된다.
+        SET 'execution.runtime-mode' = 'batch';
+        -- `-f` 실행에서 결과를 유한 표로 찍는다(관측 경로 확보, 대화형 페이저 없음).
+        SET 'sql-client.execution.result-mode' = 'tableau';
+        -- DML은 기본이 async라 클라이언트가 제출만 하고 빠져나간다.
+        -- 배치 잡은 완료를 봐야 하므로 동기 실행으로 바꾼다.
+        SET 'table.dml-sync' = 'true';
+
+        -- 네임스페이스는 이미 존재한다(2026-08-21 카탈로그 실측: poc/sample 1행).
+        -- 새 카탈로그에서도 그대로 돌도록 멱등 생성만 걸어둔다.
+        CREATE DATABASE IF NOT EXISTS `iceberg`.`poc`;
+
+        -- ① 읽기: Spark(poc-ingest)가 적재한 테이블
+        SELECT count(*) AS spark_rows FROM `iceberg`.`poc`.`sample`;
+
+        -- ② 쓰기 대상 생성.
+        --    🔴 Flink SQL의 INSERT INTO는 테이블을 자동 생성하지 않고, 카탈로그에
+        --    `poc.sample_flink`가 없다(2026-08-21 실측). CREATE가 선행돼야 한다.
+        --    IF NOT EXISTS라 재실행에도 안전하다(단 INSERT는 append라 행이 누적된다).
+        CREATE TABLE IF NOT EXISTS `iceberg`.`poc`.`sample_flink` (
+            id INT,
+            name STRING,
+            src STRING
+        );
+
+        -- ③ 쓰기: `src`로 **누가 썼는지를 데이터에서** 식별한다(엔진 판별을 로그에 의존하지 않는다).
+        INSERT INTO `iceberg`.`poc`.`sample_flink`
+        SELECT id, name, 'flink-batch' AS src FROM `iceberg`.`poc`.`sample`;

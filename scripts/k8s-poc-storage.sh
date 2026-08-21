@@ -110,3 +110,6 @@ kubectl -n default wait --for=condition=Ready \
     cluster.postgresql.cnpg.io/catalog-postgres --timeout=300s
 
 log "완료. 다음: 이미지 빌드·push → kubectl apply -f k8s/spark/sparkapplication-poc.yaml"
+# Flink는 오퍼레이터(k8s-operators.sh)까지만 부트스트랩이고 세션 클러스터는 **워크로드**라 여기서 띄우지 않는다
+# — 부트스트랩에 넣으면 클러스터를 올릴 때마다 JM이 자동 상주해 "안 쓰는 컴퓨트 유출"을 구조적으로 재생산한다.
+log "Flink: kubectl apply -f k8s/flink/flinkdeployment-session.yaml (필요할 때만, 사용 후 delete)"

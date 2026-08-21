@@ -1,10 +1,10 @@
 # PySpark + Iceberg + S3(SeaweedFS) 러너 이미지 (PoC Phase 0)
-# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.4.0 k8s/spark
+# 빌드: podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.5.0 k8s/spark
 # 태그는 구체 버전 고정(가변 채널 태그 금지, docs/conventions/docker.md). 0.1.0 = 구 `:poc`.
 FROM apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
 
 # 버전 핀(빌드 인자로 override 가능)
-ARG ICEBERG_VERSION=1.6.1
+ARG ICEBERG_VERSION=1.11.0
 ARG SCALA_BINARY=2.12
 ARG POSTGRES_JDBC_VERSION=42.7.4
 # hadoop-aws는 베이스 이미지의 hadoop-client와 **정확히 같은 버전**이어야 한다

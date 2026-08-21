@@ -6,8 +6,15 @@
 # --- 클러스터 / podman machine ---
 CLUSTER_NAME="${CLUSTER_NAME:-lakehouse}"
 MACHINE_NAME="${MACHINE_NAME:-dagster-k8s}"
-MACHINE_CPUS="${MACHINE_CPUS:-6}"
-MACHINE_MEMORY_MIB="${MACHINE_MEMORY_MIB:-16384}"    # 16 GB (Apple Silicon은 생성 시 확정)
+# 🔴 **단위 축 주의 — 아래 값은 VM 총량이지 노드 Allocatable이 아니다.**
+#    실측(2026-08-21 13:50 KST, `podman machine inspect`): CPUs=8 / Memory=22888 MiB.
+#    같은 시점 노드 Allocatable은 **22307Mi로 약 581MiB 적다**(VM 커널·kubelet 예약분).
+#    예산을 짤 때 두 축을 섞으면 안 된다 — 계획서 초안이 22528(VM 축 추정치)을 쓰다 360MiB 부족을 냈다.
+# 🔴 이 값은 **머신 생성 시에만** 적용된다. k8s-up.sh의 MANAGE_MACHINE=false가 실행 중 머신을
+#    재사용하므로, 머신이 이미 있으면 여기를 고쳐도 현재 머신에는 반영되지 않는다.
+#    목적은 **머신 없는 상태에서 처음 돌리는 사람이 같은 크기의 머신을 받게 하는 것**이다.
+MACHINE_CPUS="${MACHINE_CPUS:-8}"
+MACHINE_MEMORY_MIB="${MACHINE_MEMORY_MIB:-22888}"    # ≈22.35 GiB, VM 총량 (Apple Silicon은 생성 시 확정)
 MACHINE_DISK_GIB="${MACHINE_DISK_GIB:-120}"
 
 # --- 로컬 레지스트리 (호스트·클러스터 공통 이름 localhost:5001) ---
@@ -32,7 +39,9 @@ SPARK_JOB_NS="${SPARK_JOB_NS:-default}"
 # driver가 쓰는 ServiceAccount (차트 workloadResources.serviceAccount.name 기본값)
 SPARK_JOB_SA="${SPARK_JOB_SA:-spark}"
 
-INSTALL_FLINK="${INSTALL_FLINK:-false}"              # Phase 3에서 true (cert-manager 의존)
+# 🔴 기본값을 true로 둔다(2026-08-21) — opt-in으로 남기면 "문서엔 있는데 기본 기동엔 없는"
+#    드리프트를 재생산한다(현 Trino가 그 상태다). cert-manager 의존은 ensure_cert_manager가 보장한다.
+INSTALL_FLINK="${INSTALL_FLINK:-true}"               # 끄려면 INSTALL_FLINK=false ./scripts/k8s-operators.sh
 FLINK_OPERATOR_NS="${FLINK_OPERATOR_NS:-flink-operator}"
 FLINK_JOB_NS="${FLINK_JOB_NS:-default}"                # FlinkDeployment가 뜨는 ns(=SA·RBAC 생성 대상)
 

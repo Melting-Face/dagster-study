@@ -1,5 +1,25 @@
 .venv/
 data/          # 로컬 원천 덤프(csv.gz) — scripts/upload_raw_to_seaweedfs.py 입력
+
+# 원천 진료 데이터 파일 — 분석 경로에 데이터가 착지하는 것을 막는 1층(2026-08-22).
+# 🔴 이건 **보조**다: 조용히 무시할 뿐 이유를 말하지 않고, `git add -f`와 **이미 추적 중인
+#    파일**에는 무력하다. 설명·강제는 `.pre-commit-config.yaml`의 `no-health-data-files` 훅이 한다.
+#    반출 경로는 저장소 밖 `$DATA_EXTRACT_DIR`(기본 `~/extracts`)이며 담당은 `data-extractor`다.
+notebooks/**/*.csv
+notebooks/**/*.tsv
+notebooks/**/*.parquet
+notebooks/**/*.feather
+notebooks/**/*.arrow
+notebooks/**/*.xlsx
+notebooks/**/*.jsonl
+notebooks/**/*.pkl
+notebooks/**/*.npy
+notebooks/**/*.duckdb
+docs/analyses/**/*.csv
+docs/analyses/**/*.tsv
+docs/analyses/**/*.parquet
+docs/analyses/**/*.xlsx
+docs/analyses/**/*.jsonl
 logs/
 minio/
 rustfs/

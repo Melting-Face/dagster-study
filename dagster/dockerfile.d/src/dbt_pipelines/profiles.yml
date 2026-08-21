@@ -40,7 +40,7 @@ dbt_pipelines:
       threads: 1
       server_side_parameters:
         # 러너 이미지와 **같은 Iceberg 버전**을 쓴다(Spark 3.5 계열).
-        spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{{ env_var('ICEBERG_VERSION', '1.6.1') }},org.apache.iceberg:iceberg-aws-bundle:{{ env_var('ICEBERG_VERSION', '1.6.1') }},org.postgresql:postgresql:42.7.4"
+        spark.jars.packages: "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:{{ env_var('ICEBERG_VERSION', '1.11.0') }},org.apache.iceberg:iceberg-aws-bundle:{{ env_var('ICEBERG_VERSION', '1.11.0') }},org.postgresql:postgresql:42.7.4"
         spark.sql.extensions: "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
         spark.sql.catalog.iceberg: "org.apache.iceberg.spark.SparkCatalog"
         spark.sql.catalog.iceberg.catalog-impl: "org.apache.iceberg.jdbc.JdbcCatalog"
@@ -117,4 +117,10 @@ dbt_pipelines:
       connect_timeout: 60
       retry_all: true
 
-  target: dev
+  # 기본 타깃은 여기 한 곳만 정본으로 둔다 — Dagster(@dbt_assets)·수동 CLI·sqlfluff가
+  # 모두 같은 답을 본다. `dbt.cli([..., "--target", ...])`로 코드에 박지 않는 이유는
+  # Dagster와 수동 CLI의 진입점이 갈리기 때문이다.
+  # 값 대조가 필요하면 `DBT_TARGET=dev dbt build`처럼 환경변수로 되돌린다.
+  #   ⚠️ `trino`라는 이름의 타깃은 없다 — Trino 경로는 `dev`(개발)·`prod`다.
+  #      아래 outputs에 실재하는 이름만 쓴다: dev · prod · spark_session · spark_connect · spark_thrift
+  target: "{{ env_var('DBT_TARGET', 'spark_connect') }}"

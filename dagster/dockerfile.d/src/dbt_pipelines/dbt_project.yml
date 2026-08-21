@@ -47,3 +47,9 @@ models:
       # 레이어는 각 모델의 config(tags=['silver'])로 표기한다.
       tables:
         +materialized: table
+        # dbt-spark에서 이 줄이 없으면 22모델이 매 실행 DROP+CREATE로 돌아
+        # Iceberg 스냅샷 히스토리가 소멸하고, schema.yml의 컬럼 description이
+        # 에러 없이 통째로 무시된다(dbt-spark adapters.sql의 persist_docs 분기가
+        # file_format in ['delta','hudi','iceberg']일 때만 ALTER TABLE을 발행).
+        # dbt-trino는 이 config를 무시하므로 Trino 타깃에는 무해하다.
+        +file_format: iceberg

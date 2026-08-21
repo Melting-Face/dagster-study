@@ -143,7 +143,12 @@ def test_patient_loads_table() -> None:
 | --- | --- |
 | `dg check` | Dagster 정의(자산·리소스·잡·스케줄) 로드·타입 정합성 |
 | `dbt build --target dev` | dbt 모델 컴파일 + run + 스키마/단위/singular 테스트 일괄 실행 |
-| `ruff check` · `sqlfluff lint` · `mypy` | 정적 검사(테스트 전 단계, `.pre-commit-config.yaml`) |
+| `ruff check` · `sqlfluff lint` | 정적 검사 — **pre-commit 훅으로 자동 실행**(`.pre-commit-config.yaml`) |
+| `mypy` | 타입 정합성 — **훅 미포함, 수동 실행**(의존성 환경 필요) |
+
+> 🔴 **"정적 검사"를 한 덩어리로 읽지 않는다.** 2026-08-21 이전 이 표는 세 도구를 함께 적어
+> 셋 다 커밋 시 도는 것처럼 보였으나, 실제로는 `sqlfluff`·`mypy` **둘 다 훅에 없었다**.
+> 지금 `sqlfluff`는 들어갔고 **`mypy`는 여전히 수동**이다 — 목록에 있다는 것과 실행된다는 것은 다르다.
 
 > `dbt build`는 `run`+`test`를 합쳐 실행하므로 **1~3번 dbt 테스트가 이 명령에 자동 포함**된다.
 > Dagster 경유 실행 시엔 `dbt.cli(["build"])`가 `dbt_assets`에서 동일하게 테스트를 태운다([dagster.md](conventions/dagster.md#dbt-통합-pythonic-dbt_assets)).
@@ -246,8 +251,11 @@ pytest                      # tests/ 하위 수집
 # 정의 스모크 (정적 로드 검증)
 dg check
 
-# 정적 검사 (pre-commit이 커밋 시 자동 실행)
-ruff check . && sqlfluff lint && mypy dagster/dockerfile.d/src/src
+# 정적 검사 (pre-commit이 커밋 시 자동 실행 — repo 루트에서)
+ruff check . && sqlfluff lint dagster/dockerfile.d/src/dbt_pipelines/
+
+# 타입 정합성 (훅에 없다 — 수동)
+uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src
 
 # 수동 관문 (실인프라 필요 — 상시 CI 아님)
 uv run scripts/spark_connect_smoke.py   # §5-1 의존성 상한 인상 직전

@@ -19,17 +19,24 @@
 
 ## 포매터 / 린터
 
-| 대상 | 도구 | 설정 위치 |
-| --- | --- | --- |
-| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | 루트 `pyproject.toml` `[tool.ruff]` |
-| SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | 루트 `pyproject.toml` `[tool.sqlfluff.*]` |
-| 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `.gitlint` (루트) |
-| YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) |
-| Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) |
-| 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) |
-| Python 타입체크 | [`mypy`](https://mypy-lang.org/) | 루트 `pyproject.toml` `[tool.mypy]` |
+| 대상 | 도구 | 설정 위치 | 게이트 |
+| --- | --- | --- | --- |
+| Python | [`ruff`](https://docs.astral.sh/ruff/) (lint + format) | 루트 `pyproject.toml` `[tool.ruff]` | pre-commit |
+| SQL | [`sqlfluff`](https://docs.sqlfluff.com/) | 루트 `pyproject.toml` `[tool.sqlfluff.*]` + `.sqlfluffignore` | pre-commit |
+| 커밋 메시지 | [`gitlint`](https://jorisroovers.github.io/gitlint/) | `.gitlint` (루트) | pre-commit (`commit-msg`) |
+| YAML | [`yamllint`](https://yamllint.readthedocs.io/) | `.yamllint.yaml` (루트) | pre-commit |
+| Dockerfile | [`hadolint`](https://github.com/hadolint/hadolint) | `.hadolint.yaml` (루트) | pre-commit (로컬 바이너리) |
+| 셸 스크립트 | [`shellcheck`](https://www.shellcheck.net/) | 설정 없음(기본 룰셋) | pre-commit |
+| 시크릿 스캔 | [`gitleaks`](https://github.com/gitleaks/gitleaks) | `.gitleaks.toml` (루트) | pre-commit |
+| 노트북 출력 | [`nbstripout`](https://github.com/kynan/nbstripout) | 설정 없음 | pre-commit |
+| Python 타입체크 | [`mypy`](https://mypy-lang.org/) | 루트 `pyproject.toml` `[tool.mypy]` | **없음(수동)** |
+| EOL 정규화 | git | `.gitattributes` (루트) | git 체크인/체크아웃 |
 
 커밋 전 포매터·린터를 통과시킨다. (`mypy`는 어노테이션이 아닌 **타입 정합성**을 검사)
+
+> 🔴 **서버측 게이트는 없다.** `.github/workflows/`에는 `release.yml`(태그 푸시 시 릴리스 생성)뿐이고
+> `push`·`pull_request` 트리거 워크플로가 없다. 즉 위 게이트는 **전부 로컬**이며
+> `git commit --no-verify` 한 번이나 훅 미설치 클론으로 전량 우회된다. CI 게이트 구성은 [test.md](../test.md) TODO.
 
 ### 실행 (pre-commit)
 
@@ -38,27 +45,44 @@
 
 ```bash
 uv tool install pre-commit
+brew install hadolint                 # hadolint 훅만 로컬 바이너리를 요구한다(아래 참고)
 pre-commit install --install-hooks    # pre-commit + commit-msg 훅 설치
 pre-commit run --all-files            # 전체 수동 검사
 ```
 
-- **포함 훅**: `ruff`(check+format) · `yamllint` · `gitleaks` · `gitlint`(commit-msg) · 기본 위생 훅(공백·EOF·toml/yaml 검사).
-- **미포함**(마찰·의존성으로 수동/CI): `sqlfluff`(dbt 모델 부재), `mypy`(의존성 환경 필요 → repo 루트에서 `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`), `hadolint`(바이너리/도커 필요).
+- **포함 훅**(2026-08-21 기준 17종): `ruff-check`·`ruff-format` · `sqlfluff-lint`·`sqlfluff-fix` ·
+  `yamllint` · `hadolint` · `shellcheck` · `gitleaks` · `nbstripout` · `gitlint`(commit-msg) ·
+  기본 위생 훅 6종(공백·EOF·머지충돌·대용량파일·toml/yaml/json 검사·개인키 탐지).
+- **미포함**: `mypy` — 의존성 환경이 필요해 격리 venv에서 마찰이 크다. 수동 실행:
+  `uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src`
+
+**`hadolint`만 로컬 바이너리를 쓴다.** 업스트림 `hadolint-docker` 훅은 `docker` CLI를 요구하는데
+현행 환경은 podman뿐이라 `hadolint` 훅(`language: system`)을 쓰고 `brew install hadolint`를 선행한다.
+훅 `rev`(`v2.15.1`)를 설치 바이너리 버전과 같게 맞춰 둔다 — 다르면 "훅 정의의 버전"과
+"실제 실행본의 버전"이 갈려 재현이 안 된다.
 
 직접 실행도 가능하다:
 
 ```bash
 ruff check . && ruff format .        # Python
+sqlfluff lint dagster/dockerfile.d/src/dbt_pipelines/   # SQL — 🔴 repo 루트에서 실행할 것
 yamllint .                           # YAML
+hadolint <Dockerfile>                # Dockerfile
+shellcheck scripts/*.sh              # 셸
 gitleaks detect                      # 시크릿 스캔
 # Python 타입 정합성: repo 루트에서, src 프로젝트 의존성 환경으로 실행
 uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/src/src
 ```
 
+> 🔴 `sqlfluff`는 `library_path`를 **CWD 기준 상대경로**로 해석하므로 `mypy`와 마찬가지로
+> **repo 루트에서** 실행해야 한다. 하위 디렉터리에서 돌리면 dbt 셰임을 못 찾아
+> `TMP: Undefined jinja template variable: 'dbt'`로 죽는다. 상세는 [dbt.md](dbt.md).
+
 ### 설정 위치 원칙
 
 - `pyproject.toml`을 지원하는 도구(`ruff`·`sqlfluff`·`mypy`)의 설정은 **repo 루트 `pyproject.toml`**에 모은다.
-  pre-commit·CI가 모두 repo 루트에서 실행되므로 설정도 루트에 둬 단일 출처를 맞춘다.
+  pre-commit이 repo 루트에서 실행되므로 설정도 루트에 둬 단일 출처를 맞춘다.
+  (CI는 아직 없다 — 위 §게이트 주의 참고.)
   - `ruff`·`sqlfluff`는 대상 파일에서 상위로 올라가며 설정을 탐색해 루트 설정을 자동으로 잡는다.
   - `mypy`는 상위 탐색을 하지 않고 **CWD의 설정만** 읽으므로 반드시 repo 루트에서 실행한다.
 - 패키징(`[project]`·`[build-system]`)과 Dagster `dg` 설정은 빌드 컨텍스트인
@@ -68,6 +92,11 @@ uv run --project dagster/dockerfile.d/src --with mypy mypy dagster/dockerfile.d/
   - `hadolint` → `.hadolint.yaml`
   - `gitleaks` → `.gitleaks.toml`
   - `gitlint` → `.gitlint` (repo 루트에서 실행 → 하위 `pyproject.toml` 자동탐지 불가)
+- **예외 하나**: `sqlfluff`의 제외 목록은 `pyproject.toml`이 아니라 루트 `.sqlfluffignore`에 둔다.
+  훅에도 같은 범위를 `exclude:`로 **이중으로** 건다 — pre-commit은 스테이징 경로를 **명시 전달**하므로
+  ignore 파일만으로 걸러진다는 보장이 없다(ruff가 `force-exclude`를 필요로 하는 것과 같은 계열).
+- **`sqlfluff`의 dbt 셰임**(`sqlfluff_libs/`)만 루트의 **디렉터리**로 둔다 —
+  `library_path`가 CWD 기준이라 루트가 아니면 찾지 못한다. 상세는 [dbt.md](dbt.md).
 - 세부 예시는 [Python](python.md) · [dbt](dbt.md) 문서 참고.
 
 ## 커밋 메시지 (Conventional Commits)

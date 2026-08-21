@@ -111,6 +111,21 @@
   (`macros/cross_engine.sql`의 `elapsed`·`unnest_array`, `default__`에 `raise_compiler_error`).
   🔴 **`dbt.datediff`는 쓰지 않는다** — Spark는 경과시간 `ceil`, Trino는 경계 교차라 임계값 비교에서 값이 갈린다.
   기준은 "도는 것"이 아니라 **"같은 값"**. `dbt compile`은 이를 못 잡으므로 **컴파일 통과를 이행 완료로 읽지 않는다**.
+- **SQL 린트 게이트는 `sqlfluff` + jinja 스텁이다**(2026-08-21 신설). `templater = "dbt"`는 모델을 실제로
+  컴파일하려 **Spark Connect에 접속**해 커밋이 클러스터 가용성에 묶이므로 게이트로 쓸 수 없었고, 그래서
+  22개 모델이 **설정만 있고 아무 검사도 받지 않는 상태**로 오래 남아 있었다(문서는 "모델 부재"라 적고 있었으나
+  거짓이었다). `jinja`로 바꾸는 대가로 dbt 런타임 객체를 스텁으로 대체한다 — dispatch 매크로는
+  `[tool.sqlfluff.templater.jinja.macros]` 인라인, `{{ dbt.* }}`는 `library_path = "sqlfluff_libs"`의
+  `sqlfluff_libs/dbt.py` 셰임(`__init__.py`를 두지 않아야 파일명이 곧 네임스페이스가 된다).
+  🔴 **`macros/`에 dispatch 매크로를 추가하면 스텁도 함께 추가**한다 — 빠뜨리면 조용히 통과하지 않고
+  `TMP`로 시끄럽게 깨진다(의도한 결합). 🔴 **스텁은 의미론이 아니라 파싱만 맞으면 되지만 *길이·모양*은
+  판정에 직접 들어간다**(`LT05`·`LT02`) — 원본 구현을 옮기지 말고 짧은 등가 호출로 둔다.
+  🔴 **이 게이트가 보증하는 것은 스타일·구문까지다** — 린트 대상이 **컴파일 SQL이 아니라 스텁 치환 SQL**이라
+  매크로가 엔진별로 같은 값을 내는지는 보지 않는다(그건 `scripts/spark_connect_smoke.py` 몫).
+  같은 이유로 **`dialect = "sparksql"`도 아직 실행 검증 전**이다 — 24/24 파일 파싱 통과는
+  "구문이 파서에 맞았다"이지 "Spark에서 같은 값이 나온다"가 아니다.
+  🔴 **`library_path`는 CWD 기준**이라 `mypy`와 마찬가지로 **repo 루트에서 실행**해야 한다.
+  상세 [`docs/conventions/dbt.md`](docs/conventions/dbt.md) §templater.
 - **데이터셋 원천 스키마·피처(SOFA→Sepsis-3)** 는 [`docs/dataset_schema.md`](docs/dataset_schema.md) 참고.
 - 자세한 흐름·사용법은 [`docs/architectures/overview.md`](docs/architectures/overview.md) 참고.
 

@@ -30,9 +30,11 @@ select = [
     "E", "F", "I", "UP", "B", "D", "ANN", "FA", "RUF",
     "S", "DTZ", "SIM", "C4", "C90", "PIE", "COM", "EM", "PD", "NPY",
     "Q", "ARG",   # Q: 따옴표 스타일, ARG: 미사용 인자
+    # 2026-08-21 확장
+    "N", "FURB", "PERF", "PT", "TRY", "G", "LOG", "T20",
 ]
-# docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819) 제외
-ignore = ["D100", "D104", "ANN401", "COM812", "COM819"]
+# docstring 미요구, 동적 Any 허용, 포매터 충돌(COM812/819) 제외, 예외 메시지 인라인 허용
+ignore = ["D100", "D104", "ANN401", "COM812", "COM819", "TRY003"]
 # TC(flake8-type-checking)는 Dagster 런타임 타입 introspection과 충돌해 보류
 
 [tool.ruff.lint.pydocstyle]
@@ -45,10 +47,16 @@ max-complexity = 10   # C90 순환 복잡도 상한
 # 설정이 루트라 글롭은 임의 깊이의 tests/ 를 잡도록 **/tests/** 사용
 # ARG: pytest fixture는 본문 미참조여도 인자로 받으므로 면제
 "**/tests/**" = ["ANN", "D", "S101", "ARG"]   # 테스트는 어노테이션·docstring·assert·미사용인자 면제
+"scripts/**"   = ["C901", "T201"]             # 절차형 CLI — stdout이 인터페이스
+"notebooks/**" = ["S608", "T201"]             # 탐색 노트북 — 리터럴 SQL 조립·print 출력
+"k8s/spark/poc_ingest.py" = ["T201"]          # Spark 드라이버 잡 — context.log가 없다
 
 [tool.ruff.format]
 indent-style = "space"
 ```
+
+> ⚠️ 이 블록은 실제 설정의 **사본**이다(문서–설정 이중 관리). 정본은 루트 `pyproject.toml`이며,
+> 룰을 바꾸면 **양쪽을 함께** 고친다.
 
 #### 선택 룰 그룹
 
@@ -62,9 +70,26 @@ indent-style = "space"
 | `C90` | 순환 복잡도(mccabe, 상한 10) |
 | `COM`·`EM` | 트레일링 콤마·예외 메시지 |
 | `PD`·`NPY` | pandas·numpy 안티패턴(해당 라이브러리 사용 시) |
+| `N` | pep8-naming(클래스·함수·변수 네이밍) |
+| `FURB` | refurb — 최신 Python 관용 표현 |
+| `PERF` | perflint — 성능 안티패턴(대용량 의료 데이터 처리) |
+| `PT` | flake8-pytest-style — pytest 스타일 통일 |
+| `TRY` | tryceratops — 예외 처리 패턴 |
+| `G`·`LOG` | 로깅 포맷·사용 규칙(f-string 로깅 금지 → 지연 포매팅) |
+| `T20` | flake8-print — **실행 경로에서** print 금지 |
 
 > **충돌·제외**: `COM812`/`COM819`(포매터가 트레일링 콤마 처리)는 ignore.
 > `TC`(type-checking)는 Dagster 충돌로 보류. `PD901`(df 네이밍)은 ruff 0.13에서 제거됨.
+> `TRY003`(예외 메시지를 클래스 밖에 작성)은 ignore — 파이프라인 디버깅 메시지 가독성 우선.
+
+> 🔴 **`T20`의 면제 범위가 곧 "실행 경로"의 정의다.** `scripts/**`는 hook 가드가 결정 사유를
+> **stdout으로 내보내고 하네스가 그것을 읽으므로** print가 인터페이스이고, 로거로 바꾸면 기능이 깨진다.
+> `k8s/spark/poc_ingest.py`는 Spark 드라이버로 제출돼 컨테이너 안에서 단독 실행되므로 `context.log`가 없다.
+> 면제 근거는 "귀찮아서"가 아니라 **"그 파일에서는 stdout이 출력 계약이라서"** 이고,
+> 그 조건이 아닌 곳(`defs/`·`common/`)에는 적용하지 않는다.
+>
+> **도입 비용(2026-08-21 실측 · `ruff 0.15.20`)**: 확장 룰 8종을 켜자 위반 60건이 나왔고
+> 그중 57건이 `T201`(위 3개 경로)이라, 실제 코드 수정은 `G004`×2 + `TRY300`×1 = **3건**이었다.
 
 ### 매직 트레일링 콤마로 줄바꿈 유도
 

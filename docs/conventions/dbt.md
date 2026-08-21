@@ -1,18 +1,22 @@
 # dbt 코딩 규칙
 
-어댑터: **`dbt-trino`**(현행) → **`dbt-spark`**(이행중, [../redesign.md](../redesign.md) Phase 1).
+어댑터: **`dbt-spark`**(현행 — 기본 타깃 `spark_connect`, 2026-08-21 전환) ·
+**`dbt-trino`**(값 대조용 존치 — `DBT_TARGET=dev`로 전환, [../redesign.md](../redesign.md) Phase 1).
+🔴 trino는 **제거된 것이 아니다** — 엔진 간 값 차이(`dbt.datediff`·`dbt.dateadd` 등)를 잡는 유일한 대조 수단이다.
 두 어댑터를 **동시 설치**해 타깃만 바꿔가며 대조한다(Iceberg/SeaweedFS 레이크하우스는 공통).
 프로젝트: `dagster/dockerfile.d/src/dbt_pipelines/`.
 
 ## 포매팅 / 린팅
 
-- SQL은 [`sqlfluff`](https://docs.sqlfluff.com/)로 lint·format한다.
-- dialect는 **`trino`** 로 설정한다.
-- 들여쓰기 스페이스 4칸.
+- SQL은 [`sqlfluff`](https://docs.sqlfluff.com/)로 lint·format한다. **pre-commit 훅으로 강제**된다.
+- dialect는 **`sparksql`** 이다(dbt 기본 타깃이 `spark_connect`이므로).
+- templater는 **`jinja`** 다(`dbt` 아님 — 아래 §templater 참고).
+- 들여쓰기 스페이스 4칸, `max_line_length = 100`.
 
 ```bash
-sqlfluff lint models/
-sqlfluff fix models/
+# 🔴 반드시 repo 루트에서 실행한다 (library_path가 CWD 기준이다)
+sqlfluff lint dagster/dockerfile.d/src/dbt_pipelines/
+sqlfluff fix  dagster/dockerfile.d/src/dbt_pipelines/
 ```
 
 ### 설정은 repo 루트 `pyproject.toml`에서 관리한다
@@ -20,22 +24,44 @@ sqlfluff fix models/
 sqlfluff 명세는 별도 `.sqlfluff` 파일 대신 **repo 루트 `pyproject.toml`의 `[tool.sqlfluff.*]`** 섹션에 둔다.
 (sqlfluff는 `tool.sqlfluff`로 시작하는 nested 섹션을 공식 지원하며, 대상 파일에서 상위로
 올라가며 pyproject를 병합 탐색하므로 루트 설정이 적용된다.)
+제외 목록만 루트 `.sqlfluffignore`에 둔다(`initdb/`·`dbt_packages/`·`target/`).
 
-```toml
-# pyproject.toml (repo 루트)
-[tool.sqlfluff.core]
-templater = "dbt"
-dialect = "trino"
-max_line_length = 88
+### templater — `dbt`가 아니라 `jinja` + 스텁을 쓴다
 
-[tool.sqlfluff.indentation]
-tab_space_size = 4
+**`templater = "dbt"`는 게이트로 쓸 수 없다.** dbt templater는 모델을 **실제로 컴파일**하려고
+dbt 어댑터를 통해 Spark Connect에 접속한다. 즉 커밋이 클러스터·port-forward 가용성에 묶인다.
+그래서 이 저장소의 SQL 22개 모델은 오랫동안 **설정만 있고 아무 검사도 받지 않는 상태**였다
+(문서는 "미포함 사유: dbt 모델 부재"라고 적고 있었으나 모델은 이미 실재했다 — 2026-08-21 교정).
 
-[tool.sqlfluff.rules.capitalisation.keywords]
-capitalisation_policy = "lower"
-```
+`jinja` templater는 오프라인·수초라 게이트로 쓸 수 있다. 대신 **dbt 런타임 객체를 모른다**:
 
-> 참고: `templater = "dbt"`를 쓰려면 `sqlfluff-templater-dbt` 패키지가 필요하다.
+| 모델이 쓰는 것 | jinja templater 단독 | 대응 |
+| --- | --- | --- |
+| `ref()`·`source()`·`config()` | ✅ 내장(`apply_dbt_builtins`) | 없음 |
+| `{{ elapsed(...) }}`·`{{ unnest_array(...) }}` | ❌ `adapter.dispatch`를 모름 | `[tool.sqlfluff.templater.jinja.macros]` **인라인 스텁** |
+| `{{ dbt.dateadd(...) }}` | ❌ `dbt` 네임스페이스 없음 | `library_path = "sqlfluff_libs"` → `sqlfluff_libs/dbt.py` **셰임** |
+
+- `sqlfluff_libs/`에 **`__init__.py`를 두지 않는다** — 없으면 각 `.py`가 개별 모듈로 로드돼
+  파일명 `dbt.py`가 곧 jinja 네임스페이스 `dbt`가 된다.
+- `library_path`는 **CWD 기준**이다(config 파일 기준이 아니다 — sqlfluff 4.3.0 소스 실측).
+  `mypy`와 같은 이유로 repo 루트에서 실행해야 한다.
+
+🔴 **`macros/`에 새 dispatch 매크로를 추가하면 스텁도 함께 추가한다.** 빠뜨리면 조용히 통과하지 않고
+`TMP: Undefined jinja template variable`로 **시끄럽게 깨진다**(의도한 결합).
+
+🔴 **스텁 출력은 선언된 dialect(`sparksql`)에 맞춘다.** 의미론은 무관하지만 **길이는 무관하지 않다** —
+치환 결과의 길이·모양이 `LT05`(줄길이)·`LT02`(들여쓰기) 판정에 그대로 들어간다.
+그래서 원본 dispatch 구현을 옮기지 않고 **짧은 등가 호출**로 둔다.
+
+### 🔴 이 게이트가 검사하지 않는 것 (계측 단위)
+
+린트 대상은 **실제 컴파일 SQL이 아니라 스텁 치환 SQL**이다. 보증 범위는 **스타일·구문**
+(대소문자·들여쓰기·줄길이·참조)까지이고, **매크로 dispatch가 엔진별로 같은 값을 내는지는 검사하지 않는다.**
+그건 [test.md](../test.md) §5-1 `scripts/spark_connect_smoke.py`의 몫이다.
+**`sqlfluff` 통과를 값 정합의 근거로 읽지 않는다**([philosophy.md](../philosophy.md) 원칙 7).
+
+같은 이유로 **`dialect = "sparksql"`도 아직 실행으로 검증되지 않았다.** 훅 도입으로 24/24 파일이
+파싱을 통과했지만 그건 "구문이 sparksql 파서에 맞았다"는 뜻이지 "Spark에서 같은 값이 나온다"는 뜻이 아니다.
 
 ## 디렉토리 / 레이어링 (Medallion)
 

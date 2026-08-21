@@ -223,6 +223,12 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session_sync_guard.py file-post",
             "statusMessage": "파일 리스 갱신",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/plan_mirror_guard.py post",
+            "statusMessage": "계획 파일·저널 경로 수집",
+            "timeout": 10
           }
         ]
       }
@@ -246,6 +252,12 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/journal_guard.py stop",
             "statusMessage": "저널 기록 누락 점검",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/plan_mirror_guard.py stop",
+            "statusMessage": "계획 파일 볼트 미러",
             "timeout": 10
           }
         ]

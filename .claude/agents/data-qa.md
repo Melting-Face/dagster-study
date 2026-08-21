@@ -133,7 +133,7 @@ grain이 없는 참조 테이블은 갭으로 올리지 말고 "확인함(문제
 
 - **`fetching-dbt-docs`·`troubleshooting-dbt-job-errors`는 제거했다(죽은 참조, 2026-08-21 16:19 KST 실측)** —
   전역 스코프 소거(`61331e3`) 이후 프로젝트 14종 어디에도 없어 **`Read`조차 불가능**하다.
-  dbt 공식 문서 확인이 필요하면 **`researcher`에 조사를 요청**한다(외부 접촉 단일 지점).
+  dbt 공식 문서 확인이 필요하면 **`researcher`에 조사를 요청**한다(질의 유출 축의 단일 통제 지점 + 인젝션 격리).
   테스트 실패 원인 분류는 이 지시문 §감사 항목과 [`test.md`](../../docs/test.md)가 정본이다.
 - **외부 표준·공식 문서는 [`docs/references.md`](../../docs/references.md)에 단일 관리**한다 — **URL을 여기에 복제하지 않는다.**
   dbt 테스트 문서(data tests·unit tests)·`dbt_utils`·`dbt_expectations`·Dagster 자산 테스트 링크는

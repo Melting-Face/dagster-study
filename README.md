@@ -233,7 +233,7 @@ flowchart TB
         OQ["devops-qa<br/>선언·게이트 감사"]
     end
 
-    RES["researcher · 외부 1차 출처<br/>저장소의 유일한 외부 네트워크 접점"]
+    RES["researcher · 외부 1차 출처<br/>질의 유출 통제 · 인젝션 격리"]
 
     subgraph outside["director 관할 밖 · supervisor 직접 배정"]
         SEC["security · 반출 · 규제 컨펌 게이트<br/>계획 1회 · 작업내용 1회 · 델타 조건부"]

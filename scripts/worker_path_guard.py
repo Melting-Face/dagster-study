@@ -78,6 +78,15 @@ BOUNDARIES = {
     },
     # 기록관 — 저널은 저장소 **밖** 볼트에 쓴다. 저장소 안에는 쓸 것이 없다.
     "archivist": {"allow": ()},
+    # 데이터 추출자 — 요구사항 명세대로 데이터를 뽑아 **저장소 밖**으로만 낸다.
+    # 🔴 `analyst`와 방법(읽기 조회·SQL)은 겹치지만 **노출 등급이 다르다.**
+    #    분리의 근거는 업무가 아니라 통제다(2026-08-22 supervisor 결정).
+    #    실측 근거(2026-08-22 `git check-ignore`): `notebooks/out.csv`·
+    #    `notebooks/out.parquet`·`docs/analyses/out.csv`가 **무시되지 않는다.**
+    #    `.gitignore`에는 `data/` 한 줄뿐이었고 `nbstripout`은 `.ipynb` 셀
+    #    출력만 걷어낸다(gitleaks는 헬스 데이터를 못 잡는다).
+    #    ⇒ 추출물이 저장소 안에 착지할 경로를 아예 주지 않는다.
+    "data-extractor": {"allow": ()},
     # 리서처 — 읽기 전용. `disallowedTools`가 1차 방어이고 이건 2차(심층 방어)다.
     # 둘 다 두는 이유: `disallowedTools`의 실효는 워커마다 실측해야 확정되는데
     # (§권한 매트릭스 — 선언한 tools가 전부 실재하지는 않는다), 이 워커는 유일하게
@@ -101,7 +110,22 @@ BOUNDARIES = {
 # 저장소 **밖**에서 예외로 허용할 절대경로 접두어. 미지정 워커는 사용자 확인(`ask`).
 OUTSIDE_ALLOW = {
     "archivist": (os.environ.get("OBSIDIAN_VAULT") or str(Path.home() / "obsidian"),),
+    # 🔴 추출물은 **원천 진료 데이터**다(DUA·재식별 금지 — docs/security.md).
+    #    저장소 밖 단 한 곳으로만 나간다(그 밖은 아래 `OUTSIDE_STRICT`가 막는다).
+    #    `archivist`와 형태는 같되 성격이 반대다 — 저쪽은 기록을 **남기려고**
+    #    밖에 쓰고, 이쪽은 데이터를 저장소에 **남기지 않으려고** 밖에 쓴다.
+    "data-extractor": (
+        os.environ.get("DATA_EXTRACT_DIR") or str(Path.home() / "extracts"),
+    ),
 }
+
+# 저장소 밖에서 **허용 목록을 벗어나면 `ask`가 아니라 `deny`** 로 처리할 워커.
+# 🔴 기본값(`ask`)은 auto 모드에서 **막히지 않는다** — 분류기가 파일 도구의 `ask`를
+#    경로 민감도와 무관하게 흡수한다(CLAUDE.md §강제 수단, 2026-08-19 실측).
+#    그래서 "사람이 판단한다"는 문구는 원천 진료 데이터에 대해서는 **죽은 규칙**이 된다.
+#    ⚠️ `archivist`는 여기 넣지 않는다 — 저널은 진료 데이터가 아니고, 볼트 경로가
+#    환경마다 달라 `ask`로 사람에게 묻는 편이 맞다(둘의 성격이 반대다).
+OUTSIDE_STRICT = frozenset({"data-extractor"})
 
 # PreToolUse 입력에서 대상 경로가 담기는 키 — 도구마다 이름이 다르다.
 PATH_KEYS = ("file_path", "notebook_path", "path")
@@ -157,6 +181,31 @@ def main() -> None:
         allowed = OUTSIDE_ALLOW.get(worker, ())
         roots = (Path(prefix).expanduser().resolve() for prefix in allowed)
         if any(target.is_relative_to(root) for root in roots):
+            sys.exit(0)
+        if worker in OUTSIDE_STRICT:
+            # 🔴 `ask`로 두면 **막히지 않는다** — auto 모드 분류기가 파일 도구의 `ask`를
+            #    경로 민감도와 무관하게 흡수한다(CLAUDE.md §강제 수단).
+            #    원천 진료 데이터에서는 그 흡수가 곧 **무통제 반출**이라 `deny`다.
+            #    허용 경로를 넓혀야 하면 `OUTSIDE_ALLOW`를 고치지 이 분기를 풀지 않는다.
+            decision = "deny"
+            reason = (
+                f"`{worker}`는 지정된 반출 경로 밖에 쓸 수 없다: {target}. "
+                f"허용: {' · '.join(allowed) if allowed else '없음'}. "
+                "추출물은 원천 진료 데이터이며 반출 경로는 정본이 정한다 — "
+                "다른 경로가 필요하면 계획을 반환해 supervisor 승인을 받아라."
+            )
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PreToolUse",
+                            "permissionDecision": decision,
+                            "permissionDecisionReason": reason,
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
             sys.exit(0)
         # 🔴 값은 `ask`다 — 유효 enum은 allow·deny·ask·defer뿐이고, 벗어나면 출력
         #    전체가 검증 실패해 **결정이 사라진 채 통과**한다(fail-open).

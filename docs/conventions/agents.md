@@ -138,7 +138,19 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
 | **노출·규제**(도메인 공통) | `security` | `security` | `security` | `security` | 새어나가는가 · 규제를 지키는가 |
 | **관측·기록**(계층 밖) | `archivist` | `archivist` | `archivist` | `archivist` | 기록이 사실과 맞는가 |
 | **스킬 배선**(계층 밖) | `skill-matcher` | `skill-matcher` | `skill-matcher` | `skill-matcher` | 워커가 맞는 스킬을 물고 있는가 |
+| 🔴 **데이터 반출**(축 아님·예외) | `data-extractor` | — | `data-extractor` | — | 명세대로 뽑았는가 · **새지 않는가** |
 
+- 🔴 **`data-extractor`는 Rule of Three의 명시적 예외다**(사용자 결정 2026-08-22).
+  **축이 아니다** — 위 표의 마지막 행은 축이 아니라 예외를 눈에 띄게 두려고 붙인 것이다.
+  실제로는 **데이터 도메인 구현 축의 두 번째 워커**이고, *"구현 축 1명씩"* 원칙과 어긋난다.
+  실측상 **배정 이력 0회**(`docs/analyses/` 0편·gold 0개)라 배정 반복 근거도 없었다.
+  **그런데도 신설한 이유는 업무가 아니라 노출 통제다.** `analyst`와 방법(읽기 조회·SQL)은 겹치지만
+  산출물이 **결론 ↔ 데이터 그 자체**로, 착지가 **저장소 안 ↔ 밖**으로 갈린다.
+  결정적 근거는 실측이었다 — `notebooks/out.csv`·`docs/analyses/out.csv`가 **gitignore되지 않아**
+  (2026-08-22 `git check-ignore`) 추출을 `analyst`에 얹었으면 **이미 열린 구멍을 넓히는** 것이 됐다.
+  분리하면 추출 워커는 저장소에 **아무것도 못 쓴다**(`allow: ()` — 기계 강제, 실호출 확인).
+  🔴 **이 신설을 선례로 삼아 다른 워커를 늘리지 않는다.** 예외의 근거는 "역할이 다르다"가 아니라
+  **"한 워커가 원천 반출과 커밋 경로 쓰기를 동시에 가지면 안 된다"** 이고, 그 조건이 성립하지 않으면 예외도 없다.
 - **분석은 새 축이 아니라 새 도메인**이라 3종 세트를 복제하지 않았다(YAGNI — gold 0개·리포트 0편).
   `analyst`는 **구현 축 1명**이고, 판정은 데이터 도메인의 워커를 **그대로 재사용**한다:
   gold 모델의 값 대조 = `data-verifier`, 테스트 커버리지 = `data-qa`, 산출물 반출 = `security`.
@@ -210,7 +222,8 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
 | --- | --- | --- | --- | --- | --- |
 | `director` | `Read, Grep, Glob, Bash, Agent` | `Write, Edit, NotebookEdit`, `Agent(archivist)`, `Agent(skill-matcher)` | `inherit` | **X**(판정자) | 계획·권한 매니페스트 제출 → 승인 후 배정 → **계획 대비 실행 정합** 판정. 🔴 맨이름+인자형 **혼용 파싱 실효는 `미확인`** |
 | `data-engineer`·`devops-engineer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O | **계획만 반환**(커밋·`apply`·`down -v` 금지) |
-| `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) |
+| `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) · 🔴 `$DATA_EXTRACT_DIR` **읽기 금지**(규율 — 가드는 쓰기만 본다) |
+| `data-extractor` | `Read, Write, Bash, Grep, Glob` — 🔴 **실측은 `Read`·`Write`·`Bash` 3종**(`Grep`·`Glob` 미실재, 2026-08-22) | `NotebookEdit` | `inherit` | O — **저장소 밖 `$DATA_EXTRACT_DIR`(기본 `~/extracts`) 한정**. 🔴 **저장소 안은 전부 `deny`**(`allow: ()`), 반출 경로 **밖도 `deny`**(`OUTSIDE_STRICT` — 다른 워커의 `ask`는 auto 모드가 흡수해 안 막힌다). ✅ **실호출 확인**(가드 원문 대조) | **실행 *전* `security` 사전 컨펌**(업무 전체가 Δ 트리거 ⓒ 데이터 반출) · 쓰기 SQL·`df.write`계열 금지 · 커밋·외부 발신 금지 |
 | `tech-writer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`docs/**` · `README.md` — hook 강제, ✅ **확대 범위 실발동 확인**) | **director 관할 밖** · 🔴 **발행(업로드) 금지**(외부 발신=비가역) · 커밋 금지 · `docs/analyses/`는 표현만(내용은 `analyst`) · `docs/conventions/`는 받아적기만(규칙 신설은 supervisor) · 🔴 **`docs/security.md`·`docs/skills.md`는 통제·공급망 정본**이라 내용 변경 시 supervisor 결정 + `security` 컨펌(가드가 못 가른다) |
 | `researcher` | `Read, Grep, Glob, Bash, WebSearch, WebFetch` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 근거만 반환 — **저장소의 유일한 외부 네트워크 접촉 지점**, 설치·발신 금지 |
 | `security` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `inherit` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |

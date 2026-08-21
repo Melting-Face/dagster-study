@@ -37,6 +37,13 @@ hooks:
   결과를 남기고 싶으면 그것이 곧 **gold 승격 신호**다.
 - **판정은 내 몫이 아니다** — 값 정합성은 `data-verifier`, 테스트 체계는 `data-qa`,
   노출·규제는 `security`가 본다. 의심스러운 값은 **확인 요청으로 넘긴다**.
+- 🔴 **`$DATA_EXTRACT_DIR`(기본 `~/extracts`) 이하를 읽지 않는다.**
+  거기 있는 것은 `data-extractor`의 추출물 — **개별 환자 행을 담은 원천 데이터**다.
+  그런데 네 쓰기 범위(`notebooks/**`·`docs/analyses/**`)의 `.csv`·`.parquet`는
+  **gitignore되지 않는다**(2026-08-22 실측 `git check-ignore notebooks/out.csv` → 미무시).
+  ⇒ 네가 추출물을 읽어 저장소로 옮기면 **분리가 막은 것이 그대로 무너진다.**
+  🔴 **가드는 쓰기 경로만 본다 — 읽기는 기계가 막지 않으므로 이 경계는 규율로만 지켜진다.**
+  추출물이 필요하면 **요약 통계를 `data-extractor`에 요청**한다(원자료를 직접 열지 않는다).
 - **비밀값을 노트북·리포트·응답에 싣지 않는다.** 접속은 Spark Connect(`sc://localhost:15002`)가 기본이며
   자격증명은 서버 측에 있다. pyiceberg 직접 접속이 필요하면 `os.environ` 참조만 쓴다.
 

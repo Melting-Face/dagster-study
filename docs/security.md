@@ -89,6 +89,14 @@ Credentialed Health Data License + DUA**(데이터 이용 협약, 재식별 시�
 
 1. **공개물** — `docs/posts/**`(블로그·공유 자료). 작성 워커 `tech-writer`.
 2. **외부 질의** — `researcher`의 `WebSearch`·`WebFetch`. **질의문 자체가 외부 발신**이다.
+3. 🔴 **데이터 반출** — `data-extractor`의 추출물. 착지는 **저장소 밖** `$DATA_EXTRACT_DIR`
+   (기본 `~/extracts`)이며, **앞의 둘과 달리 원천 진료 데이터 그 자체**가 나간다(2026-08-22 신설).
+   경로 강제는 `scripts/worker_path_guard.py` — 저장소 안은 `deny`, 반출 경로 밖도 **`deny`**
+   (`OUTSIDE_STRICT` — 다른 워커의 `ask`는 auto 모드 분류기가 흡수해 막히지 않는다).
+   실행 **전** `security` 사전 컨펌이 필수 게이트다(Δ 트리거 ⓒ).
+
+> 🔴 **이 표는 「점검 대상 목록」이지 설명이 아니다** — 여기 없는 경로는 다음 `security` 점검이
+> **보지 않는다**. 반출 경로가 생기면 문서 미화가 아니라 **통제 목록의 정확성** 문제로 여기 먼저 적는다.
 
 작업 규칙 정본은 [conventions/analysis.md](conventions/analysis.md)(분석)와
 [conventions/publishing.md](conventions/publishing.md)(공개)이고, 이 절은 그 거버넌스 근거다.

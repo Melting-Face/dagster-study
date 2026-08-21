@@ -114,10 +114,18 @@ hooks:
 | --- | --- | --- | --- |
 | Dagster | [`dagster.md`](../../docs/conventions/dagster.md) | `dagster-expert`·`dagster-integrations` | `dg check`·에셋 로드 |
 | dbt | [`dbt.md`](../../docs/conventions/dbt.md) | `using-dbt-for-analytics-engineering` 등 | `dbt build`/`test`·sqlfluff |
-| 데이터 품질 | [`test.md`](../../docs/test.md)·[`dataset_schema.md`](../../docs/dataset_schema.md) | `adding-dbt-unit-test`·`duckdb`·`sql-optimization` | **`data-verifier`** 불일치 0건 · **`data-qa`** 상위 계층 갭 해소 |
-| infra | [`docker.md`](../../docs/conventions/docker.md)·[`k8s.md`](../../docs/conventions/k8s.md)·[`terraform.md`](../../docs/conventions/terraform.md)·[`resource-sizing.md`](../../docs/resource-sizing.md) | `kubernetes-specialist`·`docker-expert`·`spark-engineer`·`helm-chart-scaffolding` | `compose config`·manifest lint·`terraform fmt/validate` · **`devops-verifier`** healthcheck 수렴 · **`devops-qa`** 상위 갭 해소 |
+| 데이터 품질 | [`test.md`](../../docs/test.md)·[`dataset_schema.md`](../../docs/dataset_schema.md) | `adding-dbt-unit-test`·`sql-optimization` | **`data-verifier`** 불일치 0건 · **`data-qa`** 상위 계층 갭 해소 |
+| infra | [`docker.md`](../../docs/conventions/docker.md)·[`k8s.md`](../../docs/conventions/k8s.md)·[`terraform.md`](../../docs/conventions/terraform.md)·[`resource-sizing.md`](../../docs/resource-sizing.md) | `kubernetes-specialist`·`multi-stage-dockerfile`·`spark-optimization`·`terraform-style-guide` | `compose config`·manifest lint·`terraform fmt/validate` · **`devops-verifier`** healthcheck 수렴 · **`devops-qa`** 상위 갭 해소 |
 | docs | [`doc-sync.md`](../../docs/doc-sync.md) | — | 정본 1곳·요약 링크 정합 |
 | 보안 | [`security.md`](../../docs/security.md)·[`general.md`](../../docs/conventions/general.md) | 내장 `security-review` | **`security` 워커** 점검에서 높음 0건 |
+
+🔴 **이 표는 파생물이다 — 정본은 각 구현 워커(`*-engineer`)의 §참고 스킬 표**다. 세 규칙을 지킨다:
+1. 구현 워커 표가 확정되기 **전에** 이 표를 고치지 않는다(파생을 원본보다 먼저 고치면 재작업이 생긴다).
+2. 원본에 **없는 이름을 옮기지 않는다** — 2026-08-21 이전 판이 `duckdb`·`docker-expert`·
+   `helm-chart-scaffolding`을 싣고 있었고 셋 다 **디스크에 없는 죽은 참조**였다.
+3. 원본에서 **축2·3이 0이라 보류된 항목은 옮기지 않는다** — `spark-engineer`가 현재 그 상태다
+   (위험 패턴 실재 + 캐비트 미작성).
+   또 **`terraform-test`·`terraform-stacks`는 미등재**다(전자는 `test.md`에 레이어 미정의, 후자는 제품 미채택).
 
 - 공통: 주석 한국어/식별자 영어, 들여쓰기 4칸, 저장=UTC·스케줄=KST, 비밀정보는 참조로.
 - 부하·전문성 분리가 필요해지면 도메인별 director로 분화할 수 있다(YAGNI: 지금은 1명).

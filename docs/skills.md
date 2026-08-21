@@ -253,8 +253,8 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | **terraform-test** | `hashicorp/agent-skills` (**A**) | `.tftest.hcl` 작성·실행, `run` 블록·assertion·프로바이더 모킹. 4파일, 실행 파일 0 |
 | **terraform-stacks** | `hashicorp/agent-skills` (**A**) | Terraform Stacks(`.tfcomponent.hcl`·`.tfdeploy.hcl`). 7파일, 실행 파일 0 |
 | **kubernetes-specialist** | `jeffallan/claude-skills` (**C**) | K8s 워크로드·매니페스트. ✅ `security` 검토 완료 — **단서 필수**(§C등급 단서 표) |
-| **spark-engineer** | `jeffallan/claude-skills` (**C**) | Spark 잡 작성·튜닝. ✅ 검토 완료(위험 패턴 0건) |
-| **spark-optimization** | `wshobson/agents` (**C**) | Spark 성능 최적화. 🔴 **미검토** |
+| **spark-engineer** | `jeffallan/claude-skills` (**C**) | Spark 잡 작성·튜닝. ⚠️ **"위험 패턴 0건"은 철회**(2026-08-21 재스캔) — 그 스윕의 **패턴셋이 base64·curl\|bash·시크릿·이미지태그 4종뿐이라 Spark writer 계열을 보지 않았다.** 재스캔 결과 `.mode("overwrite")` 3 · `saveAsTable` 4 · `bucketBy` 3 · `SparkSession.builder` 1 · `s3://` 54 실재. **미등재**(★1) 상태이며 등재하려면 §C등급 단서와 동일한 패턴 기반 문구가 **선행**돼야 한다 |
+| **spark-optimization** | `wshobson/agents` (**C**) | Spark 성능 최적화. ✅ **검토 완료·조건부 승인**(2026-08-21 — §C등급 5종 판정 K-1). ⚠️ 이 칸은 2026-08-21 19:xx까지 "🔴 미검토"로 남아 **같은 문서 안에서 §C등급 5종 판정과 모순**이었다(구판 스냅샷 미갱신) |
 | ~~**brainstorming**~~ ✅ **제거됨** | `obra/superpowers` (**C**) | 🔴 `security` 판정 「거부」 → **2026-08-21 10:28 lock·디스크에서 제거**(`61331e3`). 설치 목적이던 "director 계획 게이트"는 **plan 모드 + 설계 게이트 + `director.md` 3문항**으로 대체됐다 — §설계 게이트로의 이관 |
 
 > 🔴 **이 표를 "검증된 스킬 목록"으로 읽지 않는다.** 9건 중 **5건이 C등급**이고, `security` 검토를
@@ -363,8 +363,16 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 각 전문 워커([conventions/agents.md](conventions/agents.md) §네이티브 구현)는 지시문에 **자기 작업에 해당하는 스킬만**
 추려 담고, **이 문서를 정본으로 링크**한다. 스킬 목록을 워커 파일마다 복제하면 스킬 추가·제거 때 여러 곳이 드리프트한다.
 
-**등재 기준은 별점(★)이다** — 워커×스킬을 5축 루브릭(스택 일치·권한 정합·정본 무충돌·호출 빈도·대체 불가)으로
-채점해 **★4 이상만 등재**하고, ★3 이하는 등재하지 않는다. 축 2·3(권한·정본 충돌)이 0점이면 합계와 무관하게 제외한다.
+**등재 기준은 게이트 2축 + 별점 3축이다**(2026-08-21 개정) — 먼저 **게이트**(권한 정합·정본 무충돌)를
+통과시키고(탈락하면 채점 없이 제외, 단 **단서로 무해화 가능하면 통과**), 통과분만 **채점 3축**
+(스택 일치·호출 빈도·대체 불가)으로 매겨 **★3(3축 전부)만 등재**한다. ★2 이하는 등재하지 않는다.
+
+🔴 **구 5축은 같은 축을 게이트이자 가점으로 이중 계상했다** — 축2·3에 거부권을 주면서 점수도 줬다.
+축3·5는 스킬측 속성이라 거의 전종 1이고 축2도 단서로 살아나, **기본값이 이미 ★3**이 되고
+축1·축4 중 **하나만** 1이면 ★4로 등재선을 넘었다. 즉 **5축이 실질 2축으로 작동**했다.
+개정은 **출처 신뢰성을 별점에서 분리한 것과 같은 처리**다(거부권은 게이트로, 값을 더하는 것만 점수로).
+🔴 **축을 재가중하면 구 판정이 그대로 유효하지 않다** — 특히 **축4(호출 빈도)는 1/5에서 1/3으로 비중이 올랐다.**
+구 루브릭 판정을 재사용해 등재를 내리거나 올리지 마라. 재채점은 `skill-matcher` 소관이다.
 🔴 **출처 신뢰성은 별점 축이 아니라 별개 게이트**다(별점에 섞으면 "★5인데 출처 불명"을 못 잡는다) — `security` 판정 대상.
 루브릭 전문과 채점 매트릭스는 **[`skill-matcher`](../.claude/agents/skill-matcher.md)** 가 정본이며,
 이 표는 그 결과 중 **등재분만** 옮긴 것이다.
@@ -387,21 +395,48 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
   `# Output confirms success—no verification needed`는 이 저장소 **철학 원칙 7과 정면 충돌**한다
   (probe가 원문 그대로 인용해 확인). 프리로드하는 워커의 지시문에는 **이를 따르지 않는다는 단서**를 넣는다.
 
+🔴 **이 표(＝워커별 매핑)는 사본이다 — 정본은 각 `.claude/agents/<worker>.md`의 §참고 스킬 표다.**
+**어느 워커에 무엇이 물렸는가**가 갈리면 지시문이 사실이다.
+🔴 **단 범위는 매핑까지다** — **출처 등급(A~D)·C등급 통제·프리로드 조건·lock 관리는 이 문서가 정본**이고
+지시문 편집으로 바뀌지 않는다. 범위를 안 적으면 *"지시문이 사실이다"* 가 통제 조항까지 덮는 것으로 읽혀,
+**C등급 통제를 지시문 편집만으로 우회하는 경로**가 생긴다(§A등급 허점 — "lock 등재만으로 통제 건너뛰기"와 **같은 형태**).
+이 표를 먼저 고치고 지시문이 따라오게 하지 마라 —
+2026-08-21 재매핑에서 드러난 드리프트가 **전부 그 방향**이었다(§③만 갱신되고 `.claude/agents/**`가
+안 따라와, 문서는 terraform 3종·`dataviz` 제거를 반영했는데 지시문은 "Terraform 전용 스킬 없음"이었다).
+
+**아래는 2026-08-21 전수 재채점(14 스킬 × 13 워커, 3패스 분할 + 앵커 대조) 결과다.**
+
 | 워커 | 주 스킬 | 제약 |
 | --- | --- | --- |
-| `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선** |
-| `data-verifier` | `sql-optimization` · `answering-natural-language-questions-with-dbt` · `fetching-dbt-docs` | **읽기 질의만** — 모델 생성·대용량 전량 로드 금지. `duckdb` 강등(★2 — 조회 경로가 이미 Trino·`zcat`) |
-| `data-qa` | `adding-dbt-unit-test`(핵심) · `using-dbt-for-analytics-engineering` · `fetching-dbt-docs` · `running-dbt-commands` · `troubleshooting-dbt-job-errors` | dbt CLI는 `parse`·`ls`·`compile`만(`build`/`run` 금지) |
-| `devops-engineer` | `docker-expert`**(C)** · `kubernetes-specialist`**(C)** · `helm-chart-scaffolding`**(C·조건부)** · `github-actions-templates`**(C)** · `shellcheck-configuration`**(C)** · `spark-optimization`**(C)** · **`terraform-style-guide`**·**`terraform-test`**·**`terraform-stacks`**(A) | 🔴 **C등급 6종 중 4종은 `security` 미검토**(2026-08-21 재분류 · 검토 진행 중). `helm-chart-scaffolding`은 **조건부 승인 — 아래 §helm 단서가 등재의 조건**이다(단서 없는 등재는 그 자체로 정본 위반). ✅ **Terraform은 A등급 3종 신규 등재**(`terraform-style-guide`·`terraform-test`·`terraform-stacks`) — 실행 파일 0, 검토 불요 → [conventions/terraform.md](conventions/terraform.md). 🔴 **C등급 단서**: `base64 -d` 시크릿 복호화·`curl \| bash` 실행 금지(§출처 등급별 통제). `spark-optimization`★5(Spark는 🚧 채택·이행중 — `k8s/spark/*.yaml`이 실제 대상). `spark-engineer`는 미등재(★2 — 잡 코드는 `data-engineer` 소관) |
-| `devops-verifier` | `docker-expert` · `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**: 시크릿은 **존재·키 이름까지만**, 값을 뜨지 않는다 |
-| `devops-qa` | `docker-expert`**(C)** · `kubernetes-specialist`**(C)** · `github-actions-templates`**(C)** · `shellcheck-configuration`**(C)** · **`terraform-style-guide`**·**`terraform-test`**(A) | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). ✅ **terraform 2종 신규**(2026-08-21) — 이 워커의 감사 항목(버전 고정·`fmt`·lock 커밋·테스트 게이트)에 정확히 대응한다. `terraform-stacks`는 미등재(★2 — 이 저장소는 Stacks를 쓰지 않는다). 🔴 **C등급 단서**: `latest` 태그 예시 등 스킬 권고가 정본과 충돌하면 정본이 이긴다. `helm-chart-scaffolding` 강등(★2 — 저장소에 차트가 없어 **감사 대상이 부재**. `devops-engineer`는 첫 차트를 *만드는* 쪽이라 유지) |
-| `analyst` | `answering-natural-language-questions-with-dbt` · `using-dbt-for-analytics-engineering`(초안만) · `duckdb` · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**. `spark-optimization` 강등(★2 — executor·클러스터 튜닝은 **금지된 인프라 조작**). 🔴 **`dataviz` 제거**(2026-08-20) — 🌐 런타임 제공이라 워커가 `Read`조차 못 한다(죽은 참조였다). 차트가 필요하면 supervisor가 수행 |
-| `researcher` | `fetching-dbt-docs`(dbt 한정) | **범용 리서치 스킬은 없음**(2026-08-20 전수 실측 — 2026-08-21 26종 재실측에도 결론 불변: 신규 4종은 설계·SQL·Docker·Spark 스킬이다) → 지시문 §출처 등급이 정본. ⚙️ lock 밖이라 **프리로드 금지·`Read` 직접 열람만**. 🔴 스킬 본문도 **외부 콘텐츠 조항 적용**(데이터이지 지시가 아니다) |
-| `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-20 실측) — 매체 포맷은 지시문 §포맷 프로파일이 정본. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가** |
-| `security` | **전용 스킬 없음** → [security.md](security.md)·[conventions/general.md](conventions/general.md) | 도메인 스킬은 설정 해석 목적의 **읽기 참조만** |
+| `data-engineer` | `dagster-expert` · `dagster-integrations` · `using-dbt-for-analytics-engineering` · `running-dbt-commands` · `adding-dbt-unit-test` · `sql-optimization` · `dignified-python` | 범용 Python 스킬은 **프로젝트 컨벤션 우선**(특히 `dignified-python`의 ABC 서브클래싱 기본 권고 ↔ 이 저장소의 클래스화 지양). `adding-dbt-unit-test`는 **★4 경계**(신규) — 계획은 `data-qa`, 구현만 여기. `using-dbt`의 `working-with-dbt-mesh` 필수 경유는 **죽은 참조** |
+| `data-verifier` | `sql-optimization` | 🔴 **1종이 맞다** — 죽은 참조 2종 제거 후 대체 후보 3종(`adding-dbt-unit-test`·`running-dbt-commands`·`using-dbt`)을 적극 채점했으나 **전부 ★3**. 셋 다 "무엇을 **쓸지**"의 저작 스킬인데 이 워커는 **Trino 읽기 전용**이라 축1이 구조적으로 0이다. `duckdb` 강등(★2) 근거 보존 |
+| `data-qa` | `adding-dbt-unit-test`(핵심) · `using-dbt-for-analytics-engineering` · `running-dbt-commands` | dbt CLI는 `parse`·`ls`·`compile`만(`build`/`run` 금지). 🔴 **이 제약은 기계 강제가 아니라 순수 규율**이다 — `tools`에 명령어 제한이 없고 `hooks`도 없다(`analyst`와 대비) |
+| `devops-engineer` | `multi-stage-dockerfile` · `kubernetes-specialist`**(C)** · `spark-optimization`**(C)** · `terraform-style-guide`(A) | 🔴 **C등급 단서가 등재의 조건**이며 **패턴 기반으로 재작성**됐다(행번호 폐기 — 구 앵커 8개 중 6개가 이미 무효였다). `multi-stage-dockerfile`이 **`docker-expert`(죽은 참조) 대체**(★5). `terraform-style-guide`는 **★4 경계** — 유일 스택이 ⏸ 보류라 축4가 약하다. 🔴 **`terraform-test`·`terraform-stacks`는 미등재(각 ★3)** — 이전 판의 "A등급 3종 신규 등재"는 **채점으로 뒤집혔다**: 전자는 [`test.md`](test.md) 피라미드에 **Terraform 레이어가 정의된 적이 없고**(관행 부재), 후자는 **HCP Stacks 제품을 채택한 적이 없다**(제품 불일치). 두 "0건"의 **의미가 다르다**. `spark-engineer` 미등재(★1 — 축1·3 모두 0) |
+| `devops-verifier` | `kubernetes-specialist`**(C)** | **진단·해석까지만** — 스킬이 권하는 수정·재기동 실행 금지. 🔴 **C등급 단서**(패턴 기반): `base64 -d`로 시크릿 값을 뜨지 않는다, `\| sh`/`\| bash` 미실행. 🔴 **컨테이너 런타임 진단은 미충족 갭**이다 — `docker-expert` 제거 후 `multi-stage-dockerfile`은 **★3으로 승계 불가**(46행 빌드타임 저작 가이드라 로그·OOM 해석 콘텐츠가 없다). 이름이 비슷하다고 자동 승계시키지 않는다 |
+| `devops-qa` | `multi-stage-dockerfile` · `kubernetes-specialist`**(C)** · `terraform-style-guide`(A) | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). `terraform-style-guide`는 여기서 **★5**(감사는 스택 활동 여부와 무관하게 상시 코퍼스라 `devops-engineer`의 ★4와 갈린다). `terraform-test`·`terraform-stacks`·`spark-optimization` 미등재(각 ★3 — 감사자는 "한도가 선언돼 있는가"만 보면 되고 튜닝 심화는 초과 스펙). `helm-chart-scaffolding` 강등(★2) + **디스크에도 없음**(죽은 참조) |
+| `analyst` | `using-dbt-for-analytics-engineering`(초안만) · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**(쓰기는 `analyst_path_guard.py`가 **기계 차단**). `spark-optimization` 강등(★2 — 축2가 0: `write` 계열이 "테이블 생성·덮어쓰기 금지"와 정면 충돌). 🔴 **`dataviz` 제거**(2026-08-20) — 🌐 런타임 제공이라 `Read`조차 못 한다. `answering-natural-language-questions-with-dbt`·`duckdb`는 **죽은 참조로 제거**(2026-08-21) |
+| `researcher` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST — 프로젝트 14종 전수 **재도출**. 인벤토리가 24→14로 바뀌었으므로 이전 결론의 인용이 아니다). 벤더 A등급 스킬을 "1차 출처 캐시"로 등재하는 방안을 검토했으나 **축1 탈락** — 이 워커는 저장소 조회·외부 조사만 하고 CLI를 조작하지 않는다. `fetching-dbt-docs` **죽은 참조 제거**(등급·캐비트 판단 근거는 지시문에 보존) |
+| `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST 재실측 — 14종 기준). ⚠️ 이전 판의 "24개 인벤토리"와 **결론은 같으나 분모가 다르다** — 수치는 관측 시각과 함께 읽는다. 대조 셀 `dignified-python` ★3 확인. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가** |
+| `security` | `kubernetes-specialist`**(C)** · `multi-stage-dockerfile` · `terraform-style-guide`(A·**재채점 대상**) | 🔴 **"전용 스킬 없음"은 맞지만 "참조할 스킬이 없다"는 아니다** — 2026-08-21 재채점에서 3종이 ★4 이상으로 나왔다(F1 대조 셀이 **정본 선언이 낡았음**을 반환). 도메인 스킬은 설정 해석 목적의 **읽기 참조만**이고 §C등급 단서(패턴 기반)가 적용된다. `docker-expert` **죽은 참조 제거** |
 | `skill-matcher` | **없음** — 후보 탐색은 **`researcher` 릴레이**(2026-08-20) | 갭을 식별해 **조사 요청서**를 반환하면 supervisor가 `researcher`에 넘기고, 회신 후보를 **채점·제안**한다(배선은 하지 않는다). 신뢰성 **최종 판정은 `security`**. `find-skills` 강등(★3 — 축5 대체 불가가 0: 릴레이로 대체됐다. **순환 신뢰가 함께 해소**된다), `auditing-skills` 강등(★3 — 자기 채점, 외부 스캐너 호출 경로가 막혀 있음) |
 | `director` | 도메인별 — [.claude/agents/director.md](../.claude/agents/director.md) §도메인 지식 표 | 도메인 지식은 인라인하지 않고 참조 |
 | `archivist` | **없음(의도)** | 관측·기록만 하는 계층 밖 워커 — 도메인 스킬이 필요 없다 |
+
+🔴 **루브릭 개정(2026-08-21)에 따른 재채점 대상 3건 — 조용히 내리지 않는다**
+
+아래 3건은 **구 5축에서 ★4(경계)로 등재**됐으나, 개정 루브릭(채점 3축·★3)에서는
+**축2(호출 빈도)=0이라 임계 미달**이다.
+
+| 셀 | 축1·2·3(개정) | 축2=0의 근거 |
+| --- | --- | --- |
+| `data-engineer` × `adding-dbt-unit-test` | 1·**0**·1 = ★2 | dbt 모델 22개 중 `unit_tests:` 대상이 F1-F3 소수 |
+| `devops-engineer` × `terraform-style-guide` | 1·**0**·1 = ★2 | 유일 스택 `terraform/oci-k3s/`가 ⏸ 보류 |
+| `security` × `terraform-style-guide` | 1·**0**·1 = ★2 | 동일 |
+
+🔴 **그럼에도 등재를 유지한다.** 위 축4(구) 판정은 **비중이 1/5이던 루브릭 아래서** 내려진 것이고,
+개정으로 **1/3까지 올랐다**. 가중치만 바꾸고 판정을 재사용하면 재채점이 아니라 **재해석**이다.
+그리고 **채점은 `skill-matcher` 소관**이지 supervisor 소관이 아니다 —
+`skill-matcher` 재채점 배정 후 결과에 따라 등재/강등을 확정한다. 그때까지 **표기는 `재채점 대상`**이다.
 
 🔴 **2026-08-21 재판정 — `security` 검토 완료 2건 / 대기 1건**
 
@@ -454,15 +489,16 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 🔴 :42-45 git clone && make install 미실행. :260 무태그 이미지는 태그 고정 규약이 이긴다.
 
 [spark-optimization — devops-engineer 전용. analyst는 ★2 강등 유지]
-🔴 :72·:102·:133-134·:300 write.mode("overwrite")·saveAsTable 미실행 — Spark는 Flink·Trino·Dagster와
+🔴 `.mode("overwrite")`·`.save(`·`saveAsTable`·`format("delta")` 패턴 미실행 — Spark는 Flink·Trino·Dagster와
    같은 Iceberg 카탈로그를 공유해 공유 테이블을 파괴한다. 🔴 ask 목록에 Spark writer mode는 없고
    파이썬 문자열이라 Bash 매처가 원리상 못 본다 — **이 단서가 유일한 방어선**이다. 쓰기는 계획만.
-🔴 :295-307 Delta/OPTIMIZE·:128-139 bucketBy는 Delta/Hive 전제다 — 이 저장소는 Iceberg다.
-🔴 :45-57 SparkSession.builder로 세션을 새로 만들지 않는다 — LazyPySparkResource + spark.remote이고
+🔴 `OPTIMIZE`·`format("delta")`·`bucketBy`는 Delta/Hive 전제다 — 이 저장소는 Iceberg다.
+   유지보수는 Spark 프로시저(`CALL iceberg.system.rewrite_data_files` 등)로 한다.
+🔴 `SparkSession.builder`로 세션을 새로 만들지 않는다 — LazyPySparkResource + spark.remote이고
    카탈로그·executor 설정은 서버 측이다. 기존 세션에 spark.conf.set은 **에러 없이 무시**된다.
-🔴 executor.memory 8g 예시 미채용(kind 예산 초과). s3:// 경로 상수화 금지(참조 주입이 정본).
-🔴 :318 explain(extended) 출력을 통째로 옮기지 않는다 — warehouse 경로·카탈로그명이 실린다.
-ℹ️ 로드되는 것은 전역본(411행 단일 파일)이고 위 행번호는 그 기준이다.
+🔴 `executor.memory` 하드코딩 예시 미채용(kind 예산 초과). `s3://` 경로 상수화 금지(참조 주입이 정본).
+🔴 `.explain(` 출력을 통째로 옮기지 않는다 — warehouse 경로·카탈로그명이 실린다.
+🔴 `.collect()`로 전량 수집하지 않는다 — 이 저장소는 전량 메모리 적재를 금지한다.
 ```
 
 ##### 🔴 `helm-chart-scaffolding` 단서 (등재의 **조건** — 2026-08-21 `security`)
@@ -537,8 +573,8 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 - **출처 구분**: `Bash` 축 6셀은 이 세션의 직접 실측, **파일 도구 축 4셀은 병렬 세션 관측**(사용자가 프롬프트
   발생 여부를 직접 확인). 재현이 필요하면 새 세션에서 `deny` 전환 대조로 다시 돌린다.
 
-- 위 3건은 **`skill-matcher` 채점(5축 루브릭) 대상**이며 이 표는 결과를 옮기는 곳이다.
-  등급·검토 상태는 별점 축이 아니라 **별개 게이트**(`security`)라, ★4 이상이어도 미검토면 등재하지 않는다.
+- 위 3건은 **`skill-matcher` 채점(게이트 2축 + 채점 3축) 대상**이며 이 표는 결과를 옮기는 곳이다.
+  등급·검토 상태는 채점 축도 루브릭 게이트도 아닌 **별개 게이트**(`security`)라, ★3이어도 미검토면 등재하지 않는다.
 
 - **외부 표준·공식 문서 URL은 [references.md](references.md)에 단일 관리**한다. 워커 지시문은 **URL을 복제하지 않고**
   references.md 항목명(또는 정본 문서 경로)을 가리킨다 — 링크가 바뀌면 한 곳만 고치면 된다.
@@ -675,7 +711,21 @@ dbt Labs는 **dbt의 벤더**이므로 `running-dbt-commands` 같은 것은 A여
 | `kubernetes-specialist` | `references/multi-cluster.md:151` | `curl -Ls … \| bash` | 🔴 실행 금지 — 설치는 `security` 컨펌 + 사용자 승인 경로로만 |
 | `kubernetes-specialist` | `references/configuration.md:74,137,271` | 평문 비밀 예시(`db-password: "…"`) | philosophy #4 위반 패턴 — **예시를 그대로 옮기지 않는다** |
 | `kubernetes-specialist` | `references/helm-charts.md:453` | `image: curlimages/curl:latest` | [docker.md](conventions/docker.md) 태그 고정 규약이 이긴다 |
-| `spark-engineer` | — | 위험 패턴 **0건** | — |
+| ~~`spark-engineer`~~ | ~~—~~ | ~~위험 패턴 **0건**~~ | 🔴 **철회(2026-08-21)** — 아래 §미스캔 범주 참조 |
+
+🔴 **「위험 패턴 0건」은 「이 스킬은 전 범주 안전」이 아니었다** (2026-08-21 재스캔 · 원칙 7 실사례).
+2026-08-19 스윕의 **패턴셋은 `base64 -d`·`curl|bash`·평문 시크릿·`:latest` 4종**이었고,
+**Spark writer 계열은 애초에 검색 대상이 아니었다.** 같은 패턴셋을 `spark-optimization`에
+적용했을 때 K-1(High)로 걸린 바로 그 범주를, 이 스킬에서는 **아무도 보지 않았다**.
+
+재스캔 실측(`grep -F`, 2026-08-21): `.mode("overwrite")` **3** · `saveAsTable` **4** ·
+`bucketBy` **3** · `SparkSession.builder` **1** · `.explain(` **3** · `.collect()` **7** ·
+`s3://` **54** — **표면이 `spark-optimization`보다 넓다**.
+
+⇒ **부정 결과는 관측 경로가 그 범주를 덮었는지 함께 확인해야 유효하다.**
+스윕 결과를 기록할 때는 **"무엇을 찾았나"가 아니라 "무엇을 검색어로 썼나"** 를 함께 남긴다.
+현재 이 스킬은 **어느 워커에도 미등재(★1)** 라 로드 경로가 닫혀 있고, 등재하려면
+§C등급 단서와 동일한 **패턴 기반 문구 작성이 선행 조건**이다.
 
 ### C등급 5종 판정 (2026-08-21 `security` — 6파일 2,539행 정독 + 패턴 스윕 6종)
 
@@ -739,7 +789,7 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
 | **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
 | **B** | `vercel-labs/skills` | **1** | `find-skills` | ⚙️ | — |
 | **C** | `wshobson/agents` | **4** | `github-actions-templates`·**`helm-chart-scaffolding`**·`shellcheck-configuration`·`spark-optimization` | 일부 🔒 | 🔴 **미검토** |
-| **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | 🔒 | ✅ 검토 완료(위 단서 표) |
+| **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | 🔒 | `kubernetes-specialist` ✅ 검토 완료(위 단서 표) / **`spark-engineer` 🔴 재검토 필요** — 2026-08-21 "0건" 철회(§미스캔 범주). 🔴 **등급을 스킬 단위로 매기듯 검토 상태도 스킬 단위다** — 같은 출처라고 한 칸에 묶어 읽으면 철회된 쪽이 승인된 쪽에 업혀 간다 |
 | **C** | `sickn33/antigravity-awesome-skills` | **1** | `docker-expert` | ⚙️ | 🔴 **미검토** |
 | **C** | `silvainfm/claude-skills` | **1** | `duckdb` | ⚙️ | 🔴 **미검토** |
 | **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 4종** |

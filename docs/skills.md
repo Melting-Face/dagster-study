@@ -418,7 +418,7 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | `researcher` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST — 프로젝트 14종 전수 **재도출**. 인벤토리가 24→14로 바뀌었으므로 이전 결론의 인용이 아니다). 벤더 A등급 스킬을 "1차 출처 캐시"로 등재하는 방안을 검토했으나 **축1 탈락** — 이 워커는 저장소 조회·외부 조사만 하고 CLI를 조작하지 않는다. `fetching-dbt-docs` **죽은 참조 제거**(등급·캐비트 판단 근거는 지시문에 보존) |
 | `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST 재실측 — 14종 기준). ⚠️ 이전 판의 "24개 인벤토리"와 **결론은 같으나 분모가 다르다** — 수치는 관측 시각과 함께 읽는다. 대조 셀 `dignified-python` ★3 확인. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가** |
 | `security` | `kubernetes-specialist`**(C)** · `multi-stage-dockerfile` · `terraform-style-guide`(A·**재채점 대상**) | 🔴 **"전용 스킬 없음"은 맞지만 "참조할 스킬이 없다"는 아니다** — 2026-08-21 재채점에서 3종이 ★4 이상으로 나왔다(F1 대조 셀이 **정본 선언이 낡았음**을 반환). 도메인 스킬은 설정 해석 목적의 **읽기 참조만**이고 §C등급 단서(패턴 기반)가 적용된다. `docker-expert` **죽은 참조 제거** |
-| `skill-matcher` | **없음** — 후보 탐색은 **`researcher` 릴레이**(2026-08-20) | 갭을 식별해 **조사 요청서**를 반환하면 supervisor가 `researcher`에 넘기고, 회신 후보를 **채점·제안**한다(배선은 하지 않는다). 신뢰성 **최종 판정은 `security`**. `find-skills` 강등(★3 — 축5 대체 불가가 0: 릴레이로 대체됐다. **순환 신뢰가 함께 해소**된다), `auditing-skills` 강등(★3 — 자기 채점, 외부 스캐너 호출 경로가 막혀 있음) |
+| `skill-matcher` | **없음** — 후보 탐색은 **`researcher` 릴레이**(2026-08-20) | 갭을 식별해 **조사 요청서**를 반환하면 supervisor가 `researcher`에 넘기고, 회신 후보를 **채점·제안**한다(배선은 하지 않는다). 신뢰성 **최종 판정은 `security`**. 🔴 **`find-skills` ★0**(2026-08-22 신 3축 재채점 — 축1·2·3 전부 0, 게이트 2축도 단서 없이는 탈락). ⚠️ 이전 판의 "★3"은 **구 5축의 강등값(=미등재)** 이라 **같은 숫자가 반대 의미**였다(개정 3축에서 ★3은 만점=등재 임계) — 축을 재가중하면 구 판정을 재사용하지 않는다는 규칙의 실사례다. `auditing-skills` 강등(★3 — 구 5축 값. 디스크 부재로 신 루브릭 재채점 **`미확인`**) |
 | `director` | 도메인별 — [.claude/agents/director.md](../.claude/agents/director.md) §도메인 지식 표 | 도메인 지식은 인라인하지 않고 참조 |
 | `archivist` | **없음(의도)** | 관측·기록만 하는 계층 밖 워커 — 도메인 스킬이 필요 없다 |
 
@@ -787,7 +787,7 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
 | **B** | `dagster-io/skills` | **1** | **`dignified-python`** — 범용 Python(*"Not Dagster-specific"*) | 🔒 | — |
 | **B** | `dbt-labs/dbt-agent-skills` | **1** | **`auditing-skills`** — dbt가 아니라 *스킬*을 감사 | ⚙️ | 🔴 `skill-matcher`가 로드하면 **순환 신뢰**(등급과 무관한 별개 논점) |
 | **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
-| **B** | `vercel-labs/skills` | **1** | `find-skills` | ⚙️ | — |
+| **B** | `vercel-labs/skills` | **1** | `find-skills` | 🔒 **워킹트리 기준·미커밋** | ✅ 본문 검토 완료(2026-08-22) — 실행 파일 0건·문서로서 무해. 🔴 **`computedHash`는 blob 경로라 로컬 재현 불가**(위 §무결성 고정) · 어느 워커에도 **미등재**(★0) |
 | **C** | `wshobson/agents` | **4** | `github-actions-templates`·**`helm-chart-scaffolding`**·`shellcheck-configuration`·`spark-optimization` | 일부 🔒 | 🔴 **미검토** |
 | **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | 🔒 | `kubernetes-specialist` ✅ 검토 완료(위 단서 표) / **`spark-engineer` 🔴 재검토 필요** — 2026-08-21 "0건" 철회(§미스캔 범주). 🔴 **등급을 스킬 단위로 매기듯 검토 상태도 스킬 단위다** — 같은 출처라고 한 칸에 묶어 읽으면 철회된 쪽이 승인된 쪽에 업혀 간다 |
 | **C** | `sickn33/antigravity-awesome-skills` | **1** | `docker-expert` | ⚙️ | 🔴 **미검토** |
@@ -810,8 +810,18 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
   그중 **`helm-chart-scaffolding`은 C + 실행 파일**이라 정본상 **도입 금지 대상**인데
   현재 `devops-engineer`에 등재돼 있다 → §③ 재판정 필요.
 - ✅ **무결성 고정은 이제 실효가 있다** — §해시 재계산이 열렸고 현재 **전 항목이 🔒**다
-  (전역 제거 후 lock 14 = 디스크 14, ⚙️ 0종). 🔴 단 **🔒는 여전히 C등급을 면제하지 않는다** —
+  (2026-08-21 관측, **HEAD 기준** lock 14 = 디스크 14, ⚙️ 0종). 🔴 단 **🔒는 여전히 C등급을 면제하지 않는다** —
   "안 바뀜"과 "안전함"은 다른 축이고, 그 혼동이 A등급 허점의 원인이었다.
+  🔴 **그리고 "14/14 재현"의 분모가 이미 낡았다**(2026-08-22 01:35 KST 실측). 워킹트리 기준 lock은
+  **15종**이고(사용자가 `find-skills`를 설치, 미커밋), **그중 1종이 원리상 재현 불가**다 — 설치 CLI가
+  `BLOB_ALLOWED_OWNERS`(`vercel`·`vercel-labs`·`heygen-com`)에 대해서만 `tryBlobInstall` 경로를 타
+  `computedHash`에 **레지스트리가 준 값**(`download.hash`)을 넣기 때문이다. 폴더 해시가 아니므로
+  `computeSkillFolderHash` 재구현으로는 **맞을 수가 없다**(경로 후보 6종 + 내용 단독까지 전수 대조해 전멸).
+  ⇒ 정확한 진술은 *"해시 재계산 가능"* 이 아니라 **"blob 화이트리스트 **밖** 출처에 대해 가능"** 이다.
+  🔴 **여기서 세 번째 축이 드러난다 — 🔒(고정 표기) ↔ 로컬 검증 가능성.** `find-skills`는 **🔒이면서
+  로컬 무결성 확인 불가**다. 정본이 이미 갈라놓은 *고정 ↔ 출처 등급* 두 축에 이것이 더해진다.
+  ⚠️ **"N/N 재현"은 그 N이 무엇의 전수인지와 함께 읽는다** — 주장을 쓸 때는 참이었고,
+  **분모가 나중에 늘어나면 아무도 다시 세지 않는다.**
 
 #### 프로젝트 스코프 스킬 (`.claude/skills/`) — 2026-08-21 신설
 

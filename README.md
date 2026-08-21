@@ -31,9 +31,9 @@ MIMIC-IV·eICU 중환자 데이터를 **Dagster + dbt + Iceberg 레이크하우�
 | 계층 | 현재 위치 | 비고 |
 | --- | --- | --- |
 | 오케스트레이션 | **호스트** — Dagster webserver·daemon | 메타 스토리지는 compose `postgres` |
-| 배치 컴퓨트 | **K8s** — Apache Spark Operator → `SparkApplication` | 러너 이미지 `spark-runner:0.4.0`(Iceberg·S3A·Spark Connect) |
-| SQL 엔드포인트 | **K8s** — Spark Connect 서버 | dbt-spark가 `spark.remote`로 접속(Phase 1) |
-| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` ⏸ **현재 미설치** | 러너 이미지 `flink-runner:0.2.0`(Iceberg). Phase 3에서 `INSTALL_FLINK=true`로 복구 |
+| 배치 컴퓨트 | **K8s** — Apache Spark Operator → `SparkApplication` | 러너 이미지 `spark-runner:0.5.0`(Iceberg **1.11.0**·S3A·Spark Connect) |
+| SQL 엔드포인트 | **K8s** — Spark Connect 서버 | dbt-spark가 `spark.remote`로 접속(Phase 1). 🔴 평시 `--replicas=0`이라 **쓰기 전에 1로 올린다**(§2-1) |
+| 스트림 컴퓨트 | **K8s** — Flink Operator → `FlinkDeployment` | 오퍼레이터는 **기본 설치**(`INSTALL_FLINK=false`로 제외). 러너 이미지 `flink-runner:0.2.0`(Iceberg). 세션 클러스터는 **검증 후 내린다** |
 | 테이블 포맷 | Iceberg (JDBC 카탈로그 = **CloudNativePG** `catalog-postgres`, 접속은 `-rw` 서비스) | Spark·Flink가 **동일 카탈로그 공유**(카탈로그명 `iceberg`로 통일) |
 | 오브젝트 스토어 | SeaweedFS (S3 호환, path-style) | Iceberg 웨어하우스 |
 | UI 진입점 | **K8s** — ingress-nginx (`*.localtest.me:8080`) | HTTP UI만 Ingress, 데이터 접속은 `port-forward`(§2-1) |
@@ -58,10 +58,32 @@ cp .env.example .env
 
 ```shell
 ./scripts/k8s-up.sh                       # podman machine + kind 클러스터 + 레지스트리
-./scripts/k8s-operators.sh                # Spark Operator + CloudNativePG (Flink는 INSTALL_FLINK=true)
+./scripts/k8s-operators.sh                # Spark + Flink + CloudNativePG (Flink 제외는 INSTALL_FLINK=false)
 ./scripts/k8s-poc-storage.sh              # SeaweedFS + Iceberg 카탈로그 Postgres(CNPG Cluster)
 ./scripts/k8s-down.sh                     # 정리
 ```
+
+> VM은 **8 CPU / 22888 MiB**(≈22.35 GiB)를 가져간다. 예산·배분과 **호스트 쪽 여유**는
+> [`docs/resource-sizing.md`](docs/resource-sizing.md) — 🔴 호스트 32 GiB 기준으로 **실질 여유가 거의 없다.**
+
+### 2-0. 컴퓨트 기동·회수 (검증 후 반드시 내린다)
+
+상주 컴퓨트는 **켜둔 채 잊으면 예산을 계속 갉아먹는다**(과거 13시간 유출 전례 —
+[`docs/conventions/k8s.md`](docs/conventions/k8s.md) §9-3). 쓰기 직전에 올리고 **끝난 자리에서 내린다.**
+
+```shell
+# Spark Connect (dbt·노트북용) — 평시 0, 쓸 때만 1
+kubectl scale deploy/spark-connect --replicas=1
+kubectl scale deploy/spark-connect --replicas=0     # 회수
+
+# Flink 세션 클러스터 — 잡이 없어도 JM이 1 CPU/2Gi를 상주 점유한다
+kubectl apply  -f k8s/flink/flinkdeployment-session.yaml
+kubectl delete -f k8s/flink/flinkdeployment-session.yaml   # 회수
+```
+
+> 회수가 끝나면 상주는 **2250m(28%) / 3140Mi(14%)** 로 돌아온다(2026-08-22 실측, 분모는 노드 Allocatable).
+> Spark·Flink **동시 기동은 허용**되며 실측 피크는 **84% / 52%** 다 — 단
+> `spark.executor.instances` ≤ 1을 지킨다(2개면 97%).
 
 ### 2-1. Web UI 접근 (port-forward 불필요)
 
@@ -70,16 +92,32 @@ cp .env.example .env
 
 | URL | 대상 |
 | --- | --- |
-| http://flink.localtest.me:8080 | Flink Web UI (JobManager) — ⏸ Flink 미설치라 현재 미응답 |
-| http://spark.localtest.me:8080 | Spark Web UI (Connect 서버, 쿼리 이력 누적) |
+| http://flink.localtest.me:8080 | Flink Web UI (JobManager) — **세션 클러스터가 떠 있을 때만** 응답(§2-0) |
+| http://spark.localtest.me:8080 | Spark Web UI (Connect 서버, 쿼리 이력 누적) — `--replicas=1`일 때만 |
 
 데이터 접속(카탈로그 Postgres·SeaweedFS·Spark Connect gRPC)은 `port-forward`를 쓴다.
 
 ```shell
 kubectl port-forward svc/catalog-postgres-rw 15432:5432   # Iceberg JDBC 카탈로그(CNPG 쓰기 서비스)
-kubectl port-forward svc/seaweedfs        18333:8333   # S3 API
-kubectl port-forward svc/spark-connect    15002:15002  # dbt(spark_connect 타깃)
+kubectl port-forward svc/seaweedfs           18333:8333   # S3 API
+kubectl port-forward svc/spark-connect       15002:15002  # dbt(spark_connect 타깃)
 ```
+
+> 🔴 **15002는 `spark-connect` 파드가 있어야 붙는다** — 평시 `--replicas=0`이므로 먼저 §2-0으로 1로 올린다.
+> 내려간 상태에서는 `port-forward`가 실패하며, 이건 고장이 아니라 **회수된 상태**다.
+>
+> 🔴 **15432는 클라이언트 접속이 끝날 때마다 죽는다 — 호스트 부하 탓이 아니다.**
+> 3/3 결정론적으로 재현되며 swap이 0일 때도 끊긴다(원인: Postgres 경로가 FIN이 아닌 **RST**로 끊고
+> kubectl이 이를 터널 전체의 치명 오류로 취급). **같은 조건에서 15002·18333은 생존**한다.
+> ⇒ **15432가 죽은 것을 "호스트 메모리 압박"의 근거로 삼지 마라**(그 지표는 무효다 —
+> [`docs/resource-sizing.md`](docs/resource-sizing.md) §(D)). 자동 재기동하되 **시각을 남긴다.**
+>
+> ```shell
+> until kubectl port-forward svc/catalog-postgres-rw 15432:5432; do
+>     echo "$(date '+%F %T') 15432 재기동" >> /tmp/pf-15432.log
+>     sleep 1
+> done
+> ```
 
 ### 2-2. 컴퓨트 러너 이미지 빌드 (최초 1회 / Dockerfile 변경 시)
 
@@ -88,8 +126,8 @@ Spark·Flink 워크로드는 Iceberg·S3A 의존을 구운 **전용 이미지**�
 [`docs/conventions/k8s.md`](docs/conventions/k8s.md) §10.
 
 ```shell
-podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.4.0 k8s/spark
-podman push --tls-verify=false localhost:5001/spark-runner:0.4.0
+podman build -f k8s/spark/Dockerfile.spark-runner -t localhost:5001/spark-runner:0.5.0 k8s/spark
+podman push --tls-verify=false localhost:5001/spark-runner:0.5.0
 
 podman build -f k8s/flink/Dockerfile.flink-runner -t localhost:5001/flink-runner:0.2.0 k8s/flink
 podman push --tls-verify=false localhost:5001/flink-runner:0.2.0
@@ -104,15 +142,22 @@ Dagster는 **클러스터 밖 호스트**에서 돌며 K8s를 원격 컴퓨트�
 ([`docs/conventions/k8s.md`](docs/conventions/k8s.md) §8).
 
 ```shell
-docker compose up -d postgres             # 메타 스토리지만 기동 (127.0.0.1 바인딩)
+podman compose up -d postgres             # 메타 스토리지만 기동 (127.0.0.1 바인딩)
 
 cd dagster/dockerfile.d/src
 export DAGSTER_HOME="$PWD"                # dagster.yaml이 있는 디렉터리
 uv run dg dev                             # http://localhost:3000
 ```
 
-> 컨테이너로 통째 띄우려면 `docker compose up -d --build`(webserver·daemon 분리 기동).
+> 🔴 **이 환경에는 `docker` 바이너리가 없다** — 컨테이너 런타임은 **podman 5.8.2**이고 compose는
+> `podman compose`(외부 provider `docker-compose` v5.1.3 경유)로 돈다. 문서의 `docker compose ...`는
+> 전부 `podman compose ...`로 읽는다.
+>
+> 컨테이너로 통째 띄우려면 `podman compose up -d --build`(webserver·daemon 분리 기동).
 > 이 경우 Dagster가 클러스터를 트리거하는 경로는 별도 배선이 필요하다.
+>
+> **Dagster 실사용 RSS는 856.8 MiB**(8프로세스, 2026-08-22 실측)다 — VM이 22.35 GiB를 가져간 뒤
+> 호스트 여유가 빠듯하므로 [`docs/resource-sizing.md`](docs/resource-sizing.md) §(D)를 함께 본다.
 
 ### 4. 노트북 (호스트, 옵션)
 
@@ -120,6 +165,7 @@ ad-hoc 탐색은 **Jupyter Lab**으로 한다. Dagster와 **같은 venv**를 쓰
 Spark Connect·pyiceberg에 붙고 `dagster_project.common.*`를 그대로 import할 수 있다.
 
 ```shell
+kubectl scale deploy/spark-connect --replicas=1      # 평시 0이라 먼저 올린다 (§2-0)
 kubectl port-forward svc/spark-connect 15002:15002   # 별도 터미널
 
 cd dagster/dockerfile.d/src
@@ -136,6 +182,26 @@ uv run --group notebook jupyter lab --port 8889 --notebook-dir ../../../notebook
 dbt 모델은 `dbt_pipelines/models/<dataset>/`에 `.sql`을 추가하면 자동 반영된다.
 각 데이터셋 subproject가 **`@dbt_assets(select="fqn:<dataset>")`** 로 자기 모델만 소유한다
 (`path:` 셀렉터는 cwd 글롭이라 정의 로드 시 모델이 수집되지 않는다 — [`docs/conventions/dbt.md`](docs/conventions/dbt.md)).
+
+**접속 타깃은 `DBT_TARGET`으로 고른다** — `profiles.yml`이
+`target: "{{ env_var('DBT_TARGET', 'spark_connect') }}"` 이므로 **기본값은 `spark_connect`** 다.
+
+| 값 | 접속 대상 | 용도 |
+| --- | --- | --- |
+| *(미설정)* = `spark_connect` | K8s Spark Connect(:15002) | 평시 기본 |
+| `DBT_TARGET=dev` | Trino | **값 대조**(엔진 간 결과 비교) |
+
+```shell
+kubectl scale deploy/spark-connect --replicas=1          # §2-0 — 먼저 올린다
+kubectl port-forward svc/spark-connect 15002:15002       # 별도 터미널
+
+dbt build                                                # spark_connect (기본)
+DBT_TARGET=dev dbt build                                 # Trino로 값 대조
+```
+
+> 🔴 **같은 SQL이 엔진에 따라 값이 갈린 사례가 있다**(`dbt.datediff` — Spark는 경과시간 `ceil`,
+> Trino는 경계 교차). 그래서 Trino 타깃은 제거 대상이면서도 **값 대조의 정본**으로 남아 있다.
+> 수치를 문서·리포트에 옮길 때는 **산출 엔진을 병기**한다([`docs/conventions/dbt.md`](docs/conventions/dbt.md)).
 
 ## AI 에이전트 구조 (Claude Code)
 

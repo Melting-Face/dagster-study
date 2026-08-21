@@ -10,51 +10,100 @@
 > 그 이후 섹션(Trino·Dagster·Postgres…)은 **현행 compose 배분**이다. Trino는 재설계에서 제거되므로
 > Trino 섹션은 이행 완료 시 레거시 참조가 된다.
 
-## Kubernetes 재설계 시나리오 (kind + Podman · 6 CPU / 16 GB) 🚧
+## Kubernetes 재설계 시나리오 (kind + Podman · 8 CPU / 22.3 GiB) 🚧
 
 > 대상: [redesign.md](redesign.md)의 목표 토폴로지. **Dagster는 호스트**(이 예산 밖), 컴퓨트·데이터
-> 서비스만 로컬 K8s(kind on Podman)에 둔다. 컴퓨트는 **Spark(배치) / Flink(스트리밍)** 2엔진이며 **시분할** 한다.
+> 서비스만 로컬 K8s(kind on Podman)에 둔다. 컴퓨트는 **Spark(배치) / Flink(스트리밍)** 2엔진이며,
+> 2026-08-22 실측으로 **시분할 → 동시 기동**으로 규약이 바뀌었다([conventions/k8s.md](conventions/k8s.md) §9-3).
 
-### (A) podman machine(VM) 예산 = 6 CPU / 16 GB / disk 120 GB
+### (A) 예산의 단위 축은 **셋**이다 🔴
+
+메모리를 인용할 때 **어느 축의 값인지 반드시 병기**한다. 셋은 서로 다른 것을 세며, 숫자만 옮기고
+단위를 바꾸면 조용히 틀린다([philosophy.md](philosophy.md) §계측 단위).
+
+| 축 | 값 | 무엇을 세는가 | 어디서 읽나 |
+| --- | --- | --- | --- |
+| **VM 총량** | **8 CPU / 22888 MiB** (= 22.35 GiB) | podman machine에 할당된 전체 | `podman machine inspect` |
+| **`MACHINE_MEMORY_MIB`** | `22888` | 위와 **같은 축**(VM 총량)의 선언값 | [`scripts/k8s-env.sh`](../scripts/k8s-env.sh) |
+| **노드 Allocatable** | **8000m / `22843508Ki`** (≈ 22308Mi ≈ 21.8 GiB) | 파드가 실제로 예약 가능한 양 | `kubectl describe node` |
+
+- 🔴 **VM 총량(22888 MiB)이 노드 Allocatable(≈22308Mi)보다 581 MiB 많다.** 차이는 노드 OS·kubelet
+  예약분이며, **둘은 다른 축이라 섞어 쓰면 안 된다.** 이 문서의 **백분율(%)은 전부 Allocatable 기준**이다.
+- 🔴 **단위를 바꾸는 순간이 함정이다** — `22843508Ki`를 "22843Mi"로 옮긴 중간 기록이 있었고, 이는
+  **536Mi(2.4%) 과대**다(`Ki→Mi`는 ÷1024이지 접두어 치환이 아니다). 표에는 **raw 값을 남기고
+  환산식을 함께** 적는다: `22843508 ÷ 1024 = 22308.1`.
+  ⚠️ 같은 이유로 `22307Mi`로 적힌 기록도 1Mi 어긋난 값이다(정확히는 **22308Mi**). 백분율 결론
+  (52%·14%)은 어느 쪽이든 동일하지만, **값과 함께 "무엇을 세는가"를 적지 않으면 재검산이 불가능**하다.
 
 ```bash
 # macOS(Apple Silicon): 자원은 머신 생성 시 확정(사후 변경은 재생성 필요), kind는 rootful 요구
-podman machine init dagster-k8s --rootful --cpus 6 --memory 16384 --disk-size 120
+podman machine init dagster-k8s --rootful --cpus 8 --memory 22888 --disk-size 120
 podman machine start dagster-k8s
 export KIND_EXPERIMENTAL_PROVIDER=podman
 kind create cluster --name lakehouse --config kind-cluster.yaml
+
+# 실측 확인 (환산식을 함께 남긴다)
+kubectl get node -o jsonpath='{.items[0].status.allocatable}'   # cpu:8, memory:22843508Ki
 ```
 
-- **호스트 headroom(중요)**: 16 GB는 VM에 통째 할당된다. Dagster(webserver+daemon+메타 Postgres)가
-  **호스트**에서 도므로 **호스트 총 RAM ≥ 24 GB(권장 32 GB)**. 미달 시 VM 메모리를 낮춘다.
+- **호스트 headroom**: VM 22.35 GiB는 **호스트에서 통째로 빠져나간다.** Dagster(webserver+daemon+
+  메타 Postgres)가 호스트에서 도므로 호스트 여유를 따로 봐야 한다 → **아래 (D) 호스트 축**.
 - **disk 120 GB**: SeaweedFS(원천 csv.gz + Iceberg parquet) + Redpanda 로그 + 이미지 레이어 대비.
 
-### (B) 컴포넌트 배분 (requests / limits) — 2엔진 시분할
+### (B) 컴포넌트 배분 (requests / limits) — 동시 기동
 
-원칙: **Σrequests ≤ 할당가능(≈5.5 CPU / ~14 GiB)**. **BATCH(Spark)와 STREAM(Flink)은 동시 실행 금지**
-(동시 피크 ≈ 6.85 CPU로 초과). 한 번에 한 엔진만 띄운다.
+원칙: **Σrequests ≤ 노드 Allocatable(8000m / ≈22308Mi)**. 2026-08-22 실측으로 **BATCH+STREAM 동시
+피크가 84% / 52%** 에 들어옴이 확인돼 시분할 금지가 **동시 기동 허용**으로 바뀌었다
+([conventions/k8s.md](conventions/k8s.md) §9-3).
+아래 표의 `req`는 전부 **실제 선언값**이며, 합계 행은 **관측 차분으로 검산**된 값이다.
 
 | 구분 | 워크로드 | req CPU | req Mem | lim CPU | lim Mem |
 | --- | --- | --- | --- | --- | --- |
-| **상주(baseline)** | kube-system(kind CP·CNI·coredns·local-path) | 0.5 | 1.5Gi | — | — |
+| **상주(baseline)** | kube-system(kind CP·CNI·coredns·local-path) ¹ | 950m | 290Mi | — | — |
 | | Spark Operator(Apache, **JVM**) | 250m | 512Mi | 500m | 1Gi |
-| | Flink Operator | 200m | 512Mi | 500m | 1Gi |
 | | SeaweedFS(master+volume+filer+s3) | 300m | 768Mi | 1 | 1.5Gi |
 | | **CloudNativePG 오퍼레이터**(컨트롤러) | 100m | 200Mi | 250m | 384Mi |
 | | Catalog Postgres(Iceberg JDBC, CNPG `Cluster` 1인스턴스) | 250m | 512Mi | 500m | 768Mi |
-| | **Spark Connect 서버**(Phase 1, dbt 접속용) | 500m | 1.5Gi | 1 | 2Gi |
-| | **ingress-nginx 컨트롤러**(UI 고정 URL) | 100m | 90Mi | — | — |
-| | **상주 소계** | **~2.2** | **~5.5Gi** | | |
-| **BATCH(일시)** | Spark driver | 1 | 1Gi | 1 | 1.5Gi |
-| | Spark executor × 2 | 2 | 4Gi | 1/ea | 2.5Gi/ea |
-| | **BATCH 피크(상주+Spark)** | **~4.7** | **~9.1Gi** | | ✅ 6/16 내 |
-| **STREAM(일시)** | Redpanda(dev, 1 broker) | 500m | 1.5Gi | 1 | 2Gi |
-| | Flink JobManager | 1 | 1.5Gi | 1 | 2Gi |
-| | Flink TaskManager × 1(2 slot) | 1 | 2Gi | 1 | 2.5Gi |
-| | **STREAM 피크(상주+Flink)** | **~4.2** | **~9.1Gi** | | ✅ 6/16 내 |
+| | **ingress-nginx 컨트롤러**(UI 고정 URL) ² | 100m | 90Mi | — | — |
+| | **상주 기준선 소계**(Flink Operator 미설치 상태) | **1950m** | **2372Mi** | | 24% / 11% |
+| **Flink Operator** ³ | 컨트롤러 파드 | 200m | 512Mi | 500m | 1Gi |
+| | 웹훅(webhook) 컨테이너 | 100m | 256Mi | 200m | 512Mi |
+| | **상주 + Flink Operator**(= 회수 후 실측) | **2250m** | **3140Mi** | | **28% / 14%** |
+| **온디맨드 상주** | **Spark Connect 서버**(dbt 접속용, 미사용 시 `--replicas=0`) | 500m | 1536Mi | 1 | 2Gi |
+| | Flink JobManager(세션 클러스터, 잡 없어도 상주) | 1000m | 2048Mi | 1 | 2Gi |
+| | **동시 피크의 기저**(관측 차분) | **3750m** | **6724Mi** | | 47% / 30% |
+| **STREAM(일시)** | Flink TaskManager × 1 — **잡 제출 시 온디맨드**, 종료 시 자동 회수 | 1000m | 2048Mi | 1 | 2Gi |
+| **BATCH(일시)** | Spark driver ⁴ | 1000m | **1433Mi** | 1 | 1.5Gi |
+| | Spark executor × **1** ⁴ ⁵ | 1000m | **1433Mi** | 1 | 1.5Gi |
+| | 🔴 **동시 기동 피크(3워크로드 상주) — 실측** | **6750m** | **11638Mi** | | ✅ **84% / 52%** |
 
-> ingress-nginx는 **`limits`가 없는 유일한 워크로드**다(외부 매니페스트 그대로, [conventions/k8s.md](conventions/k8s.md) §2 예외).
-> 상주 부하가 작아 예산에는 영향이 미미하지만, 상한이 없다는 점은 인지하고 쓴다.
+¹ 🔴 **구 문서의 `750m/250Mi`는 틀렸고 합계만 맞았다.** 실측은 **950m/290Mi**다. 합계가 맞으면
+  내역이 틀려도 오래 살아남는다 — 행 단위로 재측정한다.
+² ingress-nginx는 **`limits`가 없는 유일한 워크로드**다(외부 매니페스트 그대로,
+  [conventions/k8s.md](conventions/k8s.md) §2 예외). 상주 부하가 작아 예산 영향은 미미하지만 상한이 없다.
+³ 🔴 **Flink Operator 차트는 자원을 선언하지 않는다** — `helm show values` 실측 결과
+  **`operatorPod.resources: {}` · `operatorPod.webhook.resources: {}`** 로 **둘 다 비어 있다.**
+  `scripts/k8s-operators.sh`의 helm 호출에 **`--set` 8종**(`operatorPod.resources.{requests,limits}.{cpu,memory}`
+  4종 + `operatorPod.webhook.resources.*` 4종)을 넣지 않으면 이 표의 두 행이 **처음부터 거짓**이 된다.
+  이는 Spark Operator에서 이미 밟은 함정의 **거울상**이다 — 그쪽은 차트 기본값 `1000m/2048Mi`가
+  **조용히 적용**됐고(과대), 이쪽은 **0으로 잡혀 BestEffort가 된다**(과소). 방향만 반대이고
+  **"helm은 값을 안 줘도 에러를 내지 않는다"** 는 원인은 같다.
+⁴ 🔴 **driver·executor의 실제 request는 `1433Mi`이지 유도값 `1408Mi`가 아니다.**
+  `spark.{driver,executor}.memory=1024m`에 JVM overhead가 더해진 값을 오퍼레이터가 request로 환산한다.
+  **표에는 실측 1433Mi를 쓰고 유도값을 쓰지 않는다** — 계획 예측이 메모리에서 `+50Mi`(25Mi × 2) 빗나간
+  원인이 정확히 이것이었다.
+⁵ 🔴 **executor는 1개로 제한**한다. 2개면 `6750m + 1000m = 7750m` = **Allocatable의 97%** 라
+  사실상 여유가 없다((C) 다이얼 참조).
+
+> 🔴 **`BestEffort` 파드는 `describe node` 합계에 0으로 잡힌다.** 현재 cert-manager 3파드가 그 상태이며
+> 실사용은 약 82MiB인데 표시는 0이다. **"합계에 없다 = 없다"가 아니다.** 예산을 대조할 때 함께 돌린다.
+>
+> ```shell
+> kubectl get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,QOS:.status.qosClass | grep BestEffort
+> ```
+
+> 🔴 **Redpanda는 아직 미도입**이라 위 표에 없다. 도입 시 STREAM 피크가 그만큼 올라가므로
+> **이 표와 [conventions/k8s.md](conventions/k8s.md) §9-3의 경계를 함께 재계산**한다.
 
 > 🔴 **Spark Operator 행 정정 (2026-08-19)** — 종전 `100m/256Mi req · 250m/512Mi lim`은
 > **Kubeflow(Go) 오퍼레이터 시절 수치**였다. 프로젝트는 Apache 오퍼레이터(**JVM**)로 이전했는데
@@ -79,50 +128,157 @@ kind create cluster --name lakehouse --config kind-cluster.yaml
 ### (C) 운영 다이얼 (초과 시 조절 순서)
 
 0. **★★★★★ Spark Connect 서버 스케일 0** — dbt를 돌리지 않을 때 `kubectl scale deploy/spark-connect --replicas=0`.
-   유일하게 **상주하는 컴퓨트**라 시분할 원칙의 예외다. 켜둔 채 잊으면 예산을 계속 갉아먹는다.
-1. **★★★★★ 엔진 시분할** — BATCH(Spark)·STREAM(Flink)을 **번갈아** 실행. 대기 엔진 파드는 0으로.
-2. **★★★★☆ Spark executor 수/크기** — 기본 `2 × (1core/2Gi)`. 대용량 인제스트 시 조절.
-3. **★★★★☆ Flink TaskManager slot/개수** — 스트리밍 병렬도. 기본 TM 1개(2 slot).
-4. **★★★☆☆ Redpanda dev 모드 메모리** — `--memory`/`--smp`로 축소, 데모 후 스케일 0.
+   유일하게 **상주하는 컴퓨트**다. 켜둔 채 잊으면 예산을 계속 갉아먹는다.
+   🔴 **역방향도 규율이다** — 0으로 내려둔 상태에서는 `port-forward svc/spark-connect`가 붙지 않는다.
+   dbt·노트북을 쓰기 전에 `--replicas=1`로 되돌린다([README](../README.md) §2-1).
+1. **★★★★★ Flink 세션 클러스터 회수** — 검증·데모가 끝나는 **그 자리에서** `FlinkDeployment`를 삭제한다.
+   JM은 **잡이 없어도 1000m/2048Mi를 상주 점유**하며, 이 규율이 깨져 13시간 샌 전례가 있다
+   ([conventions/k8s.md](conventions/k8s.md) §9-3).
+2. **★★★★★ `spark.executor.instances` ≤ 1 (Flink 세션이 떠 있는 동안)** — 동시 피크 실측이
+   `6750m`(84%)인데 executor를 하나 더 붙이면 **`7750m` = 97%** 로 사실상 여유가 사라진다.
+   대용량 인제스트로 executor를 늘려야 하면 **Flink 세션을 먼저 내린다**(둘 중 하나만 확장).
+3. **★★★★☆ Flink TaskManager slot/개수** — 스트리밍 병렬도. 기본 TM 1개.
+   TM은 **잡 제출 시 온디맨드**로 뜨고 잡 종료와 함께 회수되므로 유휴 비용은 0이다.
+4. **★★★☆☆ Redpanda dev 모드 메모리**(도입 시) — `--memory`/`--smp`로 축소, 데모 후 스케일 0.
 
-### (C-2) 실측 (2026-08-18, kind `lakehouse` 단일 노드)
+### (C-2) 실측 — 동시 기동 피크 (2026-08-22, kind `lakehouse` 단일 노드)
+
+> **모집단**: `kubectl describe node`의 **Allocated resources**(= Σ**requests**, 실사용량이 아니다).
+> **분모**: 노드 Allocatable `8000m` / `22843508Ki`(≈22308Mi). **VM 총량(22888MiB) 축이 아니다.**
 
 | 구성 | Requests CPU | Requests Mem |
 | --- | --- | --- |
-| 상주만(오퍼레이터 2종 + SeaweedFS + 카탈로그 PG + cert-manager) | 3500m (43%) | 5538Mi (24%) |
-| + Flink 세션 클러스터(JM 1 + TM 1) | 4500m (56%) | 7586Mi (34%) |
+| 상주 기준선(Flink Operator 미설치) | **1950m (24%)** | **2372Mi (11%)** |
+| + Flink Operator(컨트롤러 + 웹훅) = **회수 후 정상 상태** | **2250m (28%)** | **3140Mi (14%)** |
+| + Spark Connect + Flink JobManager = **피크의 기저** | 3750m (47%) | 6724Mi (30%) |
+| 🔴 **+ Flink TM + Spark driver + executor = 동시 피크** | **6750m (84%)** | **11638Mi (52%)** |
 
-> ⚠️ 위 실측은 **2026-08-18** 값으로, 이후 구성이 바뀌었다(Flink 스택 제거 / CNPG 도입).
->
-> **2026-08-19 재실측** (`kubectl describe node`, CNPG 적용 직후):
->
-> | 구성 | Requests CPU | Requests Mem |
-> | --- | --- | --- |
-> | 상주(Spark Operator + **CNPG 오퍼레이터·`Cluster` 1인스턴스** + SeaweedFS + Spark Connect + ingress) | 3200m (40%) | 5444Mi (24%) |
->
-> Flink Operator가 빠지고 CNPG 2종이 들어와 **CPU는 -300m**, 메모리는 거의 같다.
->
-> 🔴 **위 재실측 값의 정정 (같은 날 후속 측정)** — `3200m/5444Mi`는 **합계는 맞지만 내역이 틀렸다.**
-> 이 숫자는 `describe node`의 결과를 그대로 옮긴 것이라, 그 안에 **Spark Operator 드리프트
-> (선언 없이 차트 기본값 `1000m/2048Mi`)가 통째로 포함**돼 있었다. 즉 재실측이 드리프트를
-> 교정한 게 아니라 **정상값으로 박제**했고, 그 결과 같은 문서의 (B) 표(당시 `100m/256Mi`)와
-> (C-2) 실측이 서로 모순인데도 실측 쪽만 갱신돼 **모순이 증거가 아니라 잡음처럼 보이게** 됐다.
-> 드리프트 교정 후 상주 예상치는 **약 2450m / 3908Mi**다(적용 후 재측정 필요).
->
-> 🔴 **cert-manager는 빠지지 않았다** — 종전 서술은 사실과 다르다. cert-manager 3파드는 계속
-> 가동 중이며(현재는 Flink가 아니라 **CNPG barman-cloud 플러그인의 TLS** 발급자다),
-> `describe node` 합계에 안 잡힌 이유는 제거돼서가 아니라 **requests/limits 선언이 아예 없어서**다
-> (barman-cloud도 동일). 예산표에 안 보이는 워크로드가 실제로는 약 82MiB를 쓰고 있다 —
-> **"합계에 없다 = 없다"가 아니다.**
->
-> podman machine 실제 할당은 **8 CPU / 22GiB**로, 문서 목표치(6/16)보다 여유가 있다.
-> 목표 예산으로 좁힐 경우 위 수치가 상한에 근접하므로 시분할이 다시 필수가 된다.
+**동시 피크 관측(2026-08-22 01:21:30, 지속 9초, 0.5초 간격 폴링)**
 
-### (D) 참고 수치 근거
+```
+01:21:01  Flink 배치 잡 제출
+01:21:09  TM Running      (+7초)     4750m /  8772Mi
+01:21:28  driver Running             5750m / 10205Mi
+01:21:30  executor Running        →  6750m / 11638Mi   ← 3워크로드 동시 상주 (피크)
+01:21:39  driver·executor 종료
+01:21:54  TM 소멸                    3750m /  6724Mi
+```
+
+| | 실측 | 계획 예측 | 오차 |
+| --- | --- | --- | --- |
+| CPU | **6750m (84%)** | 6750m | **0** |
+| Mem | **11638Mi (52%)** | 11588Mi | **+50Mi (+0.43%)** |
+
+- **분해(관측 차분)**: 기저 `3750m/6724Mi` + TM `1000m/2048Mi` + driver `1000m/1433Mi`
+  + executor `1000m/1433Mi` = `6750m / 11638Mi`.
+- 🔴 **오차 50Mi의 출처는 규명됐다** — driver·executor의 실제 request가 **1433Mi**이고 유도값 1408Mi가
+  아니다(`1024m` + JVM overhead). **25Mi × 2 = 50Mi.** 표 (B)에는 **1433Mi**를 쓴다.
+
+> 🔴 **이 피크는 세 번 만에 잡혔다 — 앞의 두 번은 타이밍 때문에 놓쳤다.**
+> Spark driver+executor의 수명은 **9초**인데 Flink TM은 **46~52초**로 **5배 차이**가 난다.
+> **짧은 쪽(Spark)을 먼저 던지면 긴 쪽이 뜨기 전에 끝나 겹치지 않는다.**
+> 재측정할 때는 반드시 **긴 쪽(Flink TM)을 먼저 띄우고 그 창 안에 Spark를 넣는다.**
+> 겹침 실패는 **"동시 피크가 낮다"로 보이지 "못 잡았다"로 보이지 않는다** —
+> 관측 실패가 유리한 결론처럼 위장하는 경로다([philosophy.md](philosophy.md) 원칙 7).
+
+> **유휴 Flink 비용은 JM뿐임이 관측으로 확인됐다** — JM 상주 `1000m/2048Mi`, **TM은 잡 제출 시
+> 온디맨드**(제출 +7초 기동, 수명 46~52초, 잡 종료 시 자동 회수). 예산의 핵심 전제가 검증됐다.
+
+> 🔴 **cert-manager는 위 합계에 없지만 존재한다** — 3파드가 `BestEffort`(requests/limits 미선언)라
+> `describe node` 합계에 0으로 잡히며 실사용은 약 82MiB다(barman-cloud 플러그인도 동일).
+> 현재는 Flink가 아니라 **CNPG barman-cloud 플러그인의 TLS** 발급자다. (B)의 `grep BestEffort` 명령으로
+> 함께 대조한다 — **"합계에 없다 = 없다"가 아니다.**
+
+<details>
+<summary>이전 실측 이력 (2026-08-18 / 08-19) — 왜 틀렸는지</summary>
+
+| 일자 | 구성 | Requests CPU | Requests Mem |
+| --- | --- | --- | --- |
+| 2026-08-18 | 상주만(오퍼레이터 2종 + SeaweedFS + 카탈로그 PG + cert-manager) | 3500m | 5538Mi |
+| 2026-08-18 | + Flink 세션 클러스터(JM 1 + TM 1) | 4500m | 7586Mi |
+| 2026-08-19 | 상주(Spark Operator + CNPG 2종 + SeaweedFS + Spark Connect + ingress) | 3200m | 5444Mi |
+
+🔴 **2026-08-19의 `3200m/5444Mi`는 합계는 맞지만 내역이 틀렸다.** `describe node` 결과를 그대로
+옮긴 값이라 **Spark Operator 드리프트**(선언 없이 차트 기본값 `1000m/2048Mi`)가 통째로 포함돼
+있었다. 재실측이 드리프트를 교정한 게 아니라 **정상값으로 박제**했고, 그 결과 (B) 표(당시
+`100m/256Mi`)와 (C-2)가 서로 모순인데도 실측 쪽만 갱신돼 **모순이 증거가 아니라 잡음처럼 보이게** 됐다.
+당시 예측치 `약 2450m / 3908Mi`도 빗나갔다 — **2026-08-22 실측은 `2250m / 3140Mi`**(회수 후)다.
+
+**교훈**: 실측은 그 자체로 정답이 아니다. **드리프트가 있는 상태에서 뜬 실측은 드리프트를 정당화한다.**
+선언(표)과 실측을 대조할 때 **불일치를 실측 쪽으로 맞추기 전에 왜 갈리는지를 먼저 찾는다.**
+
+</details>
+
+### (D) 🔴 호스트 축 — VM 밖의 예산 (2026-08-22 실측)
+
+**클러스터 예산만 보면 안 된다.** VM 22.35 GiB는 호스트에서 통째로 빠져나가고, Dagster는 그 **밖**에서
+돈다. 종전 서술 *"호스트 총 RAM ≥ 24 GB(권장 32 GB)"* 는 **VM이 16 GiB이던 시절의 숫자**이며,
+VM이 22.35 GiB를 가져가는 현재 **그 여유는 소진됐다.**
+
+| 항목 | 값 |
+| --- | --- |
+| 호스트 총량 | **32.0 GiB / 10 CPU** |
+| VM(podman machine) | **22.35 GiB / 8 CPU** |
+| 산술상 잔여 | ~9.6 GiB / 2 CPU |
+| **Dagster 실사용 RSS** | **856.8 MiB** (8프로세스) |
+
+**Dagster RSS 내역**(8프로세스 합 856.8 MiB): 코드서버 278.4 + `dg` 179.0 + webserver 158.7
++ daemon 142.9 + 코드서버 86.5 + `uv` 26.5 + 기타.
+
+**부하 단계별 호스트 메모리**
+
+| 시점 | swap used | PhysMem unused | compressor | free % |
+| --- | --- | --- | --- | --- |
+| Dagster 기동 **전** | 0.00M | **197M** | 12G | — |
+| Dagster 기동 후 | 0.00M | 183M | 12G | 53% |
+| **TM 창(최대 부하)** | **0.00M** | **107M** | 12G | **50%** |
+| 최종 | 0.00M | 92M | **13G** | 48% |
+
+- 🔴 **산술상 잔여 9.6 GiB는 실제 여유가 아니다.** Dagster 기동 **전**에 이미
+  `31G used / 197M unused`였다. 실질 여유는 사실상 **0**이고, macOS가 **메모리 압축**으로 버티고 있다.
+- ✅ **swap 진입은 0**이었다 — 최대 부하(TM 창)에서도 `swap used = 0.00M`.
+- ⚠️ **다만 방향은 단조 악화**다: unused `197M → 92M`, compressor `12G → 13G`.
+  현 구성은 **성립하지만 여유가 없다.** 워크로드를 더 얹기 전에 이 표를 다시 뜬다.
+- 🔴 **`free` 델타를 Dagster 비용으로 쓰지 마라** — 기동 전후 `free` 델타는 **−8.7 MiB**로,
+  실제 RSS **856.8 MiB**의 1%에 불과하다. macOS가 purgeable·compressor에서 회수해 free를 일정하게
+  유지하기 때문이다. **"free 델타"는 *Dagster가 쓴 양*이 아니라 *OS가 남기기로 한 양*을 센다.**
+  → 프로세스 비용은 **RSS**로, 시스템 압박은 **swap·compressor**로 본다(**다른 축**이다).
+
+#### 호스트 압박 판정 지표 — 재정의 🔴
+
+| 신호 | 판정 | 근거 |
+| --- | --- | --- |
+| **swap `used` > 0** | ✅ **유효 · 최강** | 압축으로 못 버텨 디스크로 밀린 상태 |
+| **`swapouts` 누적값** | ✅ **유효** | `used`는 회수되면 0으로 돌아가 **지나간 압박을 못 본다**. 누적값은 사후 판정이 된다 |
+| port-forward **15002 · 18333** 사망 | ✅ 유효 | 이번 실측에서 이 둘은 **끝까지 생존**했다 → 죽는다면 상시 원인이 아니라 압박 신호로 읽는다 |
+| 🔴 port-forward **15432** 사망 | ❌ **무효 — 지표로 쓰지 마라** | 아래 참조 |
+
+🔴 **15432(`catalog-postgres-rw`)는 호스트 압박과 무관하게 죽는다** — **클라이언트 접속이 끝날 때마다
+결정론적으로** 끊긴다(3/3 재현). `KUBECTL_PORT_FORWARD_WEBSOCKETS=true`로 **변인 하나만** 바꾼
+대조군도 동일했고, **swap이 0인 상태에서도** 죽었다. 같은 kubectl·같은 클러스터인데 **15002·18333은
+생존**해 대조군이 갈렸다. 원인은 Postgres 경로가 FIN이 아닌 **RST**로 끊고 kubectl이 그것을
+**터널 전체의 치명 오류**로 취급하는 것이다.
+
+⇒ 종전 서술 *"port-forward가 끊기면 호스트를 의심한다"* 를 **그대로 두면 다음 사람이 정확히 오진한다.**
+우회는 **`until` 루프 자동 재기동 + 재기동 시각 로깅**이다 — 조용히 되살리면 지표가 지워지므로
+**언제 몇 번 죽었는지를 남긴다.**
+
+```shell
+# 재기동 시각을 남긴다(지표를 지우지 않는다)
+until kubectl port-forward svc/catalog-postgres-rw 15432:5432; do
+    echo "$(date '+%F %T') 15432 재기동" >> /tmp/pf-15432.log
+    sleep 1
+done
+```
+
+### (E) 참고 수치 근거
 
 - Flink Operator FlinkDeployment 예시: JobManager/TaskManager 각 `memory 2048m / cpu 1`(권장 예시값)
   [Apache Flink Kubernetes Operator — custom-resource/overview].
 - podman machine 기본 1 CPU / 2048 MiB → 반드시 상향 지정 [podman-machine-init — Podman docs].
+- Flink Operator 차트는 `operatorPod.resources`·`operatorPod.webhook.resources`를 **빈 맵으로 둔다**
+  (`helm show values flink-operator-repo/flink-kubernetes-operator` 실측, chart 1.15.0) →
+  `--set` 미지정 시 컨트롤러·웹훅이 **`BestEffort`** 가 된다.
 
 ## 조정 지점 요약
 
@@ -235,7 +391,7 @@ daemon 필요 메모리
     300MB + 2 × 4GB × 1.5 = 12.3g → limit 16g
 ```
 
-**결정 절차**: ① 가장 메모리를 많이 쓰는 에셋을 특정 → ② `docker stats dagster-daemon` 또는 UI run
+**결정 절차**: ① 가장 메모리를 많이 쓰는 에셋을 특정 → ② `podman stats dagster-daemon`(🔴 이 환경에 `docker` 바이너리는 **없다** — compose도 `podman compose`) 또는 UI run
 로그로 피크 추정 → ③ 위 공식 적용 → ④ `dagster.yaml`·`compose.yml`·`cpus`를 **함께** 수정 → ⑤ 실측 검증.
 
 **의존성 연동 규칙** — `max_concurrent_runs`(`dagster.yaml`)와 daemon `memory`(`compose.yml`)는 강결합.

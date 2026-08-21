@@ -159,6 +159,24 @@ resources:
   오퍼레이터 전이가 없으면 **파드 기준으로 판정**한다. 정상 경로(전이 2.5분)는 그대로 두고
   watch 사멸 시에만 탈출하는 설계다. 회복은 `kubectl -n spark-operator rollout restart deploy`.
   근본 해결은 업스트림(apache/spark-kubernetes-operator) 몫이다.
+
+  🔴 **이 방어는 2026-08-22에 처음으로 실동작이 확인됐다**(그전까지는 **작성됐을 뿐 발동한 적이 없었다** —
+  "구현했다"와 "작동한다"는 다른 축이다, [../philosophy.md](../philosophy.md) 원칙 7).
+
+  | 항목 | 실측 |
+  | --- | --- |
+  | driver `Succeeded` → 자산 탈출까지 | **187초** |
+  | 설정값 `pod_terminal_grace_s` | 180 |
+  | 폴링 간격 `poll_interval_s` | 5 |
+  | 기대 창(폴링 양자화 감안) | 180~185초 |
+  | 기록된 판정 상태 문자열 | `DriverReady(watch-stalled,pod=Succeeded)` |
+
+  🔴 **판정 문자열이 직접 증거인 이유**: `...(watch-stalled,pod=...)` 형식은 `defs/poc/resources.py`의
+  탈출 분기에서**만** 생성된다. 오퍼레이터도 쿠버네티스도 이 문자열을 만들지 않으므로,
+  메타데이터에 이 값이 있다는 것은 **그 분기가 실제로 실행됐다**는 뜻이다 —
+  *"타임아웃이 안 났다"* 같은 **부정 관측이 아니라 양성 증거**다.
+  🔴 실측 187초가 기대 창 180~185초를 **2초 초과**한 것은 폴링 경계와 자산 종료 처리 지연으로 설명되며,
+  이 정도 오차까지 함께 적어야 다음 사람이 "187이면 180이 아니네"로 오판하지 않는다.
 - **검증 상태**: PoC **잡**(`k8s/spark/sparkapplication-poc.yaml`)은 Apache 오퍼레이터에서 **동작 확인됨**
   (2026-08-17 — Iceberg write+read-back `rows=3`, exitCode 0, 정리 오류 0건).
   PoC **자산**(`defs/poc/`, 호스트 Dagster 제출 경로)도 2026-08-18 Apache 스펙 이전 후 **라이브 검증 통과**:
@@ -168,12 +186,13 @@ resources:
 
 ## 9-2. Flink Operator·FlinkDeployment 규칙 (스트리밍)
 
-> ⏸ **현재 미설치**(2026-08-19). Phase 0 검증 후 `flink-session`·Flink Operator·cert-manager를
-> 제거했다 — 잡 없는 세션 클러스터가 **1 CPU / 2Gi를 상주 점유**해 §9-3 시분할 규약을 어겼기 때문이다.
-> 아래 규칙과 매니페스트·러너 이미지는 **Phase 3 재개용으로 그대로 유효**하며
-> `INSTALL_FLINK=true ./scripts/k8s-operators.sh`로 복구한다(`INSTALL_FLINK` 기본값은 `false`).
-> 🔴 세션 클러스터는 **잡이 없어도 JM이 상주**한다(아래 Web UI 항목) — 이게 자원이 조용히 새는 경로다.
-> 검증이 끝나면 반드시 내린다.
+> ✅ **오퍼레이터는 기본 설치된다**(2026-08-22 갱신). `scripts/k8s-env.sh`의 **`INSTALL_FLINK` 기본값이
+> `true`** 이며, 빼려면 `INSTALL_FLINK=false ./scripts/k8s-operators.sh`로 설치한다.
+> 2026-08-19에 잠시 제거했던 이유(잡 없는 세션 클러스터가 1 CPU / 2Gi를 상주 점유)는
+> **예산 상향(8 CPU / 22.35 GiB)과 동시 기동 실측**으로 해소됐다(§9-3).
+> 🔴 **오퍼레이터 상주와 세션 클러스터 상주는 다른 축이다** — 오퍼레이터는 상시 두되,
+> **세션 클러스터(`FlinkDeployment`)는 잡이 없어도 JM이 상주**하므로(아래 Web UI 항목)
+> **검증이 끝나면 반드시 내린다.** 회수 규율은 예산이 늘어도 그대로다(§9-3).
 
 - **오퍼레이터**: Apache **Flink Kubernetes Operator**를 Helm으로 설치하고, 스트리밍 잡은 **`FlinkDeployment`(CRD)** 로 선언한다.
   JobManager/TaskManager 자원(`memory`·`cpu`)을 명시한다(§2, 수치는 [../resource-sizing.md](../resource-sizing.md)).
@@ -203,6 +222,34 @@ resources:
 - **크리덴셜은 SQL DDL에 쓰지 않는다** — `sql-client`가 실행문을 **그대로 echo**해 터미널·로그에 평문이 남는다
   (2026-08-18 실측). S3 키는 표준 env(`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`)로 넣어 **S3FileIO의 기본
   자격증명 체인**이 집어가게 하고 DDL에서 뺀다. Secret→env 주입은 `podTemplate`으로 한다(§4).
+
+  #### 🔴 예외: JDBC 카탈로그 DDL — **조건부 허용** (2026-08-22, `security` C5)
+
+  Iceberg **JDBC 카탈로그**의 `CREATE CATALOG`는 S3 키와 달리 **환경변수 체인이 없어** DDL에
+  접속 정보를 넣는 것을 피할 수 없다. 아래 **5개 조건을 전부** 만족할 때만 허용한다.
+  하나라도 못 지키면 위 금지 조항이 그대로 적용된다.
+
+  1. **커밋 파일에는 `${VAR}` 플레이스홀더만 둔다**(비밀 0). 실값은 파드 안에서 `envsubst`로 렌더한다.
+  2. **`kubectl exec` 스트림으로만 실행**한다. stdout이 **컨테이너 로그가 되는 Job/파드 형태로 만들지 않는다** —
+     로그로 나가는 순간 회수 불가다.
+  3. **렌더 산출물은 `chmod 600` + 실행 직후 삭제**하고, `sql-client`의 **`--history`를 버릴 경로로 지정**한다.
+  4. 🔴 **무유출 3점 확인이 조건이다** — ⓐ 컨테이너 로그 ⓑ 파드 파일시스템 ⓒ **JobManager REST 로그 API**.
+     셋 다 확인해야 통과이고, 하나라도 미확인이면 **미확인**이지 통과가 아니다.
+  5. 🔴 **위험 전제를 명시한다** — 지금 이 예외의 위험이 낮은 이유는 위 통제가 아니라
+     **카탈로그 PG 비밀번호가 아직 회전되지 않은, 공개 저장소에 커밋된 기본 상수**이기 때문이다
+     (`scripts/k8s-poc-storage.sh`의 `PG_PASSWORD` 기본값 — 값은 그 파일에서 확인한다.
+     이 문서에 옮겨 적지 않는다).
+     ⇒ **실값으로 회전하는 순간 이 예외는 무효**가 되고, 그때는 위 5조건으로도 부족하다.
+     비밀번호 회전 시 이 절을 **먼저** 재검토한다.
+
+  🔴 **관측 범위 교훈 — "관측 경로의 생존"과 "관측 범위의 충분성"은 다른 축이다.**
+  2026-08-22 점검에서 지정한 범위(`/opt/flink/log`·`/tmp`)를 **벗어난** 셸 히스토리 파일
+  (`/opt/flink/.flink-sql-history`)에 평문 **5라인**이 남아 있었다. 같은 점검의 생존 확인은
+  **811·6·814건**으로 멀쩡했다 — **경로가 살아 있다는 것이 범위가 충분하다는 뜻이 아니다.**
+  ⇒ 유출 점검 범위에는 **숨김 파일(`.*`)·셸 히스토리·홈 디렉터리**를 반드시 포함한다
+  ([../philosophy.md](../philosophy.md) 원칙 7).
+
+  ⚠️ 이 예외를 적지 않으면 **"규칙은 금지인데 코드는 위반"** 인 상태가 남아, 규칙이 조용히 죽는다.
 - **Web UI**: 오퍼레이터가 `<name>-rest`(8081) Service를 만든다. 호스트에서는
   `kubectl port-forward svc/<name>-rest 8081:8081`(§10). **세션 클러스터는 잡이 없어도 JM이 상주**해
   UI가 계속 살아 있다(Spark의 driver UI가 잡 종료와 함께 사라지는 것과 대비 —
@@ -214,15 +261,74 @@ resources:
   상태 백엔드=RocksDB. 러너 이미지는 `iceberg-flink-runtime`+S3A 의존을 포함해 로컬 레지스트리에 push한다(§10 이름 규칙).
 - **역할 경계**: **배치는 Spark, 스트림은 Flink**로 분리한다(엔진 중복 금지). ad-hoc SQL은 Spark SQL로 대체(Trino 제거).
 
-## 9-3. 컴퓨트 시분할 (6/16 예산)
+## 9-3. 컴퓨트 동시 기동 규약 (8/22.3 예산)
 
-- **BATCH(Spark)와 STREAM(Flink)은 동시 실행하지 않는다**(단일 PC 6 CPU/16 GB에서 동시 피크가 예산 초과).
-  한 번에 한 엔진만 띄우고, 대기 엔진 파드는 0으로 스케일한다. 근거·배분은 [../resource-sizing.md](../resource-sizing.md) "Kubernetes 재설계 시나리오".
-- Redpanda·Flink JM/TM는 **스트리밍 데모 중에만** 상주시키고, 종료 후 스케일 0으로 자원을 회수한다.
+> **2026-08-22 개정** — 종전 규약은 *"BATCH(Spark)와 STREAM(Flink)은 동시 실행 금지"* 였다.
+> VM 실할당이 **6 CPU/16 GB → 8 CPU/22.35 GiB**로 올라가고 동시 피크가 **실측**되면서
+> **동시 기동을 허용**한다. 🔴 **규약이 바뀐 이유는 "샜던 게 괜찮아져서"가 아니라 "예산이 늘어서"** 이며,
+> **회수 규율은 그대로 유지**된다(아래 마지막 항목).
+
+### 동시 허용 — 근거는 실측이다
+
+- **BATCH(Spark)와 STREAM(Flink)을 동시에 띄워도 된다.** 3워크로드(Flink TM + Spark driver + executor)가
+  동시 상주한 **실측 피크는 `6750m` / `11638Mi`** = 노드 Allocatable의 **CPU 84% / Mem 52%** 다
+  (2026-08-22 01:21:30, 9초 지속, 0.5초 간격 폴링).
+- 계획 예측 대비 오차는 **CPU 0 · Mem +50Mi(+0.43%)** 였고, 그 50Mi의 출처까지 규명됐다
+  (driver·executor 실제 request가 `1433Mi`이지 유도값 `1408Mi`가 아니다).
+- 배분표·관측 타임라인·분해는 [../resource-sizing.md](../resource-sizing.md) §(B)·§(C-2).
+- 🔴 **백분율의 분모는 노드 Allocatable(`8000m` / `22843508Ki`)** 이지 VM 총량(`22888MiB`)이 아니다.
+  둘은 **581 MiB 차이 나는 다른 축**이라 섞으면 안 된다.
+
+### 경계 3개 — 동시 기동은 무제한이 아니다
+
+1. 🔴 **Flink 상주는 JobManager뿐이어야 한다.** TM은 **잡 제출 시 온디맨드**로 뜨고(제출 +7초)
+   수명 **46~52초** 뒤 잡 종료와 함께 **자동 회수**된다. 이 전제가 관측으로 확인됐기 때문에
+   동시 기동이 성립한다 — **TM을 상주시키면 전제가 무너진다.**
+2. 🔴 **`spark.executor.instances` ≤ 1** (Flink 세션이 떠 있는 동안). executor 하나를 더 붙이면
+   `6750m + 1000m = 7750m` = **Allocatable의 97%** 로 사실상 여유가 사라진다.
+   executor를 늘려야 하면 **Flink 세션을 먼저 내린다**(둘 중 하나만 확장).
+3. **Redpanda는 아직 미도입**이다. 도입하면 STREAM 피크가 그만큼 올라가므로
+   **[../resource-sizing.md](../resource-sizing.md) §(B) 표와 이 절의 경계를 함께 재계산**한다.
+   재계산 전에는 동시 기동 허용이 Redpanda까지 확장되지 않는다.
+
+### 🔴 회수 규율은 유지된다 (예산이 늘어도 새는 것은 새는 것이다)
+
+- Flink JM·Spark Connect는 **검증·데모가 끝나는 그 자리에서** 내린다. 예산 여유는 회수를 면제하지 않는다.
 - 🔴 **이 규칙은 2026-08-19에 실제로 깨져 있었다** — Phase 0 검증용 `flink-session`이 잡 없이 13시간
   상주하며 `spark-connect`와 **동시 점유**(합 1.5 CPU / 3.5Gi requests)했다. 발견 경로는 성능 이상이 아니라
   **"안 쓰는 것 정리"** 였다. 규약이 문서에만 있고 **회수 시점을 아무도 트리거하지 않으면** 이렇게 샌다.
-  → 검증·데모가 끝나는 **그 자리에서** 내린다. 상주 컴퓨트는 주기적으로 `kubectl get pods -A`로 대조한다.
+- 2026-08-22 검증에서도 **끝난 자리에서 Flink 세션과 Spark Connect를 내렸다** — 회수 후 실측
+  `2250m (28%) / 3140Mi (14%)`. 검증 종료 시 이 값으로 돌아왔는지 확인한다.
+- 상주 컴퓨트는 주기적으로 `kubectl get pods -A`로 대조하고, **`BestEffort` 파드는 합계에 0으로 잡히므로**
+  아래를 함께 돌린다(현재 cert-manager 3파드가 그 상태 — 실사용 약 82MiB, 표시 0).
+
+  ```shell
+  kubectl get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,QOS:.status.qosClass | grep BestEffort
+  ```
+
+### 🔴 ResourceQuota는 도입하지 않는다 — 명시적 결정 (2026-08-22)
+
+- 위 경계 3개는 **어느 것도 기계로 강제되지 않는다.** `ResourceQuota`/`LimitRange`를 걸면
+  executor 수·상주 컴퓨트를 클러스터가 거부하게 만들 수 있지만, **도입하지 않기로 한다** —
+  단일 개발 클러스터에서 쿼터 초과는 잡 실패로 나타나 **디버깅 비용이 절감 효과보다 크고**,
+  PoC 단계에서 한도를 자주 바꾸게 되어 선언이 또 다른 스테일 소스가 된다.
+- 🔴 **따라서 이 절의 실효는 규율 100%다.** 위 "13시간 유출"이 정확히 규율에만 의존한 결과였고,
+  같은 실패가 재현될 수 있다는 뜻이다. **이것은 자백이지 안전 선언이 아니다.**
+  재발 시에는 이 결정을 뒤집고 `ResourceQuota`를 다시 검토한다([../philosophy.md](../philosophy.md) 원칙 7).
+
+### 🔴 재측정 시 주의 — 순서를 거꾸로 잡으면 못 잡는다
+
+동시 피크는 **세 번 만에 잡혔다.** 앞의 두 번은 자원이 부족해서가 아니라 **타이밍 때문에** 놓쳤다.
+
+| 워크로드 | 수명 |
+| --- | --- |
+| Spark driver + executor | **약 9초** |
+| Flink TaskManager | **46~52초** |
+
+수명이 **5배** 차이 나므로 **짧은 쪽(Spark)을 먼저 던지면 긴 쪽이 뜨기 전에 끝나 겹치지 않는다.**
+→ **긴 쪽(Flink TM)을 먼저 띄우고 그 창 안에 Spark를 넣는다.**
+🔴 겹침 실패는 **"동시 피크가 낮다"로 보이지 "못 잡았다"로 보이지 않는다** — 관측 실패가
+유리한 결론처럼 위장하는 경로다([../philosophy.md](../philosophy.md) 원칙 7).
 
 ## 10. 호스트 Dagster → 로컬 K8s 트리거·연결 규칙
 
@@ -230,7 +336,7 @@ resources:
   런칭하고, **로그·asset check·materialization을 Pipes 채널로 회수**한다. 컨텍스트는 env, 메시지는 파드 로그로 전달된다.
 - **로컬 배포판**: **kind on Podman(rootful)**. macOS에선 Podman이 **VM(podman machine)** 안에서 동작하고 kind는 그 VM
   안 컨테이너로 노드를 만든다. kind Podman provider는 experimental이라 **rootful 머신이 필수**이며,
-  `export KIND_EXPERIMENTAL_PROVIDER=podman` 후 `kind create cluster` 한다. VM 자원(6/16)은 [../resource-sizing.md](../resource-sizing.md).
+  `export KIND_EXPERIMENTAL_PROVIDER=podman` 후 `kind create cluster` 한다. VM 자원(**8 CPU / 22.35 GiB**, 2026-08-22 상향)은 [../resource-sizing.md](../resource-sizing.md).
 - **로컬 레지스트리**: kind 공식 local-registry 방식을 쓴다 — containerd `config_path` 설정으로 **`localhost:5001`이
   호스트·클러스터 내부 공통**으로 동작한다. `spark.kubernetes.container.image` 등 매니페스트도 `localhost:5001/...` 로 참조한다.
   (참고: k3d는 내부/외부 이름이 달라 매니페스트에 내부 이름을 써야 하는 함정이 있으나, kind는 공통 이름으로 회피된다.)

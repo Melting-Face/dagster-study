@@ -23,7 +23,7 @@
 │  Dagster webserver + daemon   (uv run dg dev)                    │
 │    • 배치: PipesK8sClient로 SparkApplication(CRD) 제출·폴링         │
 │    • 스트림: FlinkDeployment(CRD) 제출·수명주기 관리                 │
-│    • dbt CLI(dbt-spark) → Spark(클러스터) 대상 실행                 │
+│    • dbt CLI(dbt-spark) → Spark Connect 대상 실행 (※ 아래 주 참조)  │
 │  Dagster 메타 Postgres (호스트/compose 유지)                       │
 └───────────────┬──────────────── kubeconfig ────────────────────┘
                 │ k8s API · (필요 시) port-forward
@@ -39,6 +39,16 @@
    Iceberg 공유:  Spark(batch write) ↔ dbt-spark(마트) ↔ Flink(stream r/w)
    ※ BATCH(Spark)·STREAM(Flink)은 6/16 예산상 시분할(동시 실행 금지)
 ```
+
+> 🔴 **※ dbt 경로는 아직 "클러스터 대상 실행"이 아니다**(2026-08-22 실측). Spark Connect 서버는
+> **`--master local[2]`**, 즉 **파드 한 개 안의 로컬 모드**로 돌고 있어 executor가 따로 뜨지 않는다.
+> 위 그림의 화살표는 **목표 상태**이며, 현재는 "K8s 파드 안의 단일 JVM"이 정확한 서술이다.
+> 한계(병렬도 ≈ 1·driver 힙 1g·`shuffle.partitions` 200)와 `k8s://` 전환에 필요한 2가지는
+> [architectures/spark.md](architectures/spark.md) §`--master local[2]`. **이번 범위에서 전환하지 않는다** —
+> 22모델을 아직 못 돌려 성능 문제가 발현하지 않았다.
+>
+> ⚠️ **배치 경로(`SparkApplication`)는 이와 별개로 오퍼레이터가 driver/executor를 띄운다.**
+> 그림에서 두 경로가 같은 "Spark"로 보이지만 **실행 모델이 다르다.**
 
 - **Dagster는 클러스터 밖(호스트)** 에서 컨트롤 플레인 역할만 한다. Databricks/EMR을 트리거하는 것과
   동일한 패턴이며, `dg dev` 기반 **빠른 개발 루프**를 유지한다.
@@ -180,24 +190,51 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 > **데이터 없이 미리 끝낸 것**(합성 3행으로 전 구간 검증 후 정리):
 > S3(csv.gz) → Dagster 자산 → Iceberg 적재 → **Spark Connect에서 조회**까지 K8s 스택에서 통과.
 > 이 과정에서 카탈로그 이름 분리·SeaweedFS 체크섬 두 결함을 찾아 고쳤다([conventions/k8s.md](conventions/k8s.md) §11).
+>
+> 🔴 **체크섬 결함은 "고쳤다"로 닫히지 않았다**(2026-08-22). 그때 고친 것은 **한쪽 경로**뿐이고,
+> Iceberg를 `1.6.1 → 1.11.0`으로 올리자 **번들 AWS SDK v2가 `2.26.20 → 2.44.4`로 바뀌면서**
+> `S3FileIO` 경로에서 같은 증상이 재발했다 — `metadata.json`이 aws-chunked 프레이밍째 저장돼
+> **`DROP TABLE`조차 실패**했다. 해법은 `AWS_REQUEST_CHECKSUM_CALCULATION`·
+> `AWS_RESPONSE_CHECKSUM_VALIDATION`을 **driver·executor 양쪽에** 주는 것이다.
+> 📌 **"이 결함은 고쳤다"를 적을 때는 *어느 경로에 대해* 고쳤는지 함께 적는다** —
+> 경위·오진 과정은 [architectures/spark.md](architectures/spark.md) §SeaweedFS 체크섬 결함.
 
 - **Plan/Do**: `chartevents`·`labevents`·`eicu.nurse_charting` 적재를 **SparkApplication**으로 이전,
   `load_heavy_csv_gz_to_iceberg`(boto3 청크) **은퇴**.
 - **Check**: 행 수·스키마가 기존 적재분과 일치(회귀), small-files 대비 파일 크기 개선 확인.
 - **Act**: 유지보수(compaction) 순서 재점검(compact→expire→orphan, [spark.md](architectures/spark.md)).
 
-### Phase 3 — Flink 실시간 스트리밍 (Flink의 존재이유) ⏸ **미착수 · 오퍼레이터 미설치**
+### Phase 3 — Flink 실시간 스트리밍 (Flink의 존재이유) ⏸ **스트리밍 미착수 · ✅ 배치 왕복은 실증됨**
 
-> **2026-08-19 상태**: Phase 0에서 검증용으로 띄웠던 Flink 스택(`flink-session`·Flink Operator·
-> cert-manager)을 **제거**했다. 잡 없는 세션 클러스터가 **1 CPU / 2Gi를 13시간 점유**하며
-> "BATCH·STREAM 시분할(동시 실행 금지)" 규약을 어기고 있었다.
-> **"중단"과 "삭제"의 분리**(trino 선례)와 같은 취지 — 검증 결과·매니페스트·러너 이미지는 전부
-> 남아 있고 `INSTALL_FLINK=true ./scripts/k8s-operators.sh` 한 줄로 되돌아온다(롤백 비용 ≈ 0).
-> `INSTALL_FLINK` 기본값이 이미 `false`라 **재기동해도 Flink는 뜨지 않는다**(스크립트가 정본).
+> **2026-08-22 상태 — 전제 조건이 하나 닫혔다.** 오퍼레이터 **1.15.0** + `FlinkDeployment` 세션
+> 클러스터로 **Spark ↔ Flink Iceberg 배치 왕복**을 실증했다
+> (Spark 적재 → Flink 읽기 → **Flink 쓰기** → Spark 되읽기). 데이터 컬럼·스냅샷 메타데이터
+> (`engine-name`·`iceberg-version`)·`flink.job-id` ↔ 잡 `jid` 일치의 **삼중 증거**로 닫았고,
+> 같은 카탈로그에 `spark`·`flink` 두 서명이 공존함을 확인했다([architectures/flink.md](architectures/flink.md)).
+>
+> ⇒ **"Flink가 이 레이크하우스에 쓸 수 있는가"는 더 이상 미확인이 아니다.**
+> 🔴 **남은 것은 스트리밍 고유 부분**이다 — Redpanda·체크포인트·RocksDB는 **하나도 배포되지 않았다.**
+> 배치는 잡 완료 시점에 커밋해 체크포인트가 필요 없었지만, **스트리밍은 체크포인트 단위로 커밋**하므로
+> 착수 시 **체크포인트 설정 + `flink-s3-fs-hadoop` 플러그인 + 러너 이미지 재빌드가 동시에** 필요하다.
+>
+> **검증 후 세션 클러스터는 그 자리에서 다시 내렸다.** 유휴 비용은 **JM 1000m/2048Mi**뿐이고
+> (TM은 잡 제출 +7초 기동 → 46~52초 생존 → 자동 회수), 그 JM이 "BATCH·STREAM 시분할" 규약을 어긴다.
+> 2026-08-19에 같은 구성이 **13시간 샜고 발견 경로가 성능 이상이 아니라 "안 쓰는 것 정리"였다** —
+> 그래서 회수를 다음으로 미루지 않는다. `INSTALL_FLINK` 기본값은 `false`라
+> **재기동해도 Flink는 뜨지 않는다**(스크립트가 정본).
+>
+> ⚠️ **드리프트 교정**: 2026-08-19판이 *"cert-manager도 함께 제거했다"* 고 적은 것은 **거짓**이다.
+> **CNPG barman 플러그인이 cert-manager를 무조건 요구**하므로 줄곧 `Running`이었다.
+> 그 문장은 *실행한 명령의 기록*이었지 *관측된 상태*가 아니었다([architectures/flink.md](architectures/flink.md) §드리프트 교정).
 
-- **Plan/Do**: Flink Operator(Helm) + Redpanda 배포. `vitalsign` 등을 Redpanda로 **리플레이**하고,
-  **`FlinkDeployment`** 잡이 이벤트타임 윈도우로 **실시간 SOFA/Sepsis-3 조기경보**를 계산해 Iceberg에 싱크.
+- **Plan/Do**: Redpanda 배포(Flink Operator는 검증 완료 — 재설치만 하면 된다).
+  `vitalsign` 등을 Redpanda로 **리플레이**하고, **`FlinkDeployment`** 잡이 이벤트타임 윈도우로
+  **실시간 SOFA/Sepsis-3 조기경보**를 계산해 Iceberg에 싱크.
   체크포인트는 SeaweedFS(S3), 상태 백엔드 RocksDB. Dagster가 잡 수명주기를 관리.
+  - **잡 제출 형태는 정해졌다** — ConfigMap SQL + `sql-client.sh -f`
+    (`k8s/flink/iceberg-batch-job.yaml` 선례). **`FlinkSessionJob` CR은 쓰지 않는다** —
+    `jarURI`가 필수라 SQL 한 장에 jar 빌드·배포 파이프라인이 딸려온다.
+  - **`allowed-schemes`는 `local`로 좁혀 둔다**(런타임 외부 jar fetch 차단 — 의존성은 이미지에 굽는다).
 - **Check**: 스트림 입력 대비 경보 산출 정확성·지연 관측, 배치(Spark)와 **시분할** 실행 확인([resource-sizing.md](resource-sizing.md)).
 - **Act**: 배치 결과(dbt-spark)와 스트림 결과의 정합(동일 피처 정의) 교차검증.
 

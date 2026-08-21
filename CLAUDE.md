@@ -83,7 +83,7 @@
   - `constants.py` — 공통 상수/기본값(S3 파라미터 포함)
   - `helper.py` — 적재 헬퍼(`read_csv_gz_table` 일반 / `load_heavy_csv_gz_to_iceberg` 대용량)
   - `dbt.py` — 공유 dbt 설정(`DbtProject`·`build_dbt_resource`); 단일 dbt 프로젝트를 데이터셋 subproject가 공유
-  - `trino.py` — Trino 접속 리소스(`TrinoResource`); Iceberg 유지보수 프로시저(`remove_orphan_files`) 실행용
+  - `trino.py` — Trino 접속 리소스(`TrinoResource`); 유지보수는 Spark로 이관돼 **값 대조용으로만** 남는다
 - **정의는 모두 `dagster_project/defs/` 하위**에 두고 `load_defs`가 재귀 자동발견한다.
   - **데이터셋별 서브프로젝트** `defs/<dataset>/`에 **정의만** 둔다.
     - `constants.py` — 데이터셋 전용 `NAMESPACE`·`GROUP_NAME`·`SOURCE_BASE`
@@ -199,9 +199,9 @@
   규칙 [`docs/conventions/k8s.md`](docs/conventions/k8s.md), 예산·배분 [`docs/resource-sizing.md`](docs/resource-sizing.md).
   클러스터에는 **Spark Operator**(배치)·**Spark Connect**(dbt-spark 접속용 상주)가 있고,
   Spark·Flink가 **같은 Iceberg JDBC 카탈로그**를 공유한다.
-  **Flink Operator는 채택했으나 현재 미설치**다(2026-08-19) — Phase 0 검증 후 잡 없는 세션 클러스터가
-  **1 CPU/2Gi를 상주 점유**해 "BATCH·STREAM 시분할" 규약을 어겨 내렸다. trino와 같은 **"중단"과 "삭제"의
-  분리**이고, `INSTALL_FLINK=true scripts/k8s-operators.sh`로 복구한다(기본값은 `false`).
+  **Flink Operator**(기본 설치)와 세션 클러스터로 **Iceberg 배치 왕복이 실증**됐다(2026-08-22).
+  🔴 예산 규약은 **시분할 → 동시 기동**으로 개정됐고(피크 실측 84%/52%) 경계가 셋이다 — Flink 상주는
+  **JM만**(TM은 잡 제출 시 온디맨드·수명 1분 미만), **`spark.executor.instances` ≤ 1**, Redpanda 미도입.
   🔴 **검증용으로 띄운 상주 컴퓨트는 그 자리에서 내린다** — 회수 시점을 트리거하는 주체가 없으면
   문서에만 있는 규약은 조용히 샌다(실제로 13시간 샜고, 발견 경로는 성능 이상이 아니라 "안 쓰는 것 정리"였다).
   **카탈로그 Postgres는 CloudNativePG(CNPG)** 가 관리한다(`Cluster` CR — 구 `Deployment`+`emptyDir`는
@@ -226,7 +226,7 @@
   **노출은 HTTP UI만 Ingress**로 내고 gRPC·JDBC·S3는 `port-forward`를 쓴다 — kind는 **공개 포트를 생성 시점에만**
   정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
   컴퓨트 **러너 이미지는 로컬 레지스트리에 직접 push**하고(`kind load` 불필요) **태그와 매니페스트를 함께 올린다**.
-  상세·실측은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md)(§9 Spark·§9-2 Flink·§9-3 시분할·§11 스토어·§12 CNPG)와
+  상세·실측은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md)(§9 Spark·§9-2 Flink·§9-3 동시 기동·§11 스토어·§12 CNPG)와
   [`docs/architectures/spark.md`](docs/architectures/spark.md).
 - **Terraform/IaC 규칙**: 스택 단위 `terraform/<stack>/`, 버전 고정 + `.terraform.lock.hcl` 커밋, 포매터는
   **`terraform fmt`(2-space, 4칸 규칙의 예외)**, `*.tfstate`·`terraform.tfvars`·개인키 **커밋 금지**,

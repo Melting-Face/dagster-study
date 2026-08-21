@@ -226,8 +226,15 @@ models:
 
 ## dbt-spark 타깃 (Phase 1 이행)
 
-- 타깃 2종: **`spark_session`**(호스트 로컬 Spark — 상시 서비스 없이 방언 검증용) /
-  **`spark_connect`**(클러스터 Spark Connect 서버 — 컴퓨트=K8s). 차이는 `spark.remote` 하나뿐이다.
+- **`profiles.yml`에 실재하는 타깃은 5종**이다 — `dev` · `prod` · `spark_session` · `spark_connect` · `spark_thrift`.
+  🔴 **`trino`라는 이름의 타깃은 없다**(trino로 가는 것은 `dev`·`prod`이며 **엔진명이 아니라 환경명**으로 적혀 있다).
+  기본값은 `target: "{{ env_var('DBT_TARGET', 'spark_connect') }}"` 라서 **아무것도 지정하지 않으면 Spark Connect**로 간다.
+- 이 중 dbt-spark 계열은 셋이다: **`spark_session`**(호스트 로컬 Spark — 상시 서비스 없이 방언 검증용) /
+  **`spark_connect`**(클러스터 Spark Connect 서버 — 컴퓨트=K8s) / **`spark_thrift`**(대피로, 아래).
+  앞의 둘은 차이가 `spark.remote` 하나뿐이다.
+- ⚠️ **`spark_thrift`는 지금 쓸 수 없다** — 클라이언트 의존성 `pyhive`·`thrift`·`thrift_sasl`이
+  **미설치**라 타깃만 바꾸면 접속 시점에 죽는다(`connections.py`가 ImportError를 삼켜 `hive=None`으로 둔다).
+  **선언만 있는 대피로**로 읽는다([../architectures/spark.md](../architectures/spark.md)).
 - **Iceberg 설정은 `server_side_parameters`에 둔다.** dbt-spark는 이 값들을 **세션 생성 시
   `builder.config()`로 적용**하므로 카탈로그·S3 설정이 정상 반영되고, `{{ env_var(...) }}`를 쓸 수 있어
   **비밀정보를 참조로 유지**할 수 있다(하드코딩 금지 원칙 충족).
@@ -237,19 +244,73 @@ models:
   `Cannot set database in spark!`로 죽는다. 카탈로그는 타깃이 정한다(trino=프로파일 `database`,
   spark=`spark.sql.defaultCatalog`).
 
+### 🔴 `+file_format: iceberg`는 필수다 (2026-08-22 추가)
+
+`dbt_project.yml`의 `mimic_iv.tables`에 **`+file_format: iceberg` 한 줄**을 추가했다.
+dbt-spark의 기본 `file_format`은 iceberg가 아니며, **없으면 아래 셋이 동시에 무너진다.**
+
+| 빠뜨렸을 때 | 결과 |
+| --- | --- |
+| **매 실행 DROP + CREATE** | Iceberg **스냅샷 히스토리 소멸**, 테이블 UUID 변경 |
+| 같은 원인 | DROP과 CREATE 사이에 **테이블이 존재하지 않는 창**이 생긴다(`table.sql:19,27-30`) |
+| **컬럼 `description` 244건이 통째로 무시** | `adapters.sql:365`가 `file_format in ['delta','hudi','iceberg']`일 때만 `ALTER TABLE`로 코멘트를 반영한다 |
+
+🔴 **셋째가 가장 위험하다 — 에러도 경고도 나지 않는다.** `dbt run`은 성공하고, `dbt docs`도
+생성되며, 다만 **컬럼 설명이 비어 있을 뿐**이다. 244건을 적어 넣고도 하나도 반영되지 않는 상태가
+조용히 유지된다([philosophy.md](../philosophy.md) 원칙 7 — "통과"가 *검사했다*인지 확인한다).
+
+- ⚠️ **244는 `description` 항목 수**이지 파일 줄 수가 아니다(`schema.yml`은 626줄).
+- **dbt-trino는 이 config를 무시**하므로 **Trino 경로에는 무해**하다 — 값 대조를 깨지 않는다.
+
+### 🔴 dbt-spark 어댑터가 ANSI 모드를 강제로 끈다 (2026-08-22 발견)
+
+`dbt/adapters/spark/connections.py:189-191`이 세션 생성 시 ANSI 관련 설정을 **프로파일 값보다
+나중에 덮어쓴다.** 즉 `server_side_parameters`에 ANSI를 켜 두어도 **적용되지 않는다.**
+
+**결과 — 실패해야 할 연산이 실패하지 않는다.**
+
+| 상황 | Trino(ANSI) | Spark(ANSI off) |
+| --- | --- | --- |
+| 0으로 나누기 | 에러 | **`NULL`** |
+| 정수 오버플로 | 에러 | **wrap-around** |
+| 캐스트 실패 | 에러 | **`NULL`** |
+
+🔴 **행 수는 같고 지표만 `NULL`이 된다.** 그래서 `not_null`이 없는 한 **카운트 기반 테스트로는
+절대 안 잡힌다** — 두 엔진이 같은 행 수를 내놓으므로 대조표에서도 정상으로 보인다.
+
+- **실제 노출 지점**: `urine_output_rate.sql:97,101,105`의 `/ wd.weight` — **분모 가드가 없다.**
+  체중이 0이거나 `NULL`인 환자에서 Trino는 죽고 Spark는 조용히 `NULL`을 낸다.
+- 📌 **대응은 어댑터 설정이 아니라 SQL 쪽이다.** 어댑터가 덮어쓰므로 설정으로는 못 막는다 —
+  **분모 가드(`nullif`)를 모델에 명시**하는 것이 유일하게 두 엔진에서 같은 값을 보장한다.
+  (조치는 미결 — 이 문서 개정 범위 밖이다.)
+
+### ⚠️ `spark_connect`는 어댑터 계약이 아니라 내부 동작에 얹혀 있다
+
+✅ 엔드투엔드로 **동작한다**. 🔴 그러나 dbt-spark가 공식 지원하는 method는
+`SparkConnectionMethod` 기준 **thrift / http / odbc / session 4개뿐**이고 **connect는 없다.**
+도는 이유는 `session.py`가 `builder.config()` → `getOrCreate()`를 타서 pyspark 빌더가
+`spark.remote`를 보고 위임하는 **내부 동작** 때문이다.
+
+- ⇒ **계약이 아니라 구현에 의존**하므로 minor 업그레이드가 **에러 없이** 깨뜨릴 수 있다.
+  그래서 `pyproject.toml`이 상한을 **`dbt-spark<1.12`·`pyspark<3.6`** 으로 묶는다.
+- **상한을 올리기 직전에 `scripts/spark_connect_smoke.py`를 통과시킨다**([../test.md](../test.md) §5-1).
+  🔴 단 그 스모크가 무엇을 보지 **못하는지**는 test.md의 **B9**를 함께 읽는다.
+
 ### 방언 차이는 크로스 어댑터 매크로로 흡수한다 (규칙)
 
-- 어댑터마다 문법이 갈리는 날짜·시간 연산은 **엔진 리터럴을 직접 쓰지 않고 dbt 내장
-  크로스 데이터베이스 매크로**(`dbt.dateadd`·`dbt.datediff`·`dbt.date_trunc` 등)로 쓴다.
-  어댑터가 자기 방언으로 디스패치하므로 **`dbt-trino`·`dbt-spark` 양쪽에서 같은 모델이 돈다**.
+- 어댑터마다 문법이 갈리는 날짜·시간 연산은 **엔진 리터럴을 직접 쓰지 않는다.**
+  대신 **의미론이 같은지 확인한 뒤**(아래 §의미론) 내장 매크로 또는 프로젝트 dispatch 매크로를 쓴다.
 
   ```sql
-  -- Good — 어댑터가 방언을 결정한다
-  {{ dbt.dateadd('hour', -1, 'ih.endtime') }}
+  -- Good — 엔진 리터럴을 모델에 박지 않는다
+  {{ elapsed('hour', 'a', 'b') }}
 
   -- Bad — Trino 전용 리터럴 (Spark는 따옴표 없는 INTERVAL 1 HOUR)
   ih.endtime - INTERVAL '1' HOUR
   ```
+
+  🔴 **"리터럴을 안 쓴다"와 "같은 값이 나온다"는 다른 축이다.** 리터럴 제거는 **컴파일**을
+  양쪽에서 통과시킬 뿐이고, 값 정합은 매크로마다 따로 확인해야 한다.
 
 - 이 매크로는 **dbt-core 전역 프로젝트**에 있어 `dbt_utils` 설치와 무관하게 `dbt.` 접두어로 호출된다
   (`dbt_utils.dateadd`는 구 경로 — 신규 코드는 `dbt.`를 쓴다).
@@ -270,13 +331,47 @@ models:
   `11:00 → 12:59`가 경계교차는 **1**, ceil은 **2**다. `ventilation`의 `>= 14`,
   `urine_output_rate`의 `<= 5`처럼 **임계값 비교**에 쓰이므로 값이 갈리면 silver 피처가 달라진다.
 
+- 🔴 **오분류 교정(2026-08-22) — `dbt.dateadd`도 의미론이 같지 않다**:
+
+  이 문서는 오랫동안 `dbt.dateadd`를 *"어댑터 간 의미론이 같다"* 쪽으로 분류하고 **권장**해 왔다.
+  **틀렸다.** 설치본 소스 확인 결과 두 어댑터의 구현이 다음과 같이 갈린다.
+
+  | 구현 | `dateadd('hour', n, ts)` 전개 |
+  | --- | --- |
+  | `trino__dateadd` | `date_add('hour', n, ts)` — **네이티브 타임스탬프 연산** |
+  | `spark__dateadd` | `to_timestamp(to_unix_timestamp(ts) + cast(n*3600 as int))` — **epoch 초 왕복** |
+
+  Spark 구현이 epoch **초**를 경유하므로 결과가 두 갈래로 갈린다.
+
+  | 갈리는 축 | 내용 |
+  | --- | --- |
+  | **초 이하 절삭** | `to_unix_timestamp`가 초 단위라 **밀리·마이크로초가 버려진다**. Trino는 보존한다 |
+  | **타임존 의존** | `to_unix_timestamp`/`to_timestamp`가 **`spark.sql.session.timeZone`을 탄다**. 이 값은 **현재 미설정**이라 JVM 기본값에 좌우된다 — 즉 **서버가 어디서 뜨느냐에 따라 값이 바뀔 수 있다** |
+
+  **사용 현황**: `models/`에서 `dbt.dateadd`를 쓰는 **파일이 8개**다(이 8은 *파일 수*이지
+  *호출 횟수*나 *영향 모델 수*가 아니다 — 한 파일이 여러 번 부를 수 있고, 하류 모델로도 전파된다).
+
+  🔴 **`dbt.datediff`와 같은 축의 함정인데 이쪽만 통과했다.** 왜 놓쳤는지 한 줄로 남긴다 —
+  **`datediff`는 "차이를 어떻게 세나"라는 질문이 이름에 드러나 의심을 받았지만, `dateadd`는
+  "더하기"라 의미가 자명해 보였다.** 실제로 갈린 지점은 덧셈이 아니라 **덧셈을 하려고 거쳐 간
+  중간 표현(epoch 초)** 이었다. ⇒ **의심의 트리거를 "연산이 애매한가"가 아니라
+  "구현이 중간 표현을 경유하는가"로 옮긴다.** 후자는 소스를 열어야만 보인다.
+
+  📌 **조치는 미결이다.** `elapsed`처럼 `macros/cross_engine.sql`의 dispatch 매크로로 흡수하는 것이
+  방향이나, **8파일 교체 + 값 재대조**가 필요해 이 문서 개정 범위 밖이다.
+  그때까지 **신규 코드에서 `dbt.dateadd`를 쓰지 않는다.**
+
 - **판단 기준**
 
   | 상황 | 쓸 것 |
   | --- | --- |
-  | 어댑터 간 의미론이 같다(날짜 산술 등) | **dbt 내장** — `dbt.dateadd`·`dbt.date_trunc` |
-  | 의미론이 갈린다 | **프로젝트 dispatch 매크로** — Trino 네이티브를 **정본**으로 두고 Spark에 같은 수식을 재현 |
+  | 어댑터 간 의미론이 **확인상** 같다 | **dbt 내장** — 단 **설치본 소스를 열어 확인한 것만** |
+  | 의미론이 갈린다 (`dbt.datediff`·**`dbt.dateadd`**) | **프로젝트 dispatch 매크로** — Trino 네이티브를 **정본**으로 두고 Spark에 같은 수식을 재현 |
   | 내장 매크로가 아예 없다(배열 펼치기 등) | **프로젝트 dispatch 매크로** |
+
+  🔴 **"내장이니 안전하다"는 근거가 아니다.** dbt 내장 크로스 데이터베이스 매크로는 **문법의
+  이식성**을 보장하지 **값의 동일성**을 보장하지 않는다. 새 내장 매크로를 도입할 때는
+  **`<adapter>__<macro>` 구현 두 개를 나란히 놓고 읽는다** — 이 저장소는 같은 자리에서 **두 번** 틀렸다.
 
 - 프로젝트 dispatch 매크로는 **`macros/cross_engine.sql`** 한 곳에 모은다. `adapter.dispatch`를 쓰고,
   **`default__` 구현에 `raise_compiler_error`를 둬** 새 어댑터에서 **조용히 틀리지 않고 즉시 실패**하게 한다.
@@ -286,19 +381,35 @@ models:
   | `elapsed(part, from, to)` | `date_diff(...)` 네이티브 | 경계교차 수식 재현(`hour`·`minute`만) |
   | `unnest_array(arr, alias, col)` | `cross join unnest(...)` | `lateral view explode(...)` |
 
-- **이행 현황(2026-08-19)** — 정적 스캔 기준 방언 차이 **전부 해소**
+- **이행 현황(2026-08-22 재판정)** — 🔴 *"전부 해소"* 는 **구문 기준이었고 값 기준으로는 아니다**
 
-  | 구문 | 상태 | 조치 |
-  | --- | --- | --- |
-  | `INTERVAL '1' HOUR` 리터럴 (8파일) | ✅ 해소 | `{{ dbt.dateadd(...) }}` 내장 매크로 (`52e7cde`) |
-  | `date_diff('unit', a, b)` (3파일) | ✅ 해소 | `{{ elapsed(...) }}` dispatch 매크로 (`589bd5a`) |
-  | `CROSS JOIN UNNEST(...)` (1파일) | ✅ 해소 | `{{ unnest_array(...) }}` dispatch 매크로 (`589bd5a`) |
-  | `sequence(start, stop)`·`date_trunc(fmt, ts)` | ✅ 무조치 | 양쪽 엔진에 동일 의미로 존재 |
+  | 구문 | 구문 이식성 | 값 정합 | 조치 |
+  | --- | --- | --- | --- |
+  | `INTERVAL '1' HOUR` 리터럴 (8파일) | ✅ 해소 | ⚠️ **미해소** — `dbt.dateadd`가 초 절삭·타임존 의존(위 §오분류 교정) | `{{ dbt.dateadd(...) }}` 내장 매크로 (`52e7cde`) — **dispatch 매크로로 재이관 필요** |
+  | `date_diff('unit', a, b)` (3파일) | ✅ 해소 | ✅ 해소 | `{{ elapsed(...) }}` dispatch 매크로 (`589bd5a`) |
+  | `CROSS JOIN UNNEST(...)` (1파일) | ✅ 해소 | ✅ 해소 | `{{ unnest_array(...) }}` dispatch 매크로 (`589bd5a`) |
+  | `sequence(start, stop)`·`date_trunc(fmt, ts)` | ✅ 무조치 | ✅ 무조치 | 양쪽 엔진에 동일 의미로 존재 |
+
+  🔴 **열을 둘로 나눈 이유**가 이 표의 핵심이다. 2026-08-19판은 열이 하나(`상태`)여서
+  **"리터럴을 제거했다"가 "값이 같아졌다"로 읽혔다.** 실제로는 `dateadd` 행만 두 열의 값이
+  다르며, 한 열짜리 표에서는 그 차이를 적을 자리 자체가 없었다.
+  📌 **표의 열 구성이 곧 무엇을 셀 수 있는지를 정한다**([philosophy.md](../philosophy.md) §계측 단위).
 
 - ⚠️ **`dbt compile` 통과를 이행 완료로 읽지 말 것.** 현재 `spark_session`·`dev`(trino) 두 타깃 모두
   22모델 compile 통과·렌더 결과 대조까지 됐지만, **실행 검증은 원천 데이터 부족으로 보류** 상태다
   ([../redesign.md](../redesign.md) Phase 2). 2026-08-19 기준 22모델이 참조하는 7개 source 중
   **확보된 것은 `admissions` 하나**뿐이다(나머지 6종은 PhysioNet DUA 대상, 미확보).
+
+- 🔴 **더 정확히: 22모델은 `dbt build`로 한 번도 돌아본 적이 없다**(2026-08-22 `manifest.json` 실측).
+  확인된 것은 **`dbt compile` exit 0** 하나뿐이다. 2026-08-19의 *"E2E PASS=6"* 은
+  **`models/_poc_spark_connect/`의 전용 픽스처 3모델**(`poc_seed_a`·`poc_seed_b`·`poc_incremental`)을
+  센 것이고, 그 디렉터리는 **`git log` 이력 0건에 현재 삭제**됐다.
+  경위는 [../architectures/spark.md](../architectures/spark.md) §계측 단위 교정.
+  - ⚠️ **여기서 "3"과 "22"는 서로 다른 것을 센다** — 3은 *삭제된 픽스처 모델 수*,
+    22는 *`models/mimic_iv/tables/`의 실 모델 수*다. 같은 표에 나란히 두면
+    "22가 빌드까지 통과했다"로 검산을 통과하며 읽힌다([philosophy.md](../philosophy.md) §계측 단위).
+  - 🔴 **`schema.yml`에 `data_tests`가 0건**이므로 *"스키마 테스트 3"* 이 22모델의 것일
+    가능성은 **원천적으로 0**이다 — 없는 테스트는 통과할 수 없다.
 
 ## Trino / Iceberg 주의사항
 

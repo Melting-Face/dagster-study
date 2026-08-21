@@ -6,16 +6,26 @@
 >
 > | 선행조건 | 상태 |
 > |---|---|
-> | ① **유지보수 프로시저 Spark 이관** (없으면 기능 공백) | ✅ **해소**(2026-08-19) — `rewrite_data_files`·`remove_orphan_files`로 이관, [spark.md](spark.md) |
+> | ① **유지보수 프로시저 Spark 이관** (없으면 기능 공백) | ⚠️ **이관은 완료, 실행 검증은 부분적**(2026-08-22 재판정) — `rewrite_data_files`·`remove_orphan_files`를 Spark 프로시저로 옮겼으나 orphan 정리는 **아직 실행 경로가 끝까지 도달한 적이 없다**([spark.md](spark.md)·[test.md](../test.md) §커버리지 공백) |
 > | ② **22모델 방언 값 대조** (Trino가 정본) | ⏳ **미해소** — ["도는 것"이 아니라 "같은 값"](../redesign.md), `dbt compile`은 이를 못 잡는다 |
 >
 > ②가 남아 **`dbt-trino` 어댑터와 `TrinoResource`는 유지**한다(리소스는 유지보수용에서
 > **대조용**으로 역할만 바뀌었다). ②까지 해소되면 compose 서비스·어댑터·`common/trino.py`를
 > 하나의 논리적 커밋으로 제거한다.
 >
+> **추가 변경(2026-08-21)**: **dbt 기본 타깃이 trino를 떠났다.** `profiles.yml`의 `target`이
+> `"{{ env_var('DBT_TARGET', 'spark_connect') }}"` 라서, 아무것도 지정하지 않으면 **Spark Connect로 간다.**
+> trino는 이제 *기본 경로*가 아니라 **명시적으로 불러내는 대조 경로**다.
+>
 > ```shell
-> docker compose --profile legacy-sql up -d trino   # 값 대조가 필요할 때만
+> docker compose --profile legacy-sql up -d trino   # ① 값 대조가 필요할 때만 기동
+> DBT_TARGET=dev dbt run                            # ② 타깃을 명시해 trino로 보낸다
 > ```
+>
+> 🔴 **`trino`라는 이름의 타깃은 없다.** `profiles.yml`에 실재하는 타깃명은
+> **`dev` · `prod` · `spark_session` · `spark_connect` · `spark_thrift`** 다.
+> trino로 가는 것은 `dev`(개발)와 `prod`이며, **엔진 이름이 아니라 환경 이름으로 적혀 있다.**
+> `DBT_TARGET=trino`는 조용히 도는 대신 프로파일 조회에서 실패한다 — 대조 작업 때 가장 먼저 걸리는 함정이다.
 >
 > ad-hoc 조회는 **Spark SQL**로 간다 — 호스트 노트북 경로는 [`notebooks/README.md`](../../notebooks/README.md).
 

@@ -4,8 +4,10 @@
 계층별로 *무엇을 · 어디서 · 어떻게* 테스트하는지 정하고, 각 계층의 세부 규약은
 [`conventions/dbt.md`](conventions/dbt.md)·[`conventions/python.md`](conventions/python.md)·[`conventions/dagster.md`](conventions/dagster.md)와 교차링크한다.
 
-버전 컨텍스트: `dagster==1.12.12` · `pytest`(dev 의존성) · `dbt-trino>=1.8,<2.0`
-(dbt-core 1.8+ = 단위 테스트 지원 계열).
+버전 컨텍스트: `dagster==1.12.12` · `pytest`(dev 의존성) · **`dbt-spark>=1.11,<1.12`(현행 기본)** ·
+`dbt-trino>=1.8,<2.0`(값 대조용 존치) — dbt-core 1.8+ = 단위 테스트 지원 계열.
+🔴 dbt 기본 타깃은 **`spark_connect`** 다. 아래 명령의 `--target dev`는 **trino 경로**를 뜻한다
+([conventions/dbt.md](conventions/dbt.md) §dbt-spark 타깃).
 
 ## 현황 (2026-08 기준)
 
@@ -17,7 +19,8 @@
 | dbt 단위 테스트 | ✅ dbt 1.8+ | ❌ 없음 | `unit_tests:` 미사용 |
 | dbt singular 테스트 | ✅ `dbt_pipelines/tests/`(`.gitkeep`) | ❌ 없음 | — |
 | Dagster 에셋 pytest | ✅ `src/tests/`(`__init__.py`)·`pytest` | ❌ 없음 | 뼈대만 |
-| 통합·스모크 | ✅ `dg check`·`dbt build` | ⚠️ 수동 | CI 게이트 미구성 |
+| 통합·스모크 | ✅ `dg check`·`dbt build` | ⚠️ 수동 | CI 게이트 미구성. 🔴 **`dbt build`는 22모델에 대해 한 번도 돌지 않았다**(§5-1 B9) |
+| Iceberg 유지보수 잡 | ✅ `iceberg_maintenance_job` | ❌ 없음 | 🔴 **구조적 커버리지 공백 2건**(§5-2) |
 | 분석 재현성 | ✅ `notebooks/`·`nbconvert` | ⚠️ 수동 1회(2026-08-19, 스타터 노트북 전 셀 실행) | 리포트(`docs/analyses/`)는 아직 없음 |
 
 ## 테스트 계층 (우선순위 순)
@@ -193,6 +196,62 @@ incremental이 조용히 full-refresh로 떨어져도 종료 코드는 `0`이다
 > 게이트 자체를 **일부러 위반시켜 확인**했다 — 포트를 닫고 돌려 `2`, 열고 돌려 `0`을 받았고,
 > 그 과정에서 스크립트의 dbt 플래그 위치 오류(전역 자리에 둔 `--profiles-dir`)를 **거짓 회귀**로
 > 잡아냈다. 게이트를 만들고 통과만 보면 이 오류는 "Connect가 깨졌다"로 오독됐을 것이다.
+
+#### 🔴 B9 — 이 스모크는 **실 프로젝트 경로를 검증하지 않는다** (2026-08-22)
+
+이 게이트의 관측 범위에 대한 한계다. **`exit 0`이 보증하는 대상이 생각보다 좁다.**
+
+| | 스모크 픽스처 | `models/mimic_iv/tables/` 22모델 |
+| --- | --- | --- |
+| `file_format` | **명시**(`scripts/spark_connect_smoke.py:76`·`:87`에 `file_format='iceberg'`) | **미명시였다** — `dbt_project.yml`에 `+file_format: iceberg`를 넣기 전까지 |
+
+🔴 **즉 유일한 관측 수단이 실 모델과 다른 코드 경로를 본다.** dbt-spark는 `file_format`에 따라
+DDL 분기가 갈리므로(`ALTER TABLE` 발행 여부·DROP+CREATE 여부 —
+[conventions/dbt.md](conventions/dbt.md) §`+file_format: iceberg`는 필수다), 픽스처가 통과해도
+**실 모델 경로의 결함에는 아무 보증을 주지 못한다.**
+
+- 실제로 `+file_format` 누락 결함은 **이 스모크를 `0`으로 통과시킨 채** 존재하고 있었다.
+- 📌 **교훈은 "스모크를 늘려라"가 아니라 "스모크가 *무엇의* 대리표본인지 적어라"** 다.
+  픽스처는 **어댑터 접속 경로**의 대리표본이지 **프로젝트 모델 설정**의 대리표본이 아니다.
+  두 역할을 한 스크립트에 기대면 통과 신호가 실제보다 넓게 읽힌다([philosophy.md](philosophy.md) 원칙 7).
+- ⚠️ **현재 상태**: `+file_format: iceberg`는 추가됐지만, 그 설정이 실제로 의도대로 도는지는
+  **22모델을 `dbt build`로 돌려야 확인된다** — 아직 돌린 적이 없다(원천 데이터 미확보).
+
+### 5-2. 🔴 `iceberg_maintenance_job`의 커버리지 공백 2건 (2026-08-22 실측)
+
+유지보수 잡([architectures/spark.md](architectures/spark.md) §안전 순서)에 **테스트가 없을 뿐 아니라,
+잡 구조 자체가 특정 상황을 영영 처리하지 못한다.** 테스트를 추가하기 전에 이 둘을 먼저 안다.
+
+#### ⓐ 첫 op이 실패하면 뒤 op이 전부 중단된다
+
+op 의존성이 `optimize_iceberg_files → expire snapshots → remove_orphan_files` 순서라,
+🔴 **첫 op이 원천 테이블 부재로 실패하면 나머지가 `Not executing`으로 전부 건너뛰어진다.**
+
+- ⇒ 원천 테이블이 아직 없는 지금 같은 상태에서 **orphan 정리가 영영 돌지 않는다.**
+- **순서 강제(안전)와 실패 전파(가용성)가 같은 배선에 묶여 있다.** 순서는 지켜야 하지만,
+  "앞 단계가 할 일이 없어서 실패한 것"과 "앞 단계가 깨진 것"은 다르다 — 전자는 뒤를 막을 이유가 없다.
+
+#### ⓑ 어떤 테이블에도 속하지 않는 객체를 지울 경로가 **잡에 없다**
+
+`remove_orphan_files`는 **인자로 받은 테이블의 location 하위만** 스캔한다.
+
+- ⇒ 🔴 **카탈로그에서 이미 지워진 테이블의 잔여 객체는 인자로 지목할 대상이 없어 스캔 범위 밖이다.**
+- 실제 사례: 체크섬 결함으로 손상된 `smoke`/`smoke_seed`를 카탈로그에서 드롭했으나
+  **객체 53개가 orphan으로 남았고, 현행 잡으로는 정리되지 않는다**
+  ([architectures/spark.md](architectures/spark.md) §SeaweedFS 체크섬 결함).
+- 📌 **"orphan 정리 잡이 있다"와 "orphan이 정리된다"는 다르다.** 잡의 이름이 커버리지를
+  실제보다 넓게 들리게 한다 — **테이블 단위 프로시저이지 warehouse 단위 청소기가 아니다.**
+
+#### 🔴 부정 결과 판정의 함정 — "에러 0건"을 통과로 읽지 않는다
+
+`remove_orphan_files` 실행에서 `No FileSystem for scheme "s3"`가 **0건**이었다.
+**이것을 `spark.hadoop.fs.s3*` 배선의 통과 근거로 읽으면 안 된다.**
+
+- 프로시저가 **테이블 해석 단계에서 먼저 죽어 Hadoop FS 나열에 도달조차 못 했다.**
+- ⇒ 해당 에러가 날 **코드 경로가 실행되지 않았다.** 판정은 `통과`가 아니라 **`미검증`** 이다.
+- 이것이 §5-1이 종료코드 `1`(회귀)과 `2`(판정 불가)를 나눈 것과 **정확히 같은 구분**이다.
+  다만 여기서는 그 구분을 **잡이 자동으로 해주지 않으므로 사람이 해야 한다** —
+  부정 결과는 **관측 경로가 살아 있었음을 함께 확인**해야 유효하다([philosophy.md](philosophy.md) 원칙 7).
 
 ---
 

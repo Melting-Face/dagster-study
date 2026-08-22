@@ -38,10 +38,11 @@
 | 기술 | 상태 | 참조 문서 |
 | --- | --- | --- |
 | [Docker Compose](https://docs.docker.com/reference/compose-file/) | ✅ 채택(배포) | [architectures/docker.md](architectures/docker.md) · [conventions/docker.md](conventions/docker.md) |
-| [Apache Spark](https://spark.apache.org/docs/latest/) | 🔎 미채택 | [architectures/spark.md](architectures/spark.md) |
-| [Apache Flink](https://flink.apache.org/documentation/flink-stable/) | 🔎 미채택 | [architectures/flink.md](architectures/flink.md) |
-| [Kubernetes](https://kubernetes.io/docs/home/) | 🔎 향후 배포 | [architectures/k8s.md](architectures/k8s.md) · [conventions/k8s.md](conventions/k8s.md) |
+| [Apache Spark](https://spark.apache.org/docs/latest/) | 🚧 채택·이행중 | [architectures/spark.md](architectures/spark.md) |
+| [Apache Flink](https://flink.apache.org/documentation/flink-stable/) | 🚧⏸ 채택·이행중(현재 미설치) | [architectures/flink.md](architectures/flink.md) |
+| [Kubernetes](https://kubernetes.io/docs/home/) | 🚧 채택·이행중 | [architectures/k8s.md](architectures/k8s.md) · [conventions/k8s.md](conventions/k8s.md) |
 | [Helm](https://helm.sh/docs/) | 🔎 K8s 패키징 | [conventions/k8s.md](conventions/k8s.md) |
+| [Prometheus](https://prometheus.io/docs/introduction/overview/) | 🔎 미채택 | [architectures/monitoring.md](architectures/monitoring.md) · [conventions/monitoring.md](conventions/monitoring.md) |
 
 ## 보안·규제 (의료데이터)
 

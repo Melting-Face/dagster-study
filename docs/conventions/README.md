@@ -19,6 +19,7 @@
 | [`publishing.md`](publishing.md) | 외부 공개(블로그·공유자료) | **공개는 커밋보다 강한 기준** · 소규모 셀(<5) 마스킹 · **발행은 사람이** · `security` 컨펌 게이트 |
 | [`docker.md`](docker.md) | Compose·Dockerfile | YAML 앵커 · `latest` 금지 · healthcheck + `depends_on` · `profiles` |
 | [`k8s.md`](k8s.md) | Kubernetes(이행) | kind on Podman · requests/probe · 로컬 레지스트리 |
+| [`monitoring.md`](monitoring.md) | 관측·모니터링 | **관측 수단 등록 의무**("안 둔다"도 선언) · 계측 대상 없는 수집기 금지 · **관측 경로 생존 확인**(원칙 7 운영판) · 수치는 시각·분모·도구·**단위** 병기 |
 | [`terraform.md`](terraform.md) | IaC(도입) | 스택 단위 · 버전 고정 + lock 커밋 · `terraform fmt`(2-space 예외) |
 | [`timezone.md`](timezone.md) | 타임존 | **저장 UTC · 표시/스케줄 KST** · tz-aware 강제(ruff `DTZ`) |
 | [`agents.md`](agents.md) | 에이전트 오케스트레이션·기록관 | 3계층 · **`director`=판정자**(직접 작업 X) · **`security` 컨펌 = G1(계획)+G2(작업내용)+Δ(계획 밖)** · **`tech-writer`=문서 소유자**(`docs/**`·`README.md`, 발행 금지) · **에스컬레이션** · **archivist 전담 기록** · 권한 게이트 · 정합성 가드 hook |

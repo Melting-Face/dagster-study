@@ -187,6 +187,13 @@
   붙이면 `trino`(legacy-sql)·`prometheus`(monitoring)가 의존 비활성으로 깨져 profile이 3개다.
   바꾼 뒤 **`docker compose --profile <p> config --services`로 profile별 확인**한다(기동 없이 수초).
   상세 [`docs/conventions/docker.md`](docs/conventions/docker.md).
+- **관측·모니터링**: 서비스를 추가할 때 관측 경로(healthcheck/probe·로그·메트릭)를 **무엇을 두고 무엇을
+  안 두는지 선언**한다("안 둔다"도 선언 — 빠뜨린 것과 구분). 🔴 **계측 대상 없이 수집기를 두지 않고**
+  (`profiles` opt-in도 면제 아님), 부정 결과는 **관측 경로 생존을 함께 제시**한다(원칙 7 운영판).
+  🔴 **경로 생존과 대상 정합은 다른 축**이다 — 같은 서비스가 두 환경에 이중 존재하면
+  **살아 있는 레거시가 정본 대신 답해** 생존 확인을 전부 통과한다(이 저장소에서 방향을 달리해 2회 발생).
+  규칙 정본 [`docs/conventions/monitoring.md`](docs/conventions/monitoring.md), 현행 실태는
+  [`docs/architectures/monitoring.md`](docs/architectures/monitoring.md).
 - **호스트 노트북(옵션)**: ad-hoc 탐색은 **Jupyter Lab**을 **Dagster와 같은 venv**에서 띄운다
   (`[dependency-groups] notebook`, `uv run --group notebook jupyter lab --port 8889`).
   런타임 의존성은 건드리지 않으며 **포트 8889**를 쓴다(8888은 SeaweedFS filer UI가 점유).

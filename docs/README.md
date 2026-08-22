@@ -19,6 +19,7 @@
 - [Spark](architectures/spark.md) 🚧 · [Flink](architectures/flink.md) 🚧 · [Kubernetes](architectures/k8s.md) 🚧 — 재설계로 이행중
 - [OCI + Terraform + k3s](architectures/oci.md) 🔎 — 클라우드 이행 경로(Always Free A1 ARM, IaC로 k3s 부트스트랩)
 - [Trino](architectures/trino.md) 🔎 — 현행까지 채택, 재설계로 제거
+- [모니터링·관측](architectures/monitoring.md) 🔎 — Prometheus 선언이 남아 있고 profile을 켜면 수집도 되지만, **보는 대상이 정본과 갈린** 상태(켜면 초록불이 떠서 오히려 판별이 어렵다). 현행 관측 실태(healthcheck 2/6·probe 2개·알림 0건)와 Grafana·kube-prometheus-stack·metrics-server·Alertmanager를 **지금 쓰지 않는 이유**
 
 ### 데이터셋
 
@@ -62,6 +63,7 @@
 | [타임존](conventions/timezone.md)   | 저장=UTC / 표시·스케줄=KST, `execution_timezone`, tz-aware datetime |
 | [테스트](test.md)                   | 테스트 계층(피라미드)·우선순위, dbt 스키마/단위/singular·Dagster pytest·스모크 |
 | [Docker](conventions/docker.md)     | Compose 앵커, `latest` 금지, healthcheck, `deploy.resources`, profiles, Dockerfile |
+| [**관측·모니터링**](conventions/monitoring.md) | 서비스 추가 시 **관측 수단 등록 의무**("안 둔다"도 유효한 선언 — 빠뜨린 것과 구분), **계측 대상 없이 수집기를 두지 않는다**(`profiles` opt-in도 면제 아님), **관측 경로 생존 확인**(부정 결과에 타깃 목록·`up`·로그 최신 타임스탬프 병기 — 원칙 7의 운영판), 관측 수치는 **시각(`date` 실측)·모집단·계측 도구 + 계측 단위** 병기. 현행 실태는 [architectures/monitoring.md](architectures/monitoring.md) |
 | [Kubernetes](conventions/k8s.md)    | (이행) 워크로드 유형, requests/limits, probe, ConfigMap·Secret, RBAC, Helm + **Spark/Flink Operator·호스트 Dagster 트리거(Pipes)·kind on Podman/레지스트리·러너 이미지 빌드·Ingress(UI 고정 URL)·컴퓨트 동시 기동** |
 | [Terraform/IaC](conventions/terraform.md) | (도입) 스택 구조, 버전 고정·lock 커밋, `terraform fmt`(2-space) 고정, state·비밀 커밋 금지, cloud-init 선언형, templatefile 주의 |
 | [**컨벤션 인덱스**](conventions/README.md) | `docs/conventions/` 전체 목차·읽는 순서·정본 원칙 |

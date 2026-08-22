@@ -16,6 +16,7 @@
 | [k8s.md](k8s.md) | 🚧 | 컨테이너 오케스트레이션 — 컴퓨트·데이터 서비스 이전(이행중) |
 | [oci.md](oci.md) | 🔎 | 클라우드 이행 — OCI Always Free A1(ARM) + Terraform + k3s(학습·확장 경로) |
 | [trino.md](trino.md) | 🔎 | MPP SQL 엔진 — 현행 compose까지 채택, **재설계로 제거**(dbt→dbt-spark) |
+| [monitoring.md](monitoring.md) | 🔎 | 모니터링·관측 — Prometheus 선언이 compose에 남아 있고 `--profile monitoring`이면 **수집도 된다**. 그런데 **보는 대상이 정본이 아니라**(스토리지 정본은 K8s로 이전, 그쪽엔 메트릭 포트 없음) 미채택. 현행 관측 실태(healthcheck·probe·메트릭·알림)와 대안 미채택 사유. 규칙 정본은 [conventions/monitoring.md](../conventions/monitoring.md) |
 
 ## 각 문서 형식
 

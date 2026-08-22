@@ -61,13 +61,34 @@
 - **보류 사유**: A1 인스턴스가 **Out of host capacity로 생성되지 않는다**(아래 §운영 메모 — shape 축소·AD 우회
   모두 무효). 용량 폴링 재시도([`scripts/oci_k3s_retry_apply.py`](../../scripts/oci_k3s_retry_apply.py))를 돌려도
   재고가 열리지 않아, **검증 가능한 로컬 환경**([k8s.md](k8s.md) · `kind` 클러스터 `lakehouse`)을 우선하기로 했다.
-- **프로비저닝 상태**: `terraform.tfstate`(serial 33)에 **네트워크 5종이 실재**한다 —
+- **프로비저닝 상태**: `terraform.tfstate`(serial 33 — 🔴 **관측 시점 스냅샷이다. `apply` 한 번이면
+  낡으므로 재개 시 갱신한다**)에 **네트워크 5종이 실재**한다 —
   `oci_core_vcn` · `oci_core_subnet` · `oci_core_internet_gateway` · `oci_core_route_table` · `oci_core_security_list`.
   **`oci_core_instance.k3s`(A1 컴퓨트)는 미생성**이다.
   - **과금 없음**: 위 5종은 모두 Always Free 대상이며, 과금 요인인 컴퓨트·블록스토리지가 없다.
   - **state를 지우지 않는다** — 지우면 위 5종이 orphan이 되어 terraform으로 관리·삭제할 수 없고
     OCI 콘솔에서 수동 삭제해야 한다. 보류 중 유지 비용은 0이므로 유지가 안전하다.
-- **재개 방법**: `terraform/oci-k3s/`에서 `terraform apply`(또는 용량 폴링 스크립트) 재실행. 네트워크는 이미 있으므로
+- 🔴 **재개는 「Δ 트리거」다 — `apply` 실행 *전에* `security` 재판정을 1회 받는다.**
+  재개는 **공인 IP 노드를 새로 세우는 비가역 작업**이라 [conventions/agents.md](../conventions/agents.md)
+  §게이트의 Δ 조건(ⓑ 비가역·ⓒ 외부 노출)에 그대로 걸린다. **보류 기간 동안 저장소의 노출 실태가
+  바뀌었으므로 보류 시점(2026-08-17)의 판정을 재사용하지 않는다.** 재판정 대상 넷:
+  1. **공개 노출면** — Security List `/32` 화이트리스트가 **현재** 공인 IP와 맞는지(보류 중 바뀌었을
+     가능성이 높다), 호스트 iptables의 **kubelet 10250 소스 무제한**이 그대로인지
+     ([security.md §2.6](../security.md) — SL이 앞단 방어라 SL이 느슨해지면 즉시 노출된다).
+  2. **무인증 UI 재현 여부** — 로컬 kind에서 **Flink Web UI가 Ingress 무인증 + jar 제출 개방**으로
+     드러났다([security.md §2-1 보강](../security.md), 2026-08-22). 🔴 **같은 매니페스트를 공인 IP
+     노드에 올리면 그대로 인터넷 노출이 된다** — 로컬에서 "내부망이라 괜찮다"고 넘긴 판정은
+     OCI에서 성립하지 않는다. 보류 이후 클러스터에 **추가된 워크로드 전체**가 대상이다.
+  3. **크리덴셜 유입 경로** — 회수한 `kubeconfig-oci`·ephemeral 공인 IP·엔드포인트가 문서·저널·
+     **플랜 미러**(자동 푸시되는 볼트)로 새지 않는지. 보류 시점에는 플랜 미러가 없었다.
+  4. **과금 상한** — **무료 한도는 사업자가 바꾼다**(2026-06 A1 4/24 → **2/12**).
+     `variables.tf`의 `validation` 블록이 **현행** 한도를 반영하는지
+     ([conventions/terraform.md](../conventions/terraform.md)).
+
+  판정 결과는 **날짜 + 이전 판정 + 새 판정**을 병기해 이 절에 **누적**한다 — 이전 판정을 지우지
+  않는다. 무엇이 언제 왜 뒤집혔는지가 다음 재개의 입력이다.
+- **재개 방법**: 위 재판정을 통과한 뒤, `terraform/oci-k3s/`에서 `terraform apply`(또는 용량 폴링 스크립트)
+  재실행. 네트워크는 이미 있으므로
   **컴퓨트만 추가 생성**된다. 재개 전 [`terraform.tfvars`](../../terraform/oci-k3s/terraform.tfvars.example) 값과
   무료 한도(**2 OCPU/12 GB**)를 재확인한다.
 - **정리하려면**: `terraform destroy`로 5종을 지운다(코드·문서는 보존). 무료라서 서둘 이유는 없다.

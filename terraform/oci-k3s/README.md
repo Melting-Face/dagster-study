@@ -18,7 +18,7 @@ OCI **Always Free**(Ampere A1, ARM64) 인스턴스 1대에 **k3s 단일 노드**
 
 | 리소스 | 상태 |
 | --- | --- |
-| `oci_core_vcn` · `oci_core_subnet` · `oci_core_internet_gateway` · `oci_core_route_table` · `oci_core_security_list` | ✅ 생성됨(state serial 33) — **전부 Always Free, 과금 0** |
+| `oci_core_vcn` · `oci_core_subnet` · `oci_core_internet_gateway` · `oci_core_route_table` · `oci_core_security_list` | ✅ 생성됨(state serial 33 — **관측 시점 스냅샷, `apply` 1회로 낡는다**) — **전부 Always Free, 과금 0** |
 | `oci_core_instance.k3s` (A1 컴퓨트) | ❌ 미생성 — 용량 부족 |
 
 - **재개**: `terraform apply`(또는 `../../scripts/oci_k3s_retry_apply.py`) — 네트워크는 이미 있어 **컴퓨트만 추가**된다.
@@ -44,6 +44,10 @@ OCI **Always Free**(Ampere A1, ARM64) 인스턴스 1대에 **k3s 단일 노드**
 4. CLI: `terraform`(>= 1.5), `kubectl`.
 
 ## 사용
+
+> 🔴 **보류 상태에서 재개하는 경우, `apply` 전에 `security` 재판정을 1회 받는다**(「Δ 트리거」 —
+> 공인 IP 노드 생성은 비가역·외부 노출). 재판정 대상 4가지와 누적 기록 규칙은
+> [`../../docs/architectures/oci.md`](../../docs/architectures/oci.md) §현황이 단일 출처다.
 
 ```bash
 cd terraform/oci-k3s

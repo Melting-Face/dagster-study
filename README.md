@@ -239,7 +239,7 @@ flowchart TB
         SEC["security · 반출 · 규제 컨펌 게이트<br/>계획 1회 · 작업내용 1회 · 델타 조건부"]
         ARC["archivist · 저널 기록 전담"]
         SKM["skill-matcher · 스킬 배선 감사"]
-        TW["tech-writer · 쓰기 O<br/>docs/** · README.md · 발행 금지"]
+        TW["tech-writer · 쓰기 O<br/>docs/** · README.md · 발행 금지<br/>except: security.md · skills.md"]
     end
     JR[("미션 저널<br/>$OBSIDIAN_VAULT/agents/날짜/NN-미션.md")]
 
@@ -268,7 +268,11 @@ flowchart TB
   다른 축**이다 — `security`·`tech-writer`는 관할 밖이지만 도메인 산출물을 다뤄 **계층 밖은 아니다**.
 - **`tech-writer`는 저장소의 문서 소유자**다 — `docs/**`와 최상위 `README.md`를 쓴다. 🔴 단 가드는 디렉터리
   단위라 `docs/analyses/**`(내용은 `analyst` 소관)와 `docs/conventions/**`(규칙 신설은 supervisor 소관)는
-  **규율로만** 갈린다.
+  **규율로만** 갈린다. 🔴 **2026-08-22부터 `docs/conventions/**` 에는 `ask` 프롬프트도 없다**(정본 설계 게이트
+  축소 — 판단 축을 **경로 → 가역성**으로 옮겼고, 문서 편집은 git이 되돌리므로 최종 관문을 **커밋 1회**로 모았다).
+  ✅ 반대로 **`docs/security.md`·`docs/skills.md`는 규율에서 기계 강제로 올라갔다** — 이 워커를 **판정하는
+  근거 문서**라, `worker_path_guard.py`의 **`except` 축**(`allow`/`deny`보다 먼저 평가·대소문자 무시)으로
+  `deny`한다. 판정 대상이 판정 기준을 고치면 통제가 성립하지 않기 때문이고, **문안 정합조차 예외가 아니다**.
 - **워커가 워커를 못 부르니 supervisor가 릴레이한다** — `skill-matcher`는 새 스킬 후보를 **직접 검색하지 않고**
   `researcher`에 보낼 **조사 요청서**를 반환한다(`skill-matcher`→supervisor→`researcher`→supervisor→채점·제안
   →`security`→🚦사람). 찾기는 `researcher`, 배선 판정은 `skill-matcher`, 출처 신뢰성은 `security`로 **셋이 갈린다** —
@@ -319,7 +323,7 @@ flowchart LR
 | [`journal_guard.py`](scripts/journal_guard.py) | `SessionStart` · `PreToolUse(Write)` · `Stop` | 저널 `NN` 넘버링 경합 · 규약 위반 생성 · 기록 누락 경고 |
 | [`session_sync_guard.py`](scripts/session_sync_guard.py) | `PreToolUse(Bash·Agent·Edit\|Write\|NotebookEdit)` | 병렬 세션의 중복 작업 · 워킹트리 전역 git 명령 |
 | [`protected_paths_guard.py`](scripts/protected_paths_guard.py) | `PreToolUse(Bash)` | 보호 경로(`.env`·lock 등) 우회 수정 |
-| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher`·`director`·`data-engineer`·`devops-engineer`·`archivist` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈 + **가드 스크립트 자기보호**(`*_guard.py`는 워커 무관 `deny`) (✅ `tech-writer` 3셀 대조로 실발동 확인 — 🔴 단 **뒤 3종은 2026-08-20 신규 배선분이라 `미확인`**, 새 세션 재대조 필요) |
+| [`worker_path_guard.py`](scripts/worker_path_guard.py) | `tech-writer`·`researcher`·`director`·`data-engineer`·`devops-engineer`·`archivist`·`data-extractor` 프론트매터 `hooks` | 워커별 쓰기 경로 이탈(`allow`/`deny`) + **`except`**(넓은 `allow` 안에 박힌 파일 단위 구멍 막이 — `tech-writer`의 `docs/security.md`·`docs/skills.md`. `allow`/`deny`보다 **먼저** 평가, 대소문자 무시) + **가드 스크립트 자기보호**(`*_guard.py`는 워커 무관 `deny`) (✅ `tech-writer` 3셀 대조로 실발동 확인 — 🔴 단 **뒤 3종은 2026-08-20 신규 배선분이라 `미확인`**, 새 세션 재대조 필요. 🔴 **`except` 축은 ✅ 라이브 실발동 확인 — 단 `Edit` 도구 한정**이고 `Write`·`NotebookEdit`은 미시도다. 근거는 *"막혔다"* 가 아니라 *"`allow` 분기와 **다른 분기 문구**로 막혔다"* 이며, 대조군이 **먼저** 통과해 관측 경로 생존을 확보했다. 정본 [`agents.md`](docs/conventions/agents.md) §`except` 축 대조) |
 | [`analyst_path_guard.py`](scripts/analyst_path_guard.py) | `analyst` 프론트매터 `hooks` | 같은 목적 (✅ 실발동 확인 — 과거 미발동은 **`hooks`가 정의 로드 시점에 스냅샷**되기 때문) |
 
 - 🔴 **`hooks`를 세션 도중 추가·수정하면 그 세션에는 반영되지 않는다** — 배선을 바꾸면 **새 세션에서** 3셀 대조를 다시 돌린다.

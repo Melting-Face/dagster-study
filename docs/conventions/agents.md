@@ -182,7 +182,26 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
       `tech-writer`는 **표현만** 손본다(수치·코호트·결론 변경 금지).
     - **`docs/conventions/**` 는 규약 정본** — `tech-writer`는 supervisor 결정을 **받아적을 뿐**,
       규칙을 신설·변경하지 않는다. 문안 정합(링크·목차·요약 동기화)은 `tech-writer` 몫이다.
+      🔴 **2026-08-22부터 이 경계에는 `ask` 프롬프트조차 없다**(정본 설계 게이트 축소 — 아래).
+      즉 **아무도 안 물어보는 구간**이고, 지켜지는지는 워커 반환으로만 관측된다.
     - `CLAUDE.md`는 `docs/` 밖이라 **여전히 supervisor 소관**이다(가드가 실제로 막는 층).
+  - ✅ **셋째 경계는 규율에서 기계 강제로 올라갔다**(2026-08-22) — **`docs/security.md`·`docs/skills.md`**
+    는 **그 워커를 판정하는 근거 문서**(통제·규제 매핑·공급망 등급)라, 판정 대상이 판정 기준을 고치면
+    통제가 성립하지 않는다. `worker_path_guard.py`의 **`except` 축**으로 `deny`한다(§`allow`·`deny`·`except`).
+    **문안 정합조차 예외가 아니다** — 고칠 것이 보이면 지적만 반환한다.
+  - 🔴 **정본 설계 게이트 축소**(2026-08-22 supervisor 결정) — `CANON_PATTERNS`에서
+    `docs/conventions/**`·`docs/architectures/**`를, `permissions.ask`에서 `Edit(docs/conventions/**)`를 뺐다.
+    게이트를 **경로 축**으로 걸었더니 `tech-writer` 쓰기 범위 `docs/**` **35파일 중 23파일(65.7%)** 이
+    대상이 됐다(계측 단위 = **`git ls-files` 기준 추적 `.md` 파일 수**, 2026-08-22 13:46 KST 재실측 —
+    `conventions/` 14 + `architectures/` 9. `docs/`의 추적 파일 35개는 전부 `.md`다).
+    그래서 **규칙을 바꾸는 편집과 오탈자·링크 교정이 구분 없이** 전부 `ask`로 올라왔다 —
+    **전원이 매번 위반하는 규칙은 규칙이 아니다**(`docs/skills.md` §출처 등급별 통제가 같은 이유로 개정됐다).
+    판단 축을 **경로 → 가역성**으로 옮겼다: 문서 편집은 git이 되돌리고, 최종 관문은
+    `permissions.ask`의 **`Bash(*git*commit*)` 1회**다. 남은 `CANON_PATTERNS` 6종
+    (`CLAUDE.md`·`.claude/agents/**`·`.claude/settings.json`·`scripts/*_guard.py`(+`scripts/**/*_guard.py`)·
+    `skills-lock.json`·`compose.yml`)은 전부 **실행 규칙·통제 배선**이다.
+    🔴 **부작용**: `permissions`와 `settings.json` hook은 **세션 전역**이라 워커별로 좁힐 수 없어,
+    **supervisor 자신도** `docs/conventions/**`를 프롬프트 없이 고치게 됐다.
   - **독자는 둘이다** — `docs/posts/**`는 **모르는 사람**, 나머지 문서는 **아는 사람**이 읽는다.
     공개물의 주장은 **저장소에 이미 있는 결론**이거나 `researcher`가 1차 출처로 지지한 것이어야 하고,
     `tech-writer`는 **새 결론을 만들지 않는다**. 정본 [`publishing.md`](publishing.md).
@@ -289,7 +308,7 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
 | `permissionMode` | 아니오 | ❌ 미채택 | 🔴 **부모가 auto 모드면 무시**된다 — 이 저장소는 auto로 도는 세션이 있어 **실효 0**. 넣으면 "막았다고 믿는" 상태만 만든다 |
 | `maxTurns` | 아니오 | ❌ 미채택 | 폭주 실측 사례 없음(YAGNI). 관측되면 그때 |
 | `skills` | 아니오 | 🟡 `data-engineer`만(`dagster-expert`) | 🔴 **작동한다**(2026-08-19 probe 실측 — 아래). 기동 시 **전체 본문이 주입**돼 토큰이 상시 붙고, **lock 미고정 스킬은 무결성 미검증 콘텐츠의 상시 주입**이 된다 → **`skills-lock.json` 등재분만** 프리로드한다 |
-| `hooks` | 아니오 | 🟢 `analyst`·`tech-writer` **실발동 확인** / 🟡 `data-engineer`·`devops-engineer`·`archivist` **배선만**(2026-08-20 신규 — 그 전까지 **미배선**) / ⚪ `researcher`·`director` 도달 불가 | **워커별 경로 강제의 유일한 수단**이고 **작동한다**(2026-08-20 각각 3셀 대조 — 가드 `permissionDecisionReason` 원문·즉시 `deny`). 🔴 **`worker_path_guard.py`의 `BOUNDARIES`에 경계가 적혀 있다고 그 워커가 막히는 것이 아니다** — 7종 중 3종은 `hooks`가 없어 **한 번도 실행되지 않았다**(§배선 감사). 경계표를 읽고 "막힌다"고 판단하지 말고 **해당 워커 정의의 `hooks`를 함께 확인**한다. 과거 `analyst` 미발동의 원인도 규명됐다: **hooks는 정의 로드 시점에 스냅샷**되어 세션 도중 추가한 배선은 반영되지 않는다 → **hooks(배선)를 고치면 새 세션에서 재검증**한다. ✅ 단 **스크립트 본문은 매 호출 시 실행되어 즉시 반영**된다(2026-08-20 3셀 대조로 분리 확인 — 변인 하나, 차단 문구가 **바뀐 뒤의 allow 목록**을 출력). 🔴 확인된 것은 **`Write`·`Edit`·`NotebookEdit` 경로뿐**(`Bash` 경유는 matcher 밖 = 규율). `researcher`는 `Write` 자체가 없어 **가드에 도달하지 않는다**(미확인) |
+| `hooks` | 아니오 | 🟢 `analyst`·`tech-writer` **실발동 확인** / 🟡 `data-engineer`·`devops-engineer`·`archivist` **배선만**(2026-08-20 신규 — 그 전까지 **미배선**) / ⚪ `researcher`·`director` 도달 불가 | **워커별 경로 강제의 유일한 수단**이고 **작동한다**(2026-08-20 각각 3셀 대조 — 가드 `permissionDecisionReason` 원문·즉시 `deny`). 🔴 **`worker_path_guard.py`의 `BOUNDARIES`에 경계가 적혀 있다고 그 워커가 막히는 것이 아니다** — 7종 중 3종은 `hooks`가 없어 **한 번도 실행되지 않았다**(§배선 감사). 경계표를 읽고 "막힌다"고 판단하지 말고 **해당 워커 정의의 `hooks`를 함께 확인**한다. 과거 `analyst` 미발동의 원인도 규명됐다: **hooks는 정의 로드 시점에 스냅샷**되어 세션 도중 추가한 배선은 반영되지 않는다 → **hooks(배선)를 고치면 새 세션에서 재검증**한다. ✅ 단 **스크립트 본문은 매 호출 시 실행되어 즉시 반영**된다(2026-08-20 3셀 대조로 분리 확인 — 변인 하나, 차단 문구가 **바뀐 뒤의 allow 목록**을 출력). 🔴 확인된 것은 **`Write`·`Edit`·`NotebookEdit` 경로뿐**(`Bash` 경유는 matcher 밖 = 규율). `researcher`는 `Write` 자체가 없어 **가드에 도달하지 않는다**(미확인). 🔴 **더 정확히는 실발동이 확인된 도구는 `Write`·`Edit` 둘이고 `NotebookEdit`은 미시도**다 — `NotebookEdit`은 경로 키가 **`notebook_path`** 라 matcher가 걸려도 조용히 갈릴 수 있는 갈래이므로 **3도구로 일반화하지 않는다**. `Edit`은 2026-08-22 `except` 축 라이브 3셀로 확인됐다(1차는 *존재하지 않는 `old_string`* 설계라 도구가 hook보다 **먼저** 실패해 **판정 불가**였고, **실존 `old_string`으로 변인 하나만 바꾼 2차**에서 대조군 포함 **3/3 기대 일치** — §`except` 축 대조) |
 | `mcpServers` | 아니오 | ❌ 미채택 | 워커 전용 MCP 서버 없음 |
 
 ### 권한 매트릭스 (실측)
@@ -300,7 +319,7 @@ dagre 랭크를 끌어당겨 `impl`이 반대편으로 밀려나기 때문이다
 | `data-engineer`·`devops-engineer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O | **계획만 반환**(커밋·`apply`·`down -v` 금지) |
 | `analyst` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`notebooks/**`·`docs/analyses/**` **한정 — 규율**) | **계획만 반환**(커밋·`dbt build`·정의 파일 수정 금지) · 🔴 `$DATA_EXTRACT_DIR` **읽기 금지**(규율 — 가드는 쓰기만 본다) |
 | `data-extractor` | `Read, Write, Bash, Grep, Glob` — 🔴 **실측은 `Read`·`Write`·`Bash` 3종**(`Grep`·`Glob` 미실재, 2026-08-22) | `NotebookEdit` | `inherit` | O — **저장소 밖 `$DATA_EXTRACT_DIR`(기본 `~/extracts`) 한정**. 🔴 **저장소 안은 전부 `deny`**(`allow: ()`), 반출 경로 **밖도 `deny`**(`OUTSIDE_STRICT` — 다른 워커의 `ask`는 auto 모드가 흡수해 안 막힌다). ✅ **실호출 확인**(가드 원문 대조) | **실행 *전* `security` 사전 컨펌**(업무 전체가 Δ 트리거 ⓒ 데이터 반출) · 쓰기 SQL·`df.write`계열 금지 · 커밋·외부 발신 금지 |
-| `tech-writer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`docs/**` · `README.md` — hook 강제, ✅ **확대 범위 실발동 확인**) | **director 관할 밖** · 🔴 **발행(업로드) 금지**(외부 발신=비가역) · 커밋 금지 · `docs/analyses/`는 표현만(내용은 `analyst`) · `docs/conventions/`는 받아적기만(규칙 신설은 supervisor) · 🔴 **`docs/security.md`·`docs/skills.md`는 통제·공급망 정본**이라 내용 변경 시 supervisor 결정 + `security` 컨펌(가드가 못 가른다) |
+| `tech-writer` | `Read, Write, Edit, Bash, Grep, Glob` | — | `inherit` | O(`docs/**` · `README.md` — hook 강제, ✅ **확대 범위 실발동 확인**) · 🔴 **`except`: `docs/security.md`·`docs/skills.md`는 `deny`**(2026-08-22 신설) — ✅ **라이브 실발동 확인**(2026-08-22, 🔴 **`Edit` 한정**; `Write`·`NotebookEdit` 미시도) | **director 관할 밖** · 🔴 **발행(업로드) 금지**(외부 발신=비가역) · 커밋 금지 · `docs/analyses/`는 표현만(내용은 `analyst`) · `docs/conventions/`는 받아적기만(규칙 신설은 supervisor — 🔴 2026-08-22 정본 설계 게이트 축소로 **`ask` 프롬프트조차 없다**) · 🔴 **`docs/security.md`·`docs/skills.md`는 통제·공급망 정본이라 쓰기 자체가 `deny`** — 2026-08-22 `except` 축 신설로 **규율에서 기계 강제로 승격**됐다(그 전까지 "가드가 못 가른다"였다). **문안 정합조차 예외가 아니며** 고칠 것이 보이면 변경안만 반환해 supervisor가 `security` 컨펌 후 반영한다. 🔴 **이 `except`는 워커별이라 전파되지 않는다** — supervisor·다른 워커에는 걸리지 않으므로(실측상 `devops-engineer`는 통과) **"아무도 못 고친다"로 읽지 마라.** 막는 것은 **판정 대상이 자기 판정 근거를 고치는 것 하나**다 |
 | `researcher` | `Read, Grep, Glob, Bash, WebSearch, WebFetch` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 근거만 반환 — **질의 유출(DUA) 축의 단일 통제 지점**(§외부 접촉은 네 축으로 가른다 — *"유일한 외부 접촉"* 이 아니다), 설치·발신 금지 |
 | `security` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `inherit` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
 | `data-verifier`·`devops-verifier`·`data-qa`·`devops-qa` | `Read, Grep, Glob, Bash` | `Write, Edit, NotebookEdit` | `sonnet` | ✕ | 발견만 반환 — 수정은 `*-engineer`에 재배정 |
@@ -380,6 +399,115 @@ skill-matcher, statusline-setup
 docs/conventions/agents.md §권한 매트릭스다``. 워커명·시도 경로·정본 경로를 담고 있어
 **가드만이 만들 수 있는 문자열**이고, `denied by the Claude Code auto mode classifier`가 **아니다**
 (§hook 결정값의 출처 구분법을 그대로 적용). `ask`가 아니라 **즉시 `deny`** 라 분류기가 흡수할 층도 아니었다.
+
+##### 🔴 `except` 축 대조 — **라이브 실발동 확인**(`Edit` 한정), 1차 프로브는 판정 불가였다 (2026-08-22)
+
+`except` 축 신설(§`allow`·`deny`·`except`)의 실효를 두 층으로 나눠 쟀다. **두 층은 다른 축**이다.
+
+| 층 | 방법 | 관측 시각 | 결과 |
+| --- | --- | --- | --- |
+| ① 로직 | 합성 페이로드를 가드에 직접 파이프(`printf … \| ./scripts/worker_path_guard.py <worker>`) | 2026-08-22 13:37 KST(+14:11 재관측) | ✅ **22/22** — `except` 6(`file_path`·`notebook_path`·`path` 3키 × 대소문자 변형 `docs/Security.md`·`docs/SKILLS.md` 포함) · 기존 경계 생존 7 · 경계 밖 `deny` 4 · 다른 워커 비간섭 5 |
+| ② 라이브 **1차** | `tech-writer` 3셀 (`Edit` × **존재하지 않는** `old_string`) | 2026-08-22 13:2x KST | 🔴 **판정 불가** — 설계 결함, 아래 |
+| ② 라이브 **2차** | `tech-writer` 3셀 (`Edit` × **실존하는** `old_string`, 전용 프로브 파일 3개) | 2026-08-22 14:50 KST 직전(기록 직전 `date` 실측 = 14:50 KST) | ✅ **3/3 기대 일치** — `except` `deny` 1 · **대조군 성공 1** · 경계 밖 `deny` 1 |
+
+**1차 (판정 불가) — 🔴 프로브 설계가 관측을 삼켰다.** 3셀을 **`Edit` + 파일에 없는 `old_string`** 으로 짜서
+원문이 절대 바뀌지 않는 fail-safe를 만들었는데, **그 fail-safe가 곧 관측 불능의 원인**이었다 —
+세 셀 모두 hook 판정이 아니라 도구의 ``String to replace not found in file`` 로 끝났고,
+**차단(가드)과 실패(도구)가 구분되지 않았다.**
+
+판별은 **대조군 한 셀**로 닫았다 — 같은 프로브를 **경계 밖이 확실한 기존 파일**(`pyproject.toml`,
+로직층에서 `deny` 확인분)에 걸었더니 **똑같은 도구 에러**가 났다. 즉 이 설계에서는
+**경계 밖이든 안이든 출력이 같아** 층을 가를 수 없다. 2026-08-20에 실발동을 잡아낸 프로브는
+**`Write`로 새 파일을 만드는** 형태였고(`99-writer-probe.md` — "생성 후 정리"), 거기엔
+선행 검증될 `old_string`이 없어 판정이 hook까지 도달했다.
+
+- ⇒ 1차 시점의 결론은 **`미확인`** 이었다. 로직 22/22을 근거로 강제될 것으로 **추정**만 하고
+  실측으로 적지 않았다(원칙 7). **2차에서 해소됐다** — 아래.
+
+**2차 (해소) — `Edit` 실존 `old_string`으로 hook까지 도달시켰다.** 1차의 원인이 "도구가 hook보다
+먼저 실패한 것"이었으므로, 변인을 **`old_string`의 실재 여부 하나만** 바꿔 같은 3셀을 다시 돌렸다.
+대상은 전부 **버려도 되는 전용 프로브 파일**이라 가드가 죽어 있어도 원문이 상하지 않는다.
+
+| 셀 | 대상 | 기대 | 실측 | 차단 문구 출처 |
+| --- | --- | --- | --- | --- |
+| ② 대조군 | `docs/_probe_control_…md` | 편집 성공 | ✅ **성공** — `Read` 재확인으로 `PROBE_ORIGINAL`→`PROBE_MODIFIED` **내용 변경 확증** | — |
+| ① `except` 축 | `docs/_probe_except_…md` | `deny` | ✅ **즉시 `deny`** | 가드 `permissionDecisionReason` 원문 |
+| ③ `allow` 축 | 최상위 `_probe_outside_…md` | `deny` | ✅ **즉시 `deny`** | 가드 `permissionDecisionReason` 원문 |
+
+- 🔴 **대조군을 먼저 돌렸다.** ②가 성공하지 않으면 ①③의 `deny`는 "가드가 막았다"와 "도구가 아예
+  안 돈다"를 가르지 못해 근거가 되지 못한다. **부정 결과는 관측 경로 생존을 함께 제시해야 유효하다**(원칙 7).
+  도구가 돌려준 `updated successfully`는 성공 *신호*일 뿐이라 **`Read`로 내용을 재관측**해 확증했다.
+- 🔴 **`except` 발동의 근거는 "막혔다"가 아니라 "다른 분기로 막혔다"** 이다. ①은 `docs/` 하위라
+  **`allow`만 있었다면 통과했어야** 하는 경로다. 그런데 `deny`가 났고 문구가 ③(경계 밖 일반 분기,
+  *"쓸 수 있는 곳: docs/ · README.md"*)과 **다른 `except` 전용 분기**(*"이 문서는 그 워커를 판정하는
+  근거다 … 문안 정합조차 예외가 아니다"*)였다. 두 문구가 갈린 것이 이 축이 실제로 평가됐다는 증거다.
+  둘 다 워커명·시도 경로·정본 경로를 담은 **가드만이 만들 수 있는 문자열**이고
+  `denied by the … classifier`가 아니다(§hook 결정값의 출처 구분법).
+- 🔴 **관측을 위해 `except`에 프로브 경로를 한시적으로 올렸다가 내렸다** — 이 우회가 **원리상 필수**다.
+  `docs/` 하위는 `allow`가 통과시키므로, 프로브를 `except`에 올리지 않으면 ①과 ②가 **같은 분기로 갇혀**
+  두 축이 갈리지 않는다. 즉 **이 축은 대상 경로를 일시적으로 `except`에 넣지 않고서는 관측되지 않는다.**
+  측정 후 프로브 경로를 내리고 파일 3개도 삭제했으며, 가드 회귀를 재확인했다.
+  ⇒ **상시 `except`는 `docs/security.md`·`docs/skills.md` 2종**이다(2026-08-22 14:54 KST 실측 —
+  이 시점 선언 항목은 **3건**이었고 차이 1건은 **한시 프로브 경로**다.
+  🔴 **"상시 정책 2종"과 "선언 항목 수"는 다른 단위**이므로 항목 수를 정책 수로 읽지 마라).
+  🔴 **그 1건의 주체는 「다른 세션」이 아니라 supervisor 자신이었다**(같은 미션의 두 번째 프로브 —
+  아래 §`permissions.allow` ↔ hook `deny`). 워커는 주체를 확인할 수단이 없어 *"다른 세션"* 으로
+  보고했다(**서브에이전트에는 `ListAgents`·`SendMessage`가 없다**). ⇒ **관측 주체를 특정할 수
+  없는 층이 있다**는 뜻이고, §3자부터는 관측 주체를 함께 적는다가 **워커 반환에는 적용 불가**다.
+  ✅ 15:1x KST 회수 확인 — 프로브 경로·파일 전부 제거, 가드 회귀 7/7, `ruff` 통과.
+
+#### 🔴 `permissions.allow`는 hook `deny`를 우회하지 못한다 (2026-08-22 실측)
+
+`.claude/settings.json`의 `permissions.allow`에 **`Edit(docs/**)`** 를 넣는 것이 안전한지 재기 위해,
+그 규칙이 **존재하는 상태에서** `except` 경로를 쳤다(변인 하나·`Edit` 도구·프로브 파일).
+
+| 셀 | 대상 | 결과 |
+| --- | --- | --- |
+| B(대조군, **먼저**) | `docs/` 일반 경로에 `Write` 신규 | **성공**(`Read` 재확인) — 관측 경로 생존 |
+| A | `docs/` 하위 **∧** `except` 한시 등재 경로 | **가드 `deny`**, 파일 내용 `PROBE_ORIGINAL` 그대로 |
+
+**hook의 `deny`가 세션 `allow`를 이긴다.** A는 "에러만 내고 디스크엔 썼다"는 **부분 실패도 아니었다**.
+🔴 **순서가 반대였다면 `allow` 한 줄이 워커 경로 경계 전체를 무력화**했다 — `permissions`는 세션
+전역이라 `Edit(docs/**)` 하나로 모든 워커의 `docs/` 경계가 열렸을 것이다. **편의를 위해 `allow`를
+넓힐 때는 이 순서를 다시 실측하고 넓힌다.**
+🔴 보증 범위는 **`Edit` 도구 · `docs/**` 패턴 · `except` 경로 1건**까지다 — 다른 워커·다른 패턴에서
+같은 순서인지는 **별도 셀이 필요**하다. 프롬프트는 두 셀 모두 **0회**였다.
+
+🔴 **`미확인` — `permissions.allow` ↔ hook `ask`의 순서는 재지 않았다**(2026-08-22 `security` 지적).
+잰 것은 **`deny`** 뿐이고, `ask`는 더 약한 결정이라 같은 순서라고 **추론하지 마라**. 이게 빈 축이 아닌
+이유는 `docs/**`에 **`ask`를 내는 hook이 하나 더** 걸려 있어서다 — `session_sync_guard.py file-pre`
+(병렬 세션 **동일 파일 충돌 상신**). `Edit(docs/**)` allow가 이 `ask`를 흡수하면 **`docs/` 전역에서
+충돌 상신이 죽는다.**
+🔴 **손실이 나는 모드가 하필 이 변경의 대상 모드**다 — auto 모드는 파일 도구의 `ask`를 이미 흡수하므로
+한계 손실은 **non-auto 한정**인데, `allow`를 넣은 근거 자체가 *"사용자가 겪은 프롬프트는 auto가 아닌 모드"*
+였다. **"auto에서 어차피 흡수되니 무해하다"는 논거가 여기서는 성립하지 않는다.**
+⇒ 닫는 법(2셀): **피어가 점유한 `docs/` 파일 1개**(대조군: 미점유 파일 1개)에 `Edit`를 걸어
+충돌 상신 문구가 뜨는지 본다. 🔴 합성 리스로 테스트하면 **실제 레지스트리가 바뀌므로**
+`.claude/.claims/`를 테스트 후 정리한다(§병렬 세션).
+- 🔴 **보증 범위는 `Edit` 도구 경로뿐이다.** `Write`·`NotebookEdit`은 이번에 **시도하지 않았다**.
+  특히 **`NotebookEdit`은 경로 키가 `notebook_path`** 라 matcher가 걸려도 키가 갈리면 조용히 무시되는
+  **알려진 갈래**다(§matcher가 붙어도 경로 키가 다르면 무시된다). **3도구로 일반화하지 마라.**
+  `Bash` 경유(`sed`·리다이렉트·`tee`)는 여전히 **matcher 밖 = 무관측**이고 규율로만 지켜진다.
+- 🔴 **`except`는 완전일치라 접미어 변형이 통과한다** — `docs/skills.md.bak`은 **`allow`**다(2026-08-22
+`security` 실측). 위협은 아니다(정본 파일 자체는 완전 보호되고 `.bak`은 판정 근거가 아니다).
+다만 **1차 대조 22셀에 접미어 트랩이 없었다**(대소문자 변형만 있었다) — 같은 계열의 트랩이
+`allow` 축에서는 실제 버그였으므로(`README.md` 접두어가 `README.md.bak`을 열어줬다),
+**다음 재대조에는 접미어 트랩 셀을 넣는다.**
+🔴 **`except`는 워커별이라 다른 워커로 전파되지 않는다.** 이 축이 막는 것은
+  **판정 대상이 자기 판정 근거를 고치는 것 하나**이며, supervisor나 다른 워커에는 걸리지 않는다
+  (실측상 `devops-engineer`로는 `docs/security.md`가 **통과**한다). **"아무도 못 고친다"로 읽지 마라.**
+- 🔴 **(1차가 남긴 교훈) fail-safe와 관측 가능성은 상충할 수 있다** — "원문이 안 바뀌게" 설계한 안전장치가
+  **판정 신호까지 함께 지웠다.** 프로브를 짤 때는 *"이 셀이 무엇을 관측 범위에서 빠뜨리는가"* 를
+  먼저 적는다(§피어 지적은 실험 설계로 답한다와 같은 규율).
+- 권한 프롬프트는 **1차·2차 모두 0회**였다(기대값과 일치 — `except`는 `ask`가 아니라 `deny`이고,
+  `docs/conventions/**`의 정본 게이트는 같은 날 축소로 사라졌다). 2차의 ①③은 프롬프트 없이
+  **즉시 `deny`** 로 끝나, **파일 도구의 `ask`는 auto 모드 분류기가 흡수한다**는 기존 실측과 정합한다
+  → **파일 경로 경계는 `ask`가 아니라 `deny`여야 막힌다**가 라이브에서도 재확인됐다.
+- 🔴 **측정 도중 병렬 세션이 대상 스크립트를 고쳤다** — 13:37 측정 뒤 `worker_path_guard.py`의 mtime이
+  **13:39:44**로 바뀌어 있었다(피어 세션 `b6215e`, 같은 워킹트리). 그래서 **14:11에 스팟 3셀을 재관측**해
+  `tech-writer` 경계가 그대로임을 확인한 뒤 이 수치를 남겼다. §피어에게 전달하는 저장소 상태는
+  **관측 시점을 함께 적고 집행 직전 재관측**한다는 규율이 **측정치에도 그대로 적용**된다 —
+  관측과 기록 사이에 상대가 끼어들면 **맞았던 수치가 조용히 낡는다.**
 
 ##### 🔴 `analyst` 미발동의 원인 — **hooks는 정의 로드 시점에 스냅샷된다** (2026-08-20 규명)
 
@@ -788,6 +916,23 @@ Read, Edit, or Write tools"*.
   아니면 완전일치**다. `deny`에는 이 분기를 두지 않았다 — 막는 쪽은 넓게 걸리는 편이 안전하기 때문이다
   (`.env`가 `.env.example`까지 막는 것은 의도된 여유). **재대조 시 접두어 트랩 셀을 반드시 포함**한다
   (위반 `docs/../dagster_project/x.py` / 트랩 `README.md.bak` / 대조군 `docs/README.md`).
+- 🔴 **2026-08-22 개정: `except` 축을 신설했다**(supervisor 결정). `BOUNDARIES`가 `allow`/`deny`에 더해
+  **`except`** 를 갖는다 — **`allow`/`deny` 판정보다 먼저** 평가되는 **구멍 막이**이고, `deny`와 같은
+  방향(막는 쪽)이라 **대소문자를 무시**한다(fail-closed). `tech-writer`에
+  **`except: ("docs/security.md", "docs/skills.md")`** 를 적용했다.
+  - **왜 별도 축인가**: `allow`는 디렉터리 접두어라 *"이 디렉터리는 되는데 그 안의 이 파일만 안 된다"* 를
+    표현할 수 없고, `deny` 축을 쓰면 그 워커의 `allow`가 통째로 사라진다. **뒤에 두면 `allow`가 먼저
+    통과시켜 축이 통째로 죽으므로** 평가 순서가 앞이어야 한다.
+  - **왜 지금인가**: 2026-08-20 쓰기 범위 확대로 **판정 대상이 자기 판정 근거를 고칠 수 있는** 상태가 됐고,
+    이는 [`security.md`](../security.md) 「공개물 반출 차단 ↳ 잔여 위험」 행에 **🔴 규율**로만 남아 있었다.
+    같은 날 **정본 설계 게이트 축소**(`protected_paths_guard.py`의 `CANON_PATTERNS`에서
+    `docs/conventions/**`·`docs/architectures/**` 제거, `permissions.ask`에서 `Edit(docs/conventions/**)` 제거)로
+    **규율 의존이 늘어난 만큼 가장 위험한 2종을 기계 강제로 승격**했다.
+  - 🔴 **`docs/conventions/**` 는 `except`에 넣지 않았다** — 링크·목차·요약 동기화(doc-sync 체인)가
+    `tech-writer`의 정당한 업무라 막으면 **매 교정이 supervisor 왕복**이 된다. 그쪽은 **규율로 남고,
+    이제 `ask` 프롬프트조차 없다**(아무도 안 물어본다).
+  - 🔴 **`except`는 워커별이라 다른 워커로 전파되지 않는다** — 실측상 `devops-engineer`(deny 축 워커)는
+    `docs/security.md`를 **통과**한다. 이 축으로 막히는 것은 `except`가 선언된 워커뿐이다(2026-08-22 실측).
 - ~~**재검증 절차**: 새 세션에서 `analyst`에 가드를 배선하고 금지 경로 쓰기를 시킨다.~~
   → **수행했고 거부됐다**(2026-08-20). 예고한 두 갈래 중 **"세션 내 재적용 문제로 확정"** 쪽이었다.
   절차 자체가 판별에 성공한 사례라 남긴다 — **분기와 각 분기의 의미를 미리 적어 두면

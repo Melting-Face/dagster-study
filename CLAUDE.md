@@ -325,10 +325,19 @@
   **분석·공개는 새 축이 아니라 새 도메인**이라 3종을 복제하지 않고 **구현 축 1명씩**만 둔다(판정은 `data-*` 재사용) —
   **`analyst`**(쓰기 `notebooks/**`·`docs/analyses/**` 한정, gold 모델은 **제안만**)과
   **`tech-writer`**(`docs/**` 전체 + 최상위 `README.md`). ✅ 이 경로 경계는 **강제된다**.
-  🔴 **그 대가로 기계가 못 가르는 경계 둘이 규율로 남는다**(가드는 디렉터리 단위): ① `docs/analyses/**`는
+  🔴 **`tech-writer`는 자기 판정 근거 문서를 못 고친다** — `worker_path_guard.py`의 **`except` 축**
+  (`allow`/`deny`보다 먼저 평가)이 `docs/security.md`·`docs/skills.md`를 뺀다(✅ 라이브 실발동 확인).
+  🔴 **`except`는 워커별이라 전파되지 않는다** — supervisor·다른 워커에는 걸리지 않으니
+  **"아무도 못 고친다"로 읽지 마라**. 이 축이 막는 것은 **판정 대상의 자기 판정 근거 수정** 하나다.
+  🔴 **그 밖에 기계가 못 가르는 경계 둘은 규율로 남는다**(가드는 디렉터리 단위): ① `docs/analyses/**`는
   **이중 소유** — 내부 결론의 **저자는 `analyst`**이고 `tech-writer`는 **표현만** 손본다 ② `docs/conventions/**`는
   **규약 정본** — supervisor 결정을 **받아적을 뿐** 규칙을 신설·변경하지 않는다(`CLAUDE.md`는 `docs/` 밖이라
-  가드가 **실제로** 막는다). 독자는 둘 — `docs/posts/**`는 **모르는 사람**, 나머지는 **아는 사람**이 읽는다.
+  가드가 **실제로** 막는다). 🔴 ②는 **`ask` 프롬프트조차 없다** — 게이트를 **경로 축에서 가역성 축으로**
+  옮겨(2026-08-22) `docs/conventions/**`·`docs/architectures/**`를 정본 게이트에서 뺐다.
+  문서 편집은 git이 되돌리고 **최종 관문은 커밋 `ask` 1회**다. **전원이 매번 위반하는 규칙은 규칙이 아니다** —
+  쓰기 범위 35파일 중 23파일이 게이트라 규칙 변경과 오탈자 교정이 구분 없이 올라오고 있었다.
+  남은 정본 게이트는 **실행 규칙·통제 배선**뿐이다(`CLAUDE.md`·`.claude/agents/**`·`settings.json`·
+  `*_guard.py`·`skills-lock.json`·`compose.yml`). 독자는 둘 — `docs/posts/**`는 **모르는 사람**, 나머지는 **아는 사람**이 읽는다.
   🔴 **매체는 축이 아니다**(지시문 **포맷 프로파일**로 흡수). 🔴 **발행(업로드)은 어느 워커도 하지 않는다** —
   외부 발신은 비가역이고 마지막 게이트는 **사람**이 갖는다. **공개는 커밋보다 강한 기준**이다
   (내부 경로·버킷명·소규모 셀 <5·DUA 재배포 제한) — [`docs/conventions/publishing.md`](docs/conventions/publishing.md).
@@ -421,6 +430,10 @@
   `deny` > `ask` > `allow` 순으로 **auto 모드 분류기보다 먼저** 평가되고 **서브에이전트에도 동일 적용**된다 —
   비가역 작업(git 커밋·푸시, `terraform/kubectl apply`, `compose down -v`, `dbt --full-refresh`, `DROP`/`TRUNCATE`,
   `.env`·`tfstate` 수정, 외부 발신)은 `ask`로 못 박는다. `allow`에 비가역 명령을 넣지 않는다.
+  🔴 **`permissions.allow`는 워커 hook의 `deny`를 우회하지 못한다**(2026-08-22 실측 — `Edit(docs/**)`가
+  `allow`에 있는 상태에서 `except` 경로가 차단됐고 파일 내용도 안 바뀌었다. 대조군 먼저 통과).
+  이 순서가 반대였다면 **`allow` 한 줄이 전 워커의 경로 경계를 열었을 것**이다(`permissions`는 세션 전역).
+  ⇒ **편의를 위해 `allow`를 넓힐 때는 이 순서를 다시 실측하고 넓힌다**(보증 범위는 `Edit`·`docs/**`까지).
   **파일 경로 경계는 `Edit(<경로>)`로만 선언한다** — `Write(<경로>)`는 매칭기가 인식하지 않는 죽은 규칙이고,
   `Edit(<경로>)` 하나가 `Write`·`Edit`·`NotebookEdit`을 모두 커버한다.
   상세 [`docs/conventions/agents.md`](docs/conventions/agents.md).

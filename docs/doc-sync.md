@@ -28,7 +28,7 @@
 | 분석 규칙(gold·노트북·리포트) | `docs/conventions/analysis.md` | `CLAUDE.md` 분석 섹션 · `docs/conventions/dbt.md`(gold 레이어) · `docs/test.md`(grain 테스트) · `notebooks/README.md` |
 | 외부 공개(블로그·공유 자료) | `docs/conventions/publishing.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `docs/posts/README.md` · `.claude/agents/tech-writer.md`(포맷 프로파일·경계) · `docs/security.md`(반출 통제) |
 | Claude Code 스킬 | `docs/skills.md` | `skills-lock.json`(등재·`computedHash`) · `.claude/agents/*.md` 프론트매터 `skills:`(프리로드는 **lock 등재분만**) · `.claude/agents/skill-matcher.md`(채점 루브릭) · `CLAUDE.md` 운영 섹션 |
-| 에이전트 오케스트레이션·기록관 | `docs/conventions/agents.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `.claude/agents/*.md` · `.claude/commands/journal.md` · **`scripts/journal_guard.py`·`scripts/protected_paths_guard.py`·`scripts/session_sync_guard.py`·`scripts/analyst_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/analyst.md` 프론트매터)·`scripts/worker_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/{director,tech-writer,researcher,data-engineer,devops-engineer,archivist,data-extractor}.md` 프론트매터 — 🔴 **`BOUNDARIES`에 워커를 추가하면 그 워커 정의의 `hooks`도 함께 잇는다.** 2026-08-20까지 7종 중 3종이 미배선이라 **정의만 있고 실행된 적이 없었다**. 🔴 **`OUTSIDE_ALLOW`·`OUTSIDE_STRICT`(저장소 밖 경로)도 같은 규칙**이다 — `data-extractor`는 셋 다에 걸린다)·`.claude/settings.json`(기계 강제 가능한 규약은 hook·권한 규칙에 반영)·`.claude/settings.json`의 가드 스크립트 보호 규칙(`Edit(scripts/*_guard.py)`·`Edit(scripts/**/*_guard.py)`)·`docs/conventions/git.md`(커밋 대상·금지)·`.gitignore`** (저널 원문은 볼트 `$OBSIDIAN_VAULT/agents/`, repo 미커밋)<br/>🔴 **가드 배선을 바꿨으면 3셀 대조**(위반 2 + 대조군 1)로 실발동을 확인한다 — 프론트매터 `hooks`는 **정의 로드 시점 스냅샷**이라 편집한 세션의 음성 결과는 근거가 아니고 **새 세션에서** 돌린다(§실무 규칙 5). |
+| 에이전트 오케스트레이션·기록관 | `docs/conventions/agents.md` | `CLAUDE.md` 운영 섹션 · `docs/README.md` 목차 · `.claude/agents/*.md` · `.claude/commands/journal.md` · **`scripts/journal_guard.py`·`scripts/protected_paths_guard.py`·`scripts/session_sync_guard.py`·`scripts/analyst_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/analyst.md` 프론트매터)·`scripts/worker_path_guard.py`(← 배선처가 `settings.json`이 아니라 `.claude/agents/{director,tech-writer,researcher,data-engineer,devops-engineer,archivist,data-extractor}.md` 프론트매터 — 🔴 **`BOUNDARIES`에 워커를 추가하면 그 워커 정의의 `hooks`도 함께 잇는다.** 2026-08-20까지 7종 중 3종이 미배선이라 **정의만 있고 실행된 적이 없었다**. 🔴 **`OUTSIDE_ALLOW`·`OUTSIDE_STRICT`(저장소 밖 경로)도 같은 규칙**이다 — `data-extractor`는 셋 다에 걸린다. 🔴 **`except`(2026-08-22 신설·`allow`/`deny`보다 먼저 평가)는 이미 배선된 워커의 `BOUNDARIES` 안에서 바뀌므로 새 배선이 필요 없고, 그래서 「배선 변경 → 새 세션」 법칙의 대상이 아니다** — **스크립트 본문은 매 호출 즉시 반영**된다. 대신 **경계가 늘면 그 경계를 겨냥한 대조 셀을 추가**한다)·`.claude/settings.json`(기계 강제 가능한 규약은 hook·권한 규칙에 반영)·`.claude/settings.json`의 가드 스크립트 보호 규칙(`Edit(scripts/*_guard.py)`·`Edit(scripts/**/*_guard.py)`)·`docs/conventions/git.md`(커밋 대상·금지)·`.gitignore`** (저널 원문은 볼트 `$OBSIDIAN_VAULT/agents/`, repo 미커밋)<br/>🔴 **가드 배선을 바꿨으면 3셀 대조**(위반 2 + 대조군 1)로 실발동을 확인한다 — 프론트매터 `hooks`는 **정의 로드 시점 스냅샷**이라 편집한 세션의 음성 결과는 근거가 아니고 **새 세션에서** 돌린다(§실무 규칙 5). |
 
 ## 실무 규칙
 
@@ -41,6 +41,20 @@
    적는다. 안 적으면 "설정은 넣었는데 실효가 없는" 상태가 조용히 남는다 — 2026-08-20까지 실측된
    계열이 이미 셋이다(존재하지 않는 hook 결정값 `escalate`·매칭기가 무시하는 `Write(<경로>)` 규칙·
    헤드리스 세션에서 판정 불가인 `cleanupPeriodDays`).
+6. 🔴 **3셀을 적고 돌렸는데도 관측이 안 되는 경우가 있다 — 프로브가 「판정층에 도달하는지」를
+   먼저 확인한다.** 규칙 5는 *"어떻게 위반시킬지 적어라"* 인데, 2026-08-22 그것을 적고 실행했는데도
+   **판정 불가**가 났다. 원인은 가드가 아니라 **프로브 설계**였다 — `Edit` 도구에 **존재하지 않는
+   `old_string`** 을 주면 도구가 문자열 매칭에서 **hook보다 먼저** 실패해, 경계 **안이든 밖이든
+   출력이 같아진다**(대조군으로 로직층 `deny`가 확인된 `pyproject.toml`에 같은 프로브를 걸어 원인을 닫았다).
+   원문을 지키려고 넣은 fail-safe가 곧 **관측 불능의 원인**이었다.
+   ⇒ 3셀에는 **통과가 기대되는 대조군을 반드시 넣고, 그것이 *먼저* 성공하는지 본다.** 대조군이
+   성공하지 않으면 위반 셀의 `deny`는 근거가 못 된다("막혔다"와 "도구가 아예 안 돌았다"가 구분되지 않는다).
+   그리고 **차단 문구가 어느 분기의 원문인지**까지 대조한다 — 통과 후 다른 이유로 걸린 것과
+   의도한 축이 발동한 것은 문구로만 갈린다.
+   🔴 **경계가 「넓은 허용 안의 좁은 금지」면 프로브 경로 선택이 관측 가능성을 좌우한다.**
+   `worker_path_guard.py`의 `except` 축이 그렇다 — 프로브를 `except`에 올리지 않으면 `allow`가
+   먼저 통과시켜 **두 분기가 갈리지 않고, 이 축은 원리상 관측되지 않는다.**
+   (한시적으로 프로브 경로를 `except`에 올려 돌린 뒤 내렸다 — **내리는 것까지가 절차**다.)
 
 ## 참고
 

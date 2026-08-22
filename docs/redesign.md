@@ -37,7 +37,7 @@
 │  로컬 레지스트리 (kind local-registry)                             │
 └──────────────────────────────────────────────────────────────────┘
    Iceberg 공유:  Spark(batch write) ↔ dbt-spark(마트) ↔ Flink(stream r/w)
-   ※ BATCH(Spark)·STREAM(Flink)은 6/16 예산상 시분할(동시 실행 금지)
+   ※ BATCH(Spark)·STREAM(Flink)은 동시 기동 허용(2026-08-22 실측 — 경계 3개는 conventions/k8s.md §9-3)
 ```
 
 > 🔴 **※ dbt 경로는 아직 "클러스터 대상 실행"이 아니다**(2026-08-22 실측). Spark Connect 서버는
@@ -54,7 +54,9 @@
   동일한 패턴이며, `dg dev` 기반 **빠른 개발 루프**를 유지한다.
 - **컴퓨트·데이터 서비스는 K8s로 통일**한다(하이브리드 이중관리 회피). 컴퓨트는 **Spark(배치)+Flink(스트림)**.
 - **Trino는 제거**한다. dbt는 **dbt-spark**로 이관하고, ad-hoc 조회는 Spark SQL로 대체한다.
-- 자원 배분(6 CPU/16 GB, 시분할)은 [resource-sizing.md](resource-sizing.md) "Kubernetes 재설계 시나리오".
+- 자원 배분(**8 CPU / 22,888 MiB** VM — `scripts/k8s-env.sh`가 정본, **동시 기동 허용**)은
+  [resource-sizing.md](resource-sizing.md) "Kubernetes 재설계 시나리오"와 [conventions/k8s.md](conventions/k8s.md) §9-3.
+  🔴 백분율의 분모는 VM 총량이 아니라 **노드 Allocatable**(`8000m` / `22843508Ki`)이다.
 
 ## 3. 핵심 결정 (설계 급소)
 
@@ -106,8 +108,11 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 
 - **Plan**: kind(on Podman) 클러스터 + Spark Operator(Helm) 위에, 최소 SparkApplication을 **Dagster 자산이
   `PipesK8sClient`로 제출**하고 Iceberg 테이블에 write까지 성공시킨다.
-- **Do**: ① `scripts/k8s-up.sh`(podman machine rootful 6/16 + kind + 로컬 레지스트리, config는 `k8s/kind-cluster.yaml`)
-  ② `scripts/k8s-operators.sh`(Spark Operator Helm; Flink는 `INSTALL_FLINK=true`) ③ PySpark+Iceberg 러너 이미지 빌드·push
+- **Do**: ① `scripts/k8s-up.sh`(podman machine rootful **당시 6/16** + kind + 로컬 레지스트리, config는 `k8s/kind-cluster.yaml`)
+  — 🔴 이 6/16은 **Phase 0 실행 당시의 값**이다. 이후 `scripts/k8s-env.sh`가 **8 CPU / 22,888 MiB**로 올랐으므로
+  현재 값을 볼 때는 스크립트를 본다(스크립트가 정본).
+  ② `scripts/k8s-operators.sh`(Spark Operator Helm; **Flink 오퍼레이터는 기본 설치** — 제외하려면 `INSTALL_FLINK=false`)
+  ③ PySpark+Iceberg 러너 이미지 빌드·push
   ④ SeaweedFS/카탈로그 Postgres 최소 기동 ⑤ Dagster 자산에서 CRD 제출·폴링. 정리는 `scripts/k8s-down.sh`.
 - **Check(성공 게이트)**: Iceberg 테이블 1개가 Spark로 append되고 **Spark SQL로 조회**되며, Dagster UI에
   로그·materialization이 회수된다.
@@ -218,10 +223,13 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 > 착수 시 **체크포인트 설정 + `flink-s3-fs-hadoop` 플러그인 + 러너 이미지 재빌드가 동시에** 필요하다.
 >
 > **검증 후 세션 클러스터는 그 자리에서 다시 내렸다.** 유휴 비용은 **JM 1000m/2048Mi**뿐이고
-> (TM은 잡 제출 +7초 기동 → 46~52초 생존 → 자동 회수), 그 JM이 "BATCH·STREAM 시분할" 규약을 어긴다.
+> (TM은 잡 제출 +7초 기동 → 46~52초 생존 → 자동 회수), 🔴 **사유는 시분할 위반이 아니라 회수 규율이다** —
+> 경계 ①은 오히려 **JM 상주를 전제로** 동시 기동을 허용한다([conventions/k8s.md](conventions/k8s.md) §9-3).
+> 쓰지 않는 상주분을 놀리지 않는다는 것이 근거이고, **예산 여유는 회수를 면제하지 않는다.**
 > 2026-08-19에 같은 구성이 **13시간 샜고 발견 경로가 성능 이상이 아니라 "안 쓰는 것 정리"였다** —
-> 그래서 회수를 다음으로 미루지 않는다. `INSTALL_FLINK` 기본값은 `false`라
-> **재기동해도 Flink는 뜨지 않는다**(스크립트가 정본).
+> 그래서 회수를 다음으로 미루지 않는다. 🔴 `INSTALL_FLINK` **기본값은 `true`(기본 설치)** 라
+> 재기동하면 **오퍼레이터는 다시 뜬다** — 빼려면 `INSTALL_FLINK=false`를 준다(스크립트가 정본).
+> 다만 오퍼레이터가 떠도 **세션 클러스터(`FlinkDeployment`)는 별도 적용**이라 JM이 자동으로 서지는 않는다.
 >
 > ⚠️ **드리프트 교정**: 2026-08-19판이 *"cert-manager도 함께 제거했다"* 고 적은 것은 **거짓**이다.
 > **CNPG barman 플러그인이 cert-manager를 무조건 요구**하므로 줄곧 `Running`이었다.
@@ -235,7 +243,9 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
     (`k8s/flink/iceberg-batch-job.yaml` 선례). **`FlinkSessionJob` CR은 쓰지 않는다** —
     `jarURI`가 필수라 SQL 한 장에 jar 빌드·배포 파이프라인이 딸려온다.
   - **`allowed-schemes`는 `local`로 좁혀 둔다**(런타임 외부 jar fetch 차단 — 의존성은 이미지에 굽는다).
-- **Check**: 스트림 입력 대비 경보 산출 정확성·지연 관측, 배치(Spark)와 **시분할** 실행 확인([resource-sizing.md](resource-sizing.md)).
+- **Check**: 스트림 입력 대비 경보 산출 정확성·지연 관측, 배치(Spark)와 **동시 기동** 시 경계 3개 준수 확인
+  (**Flink 상주는 JM만** · **`spark.executor.instances` ≤ 1** · Redpanda 도입 시 경계 재계산)
+  ([resource-sizing.md](resource-sizing.md) · [conventions/k8s.md](conventions/k8s.md) §9-3).
 - **Act**: 배치 결과(dbt-spark)와 스트림 결과의 정합(동일 피처 정의) 교차검증.
 
 ### Phase 4 — 오케스트레이션 정착 + 문서·컨벤션 확정
@@ -276,7 +286,7 @@ lineage(스트림): **Redpanda(리플레이) → Flink(실시간 피처·경보)
 | --- | --- | --- |
 | 정확성/학습가치 | ★★★★★ | Spark/Flink 2개 K8s Operator(선언형 CRD)·배치+스트림 시연 = 강한 포트폴리오 신호 |
 | 리스크 | ★★★☆☆ | Dagster↔Operator canonical 예제 부재(커스텀 글루) + **dbt-trino→dbt-spark SQL 방언 교정** 필요(Phase 0·1로 방어) |
-| 비용 | ★★★☆☆ | 로컬이라 클라우드 비용 0, 단 **단일 PC RAM 압박**(2엔진+Redpanda+SeaweedFS). **시분할**로 6/16 내 수용([resource-sizing.md](resource-sizing.md)) |
+| 비용 | ★★★☆☆ | 로컬이라 클라우드 비용 0, 단 **단일 PC RAM 압박**(2엔진+Redpanda+SeaweedFS). **8 CPU / 22,888 MiB** VM에서 **동시 기동**으로 수용(실측 피크 CPU 84% / Mem 52%). Redpanda는 미도입이라 이 여유에 포함되지 않는다([resource-sizing.md](resource-sizing.md) · [conventions/k8s.md](conventions/k8s.md) §9-3) |
 | 효율(개발 루프) | ★★☆☆☆ | in-process 대비 느려짐(이미지 빌드→레지스트리 push→CRD 제출). **의도된 학습 트레이드오프**로 수용 |
 
 - **데이터 규모 대비 Spark/Flink 과함**은 인정하고, 급소①의 분업(대용량 인제스트=Spark, 실시간 경보=Flink)으로 정당성을 확보한다.

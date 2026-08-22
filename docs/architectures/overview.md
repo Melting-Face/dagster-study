@@ -11,8 +11,9 @@
 > **2026-08-20 기준 실제로 도는 구성**: 호스트 Dagster + compose `postgres`(메타) +
 > kind 클러스터(Spark Operator·Spark Connect·SeaweedFS·카탈로그 Postgres·ingress-nginx).
 > **Flink Operator는 ⏸ 미설치**다 — 채택은 했으나 잡 없는 세션 클러스터가 상주 자원을 점유해
-> 내렸고, `INSTALL_FLINK=true scripts/k8s-operators.sh`로 복구한다(기본값 `false` —
-> [`scripts/k8s-env.sh`](../../scripts/k8s-env.sh)). trino와 같은 **"중단"과 "삭제"의 분리**다.
+> 내렸고, `scripts/k8s-operators.sh`로 **오퍼레이터만** 복구한다(기본값이 `true`라 지정 없이 설치되며
+> 제외는 `INSTALL_FLINK=false` — [`scripts/k8s-env.sh`](../../scripts/k8s-env.sh); 잡을 돌리려면 세션
+> 클러스터를 따로 세운다 — [flink.md](flink.md)). trino와 같은 **"중단"과 "삭제"의 분리**다.
 > 클러스터 UI는 `*.localtest.me:8080` 고정 URL, 데이터 접속은 `port-forward`
 > ([../conventions/k8s.md](../conventions/k8s.md) §10).
 

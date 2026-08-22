@@ -16,11 +16,18 @@ TaskManager가 병렬 처리하며, 배치는 스트림의 특수 경우로 취�
 > **다만 스트리밍(Redpanda·체크포인트·RocksDB)은 여전히 미착수**이며, 이 문서의 §운영 메모(목표)는
 > 현행이 아니라 [redesign.md](../redesign.md) **Phase 3**의 설계안이다.
 >
-> **검증 후 세션 클러스터는 그 자리에서 내렸다.** 잡 없는 세션 클러스터가 JM 1 CPU / 2Gi를
-> 상주 점유해 "BATCH·STREAM 시분할" 규약을 어기기 때문이다(2026-08-19에 **13시간 샌 전력**이 있고,
-> 발견 경로가 성능 이상이 아니라 "안 쓰는 것 정리"였다는 점이 이 규율의 근거다).
+> **검증 후 세션 클러스터는 그 자리에서 내렸다.** 🔴 **사유는 시분할이 아니라 회수 규율이다** —
+> 2026-08-22 실측(3워크로드 동시 상주 피크 CPU 84% / Mem 52%)으로 규약이 **시분할 금지 → 동시
+> 기동 허용**으로 바뀌었고, 경계 ①은 오히려 **Flink JM 상주를 전제로** 동시 기동을 허용한다
+> ([conventions/k8s.md](../conventions/k8s.md) §9-3). 그럼에도 내리는 이유는 **잡 없는 세션
+> 클러스터가 JM 1 CPU / 2Gi를 놀리기 때문**이고, **예산 여유는 회수를 면제하지 않는다**
+> (2026-08-19에 **13시간 샌 전력**이 있고, 발견 경로가 성능 이상이 아니라 "안 쓰는 것 정리"였다는
+> 점이 이 규율의 근거다 — [conventions/k8s.md](../conventions/k8s.md) §회수 규율).
 > **"중단"과 "삭제"의 분리**(trino 선례) — 자원은 즉시 회수하되 결정·검증 결과·매니페스트·러너
-> 이미지는 남긴다. 복구는 `INSTALL_FLINK=true ./scripts/k8s-operators.sh` 한 줄(롤백 비용 ≈ 0).
+> 이미지는 남긴다. 오퍼레이터 복구는 `./scripts/k8s-operators.sh` 한 줄이다 — **`INSTALL_FLINK`
+> 기본값이 `true`라 지정 없이 설치된다**(제외하려면 `INSTALL_FLINK=false`, 스크립트가 정본).
+> 🔴 다만 이것으로 돌아오는 것은 **오퍼레이터까지**이고, 잡을 돌리려면 세션 클러스터
+> (`FlinkDeployment`)를 따로 세운다(롤백 비용 ≈ 0).
 
 - **채택 방향**: [재설계](../redesign.md)에서 컴퓨트를 **Spark(배치)+Flink(스트림)** 으로 나누며 Flink를 도입한다.
   Trino는 제거한다. 전체 로드맵은 [redesign.md](../redesign.md) Phase 3.
@@ -103,8 +110,11 @@ SQL 한 장을 돌리자고 jar 빌드·배포 파이프라인을 세워야 해�
 - **소스**: Redpanda(Kafka API, 경량). **싱크**: Iceberg(Spark와 동일 JDBC 카탈로그 공유, 낙관적 동시성).
 - **체크포인트**: S3 호환 **SeaweedFS 재사용**(path-style 강제), 상태 백엔드 RocksDB.
   → 도입 시 `flink-s3-fs-hadoop` 플러그인·이미지 재빌드가 **함께** 필요하다(위 §배치 모드 참고).
-- **자원·시분할**: JM+TM는 6/16 예산에서 **배치(Spark)와 동시 실행 금지**(시분할). 배분은
-  [resource-sizing.md](../resource-sizing.md) "Kubernetes 재설계 시나리오".
+- **자원·동시 기동**: JM+TM는 **배치(Spark)와 동시 실행이 허용**된다(2026-08-22 실측 피크
+  CPU 84% / Mem 52%, 분모는 노드 Allocatable `8000m`/`22843508Ki`). 단 경계가 셋이다 —
+  **Flink 상주는 JM만**(TM은 잡 제출 시 온디맨드·수명 46~52초) · **`spark.executor.instances` ≤ 1** ·
+  **Redpanda 미도입**(도입 시 경계 재계산). 정본 [conventions/k8s.md](../conventions/k8s.md) §9-3,
+  배분은 [resource-sizing.md](../resource-sizing.md) "Kubernetes 재설계 시나리오".
 - **카탈로그 정합**: Spark·Flink 동시 writer 구조라 장기적으로 REST 카탈로그 이행 유인이 크다([redesign.md](../redesign.md) 급소②).
 
 ## ⚠️ 드리프트 교정 — cert-manager는 제거되지 않았다

@@ -13,7 +13,7 @@
 
 기술별 **개요 + 프로젝트 결정 관점**(채택 이유·대안 비교). 채택 ✅ / 채택·이행중 🚧 / 미채택·향후 🔎.
 
-- **[재설계 로드맵](redesign.md) 🚧 — 호스트 Dagster + K8s(kind on Podman)로의 이행. 컴퓨트=Spark(배치)+Flink(스트림), Trino 제거·dbt→dbt-spark. 목표 토폴로지·급소·자원(6/16 시분할)·PoC 우선 PDCA**
+- **[재설계 로드맵](redesign.md) 🚧 — 호스트 Dagster + K8s(kind on Podman)로의 이행. 컴퓨트=Spark(배치)+Flink(스트림), Trino 제거·dbt→dbt-spark. 목표 토폴로지·급소·자원(**8 CPU / 22,888 MiB**, BATCH·STREAM **동시 기동**)·PoC 우선 PDCA**
 - [전체 아키텍처 / 데이터 흐름](architectures/overview.md) 🚧 — 현행 Dagster · dbt · Iceberg · SeaweedFS 스택 **스냅샷**(재설계 이행 중 — Trino 경로는 제거 대상), **bronze 적재 템플릿(S3→Iceberg)**
 - [Docker/Compose](architectures/docker.md) ✅ — 현행 채택
 - [Spark](architectures/spark.md) 🚧 · [Flink](architectures/flink.md) 🚧 · [Kubernetes](architectures/k8s.md) 🚧 — 재설계로 이행중

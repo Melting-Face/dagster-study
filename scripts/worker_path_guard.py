@@ -43,8 +43,14 @@ import sys
 from pathlib import Path
 
 # 워커별 저장소 **안** 경계. 정본은 docs/conventions/agents.md §권한 매트릭스.
-#   allow — 여기 나열된 접두어만 쓸 수 있다(그 외 전부 거부). 좁은 범위의 워커용.
-#   deny  — 여기 나열된 접두어만 막는다(그 외 허용). 넓은 범위의 구현 워커용.
+#   allow  — 여기 나열된 접두어만 쓸 수 있다(그 외 전부 거부). 좁은 범위의 워커용.
+#   deny   — 여기 나열된 접두어만 막는다(그 외 허용). 넓은 범위의 구현 워커용.
+#   except — `allow`/`deny` **판정보다 먼저** 평가하는 구멍 막이. 넓은 `allow` 안에
+#            박혀 있는 소수의 금지 항목을 파일 단위로 판다.
+# 🔴 `except`는 왜 필요한가: `allow`는 디렉터리 접두어라 "이 디렉터리는 되는데 그 안의
+#    이 파일만 안 된다"를 표현할 수 없었다. 그래서 그런 항목은 전부 **규율**로 남았고
+#    (docs/security.md §공개물 반출 차단의 잔여 위험 행), 규율은 기계가 집행하지 않는다.
+#    `deny` 축을 쓰면 그 워커의 `allow`가 통째로 사라지므로 별도 축이어야 한다.
 # 🔴 접두어 끝의 `/`는 필수다 — 없으면 `docs/analyses_fake/`가 통과한다(실측 버그).
 #    `allow`에 **파일 하나**를 열 때만 `/` 없이 적고, 그때는 **완전일치**로 본다 —
 #    `README.md`를 접두어로 두면 `README.md.bak`까지 함께 열린다
@@ -100,7 +106,31 @@ BOUNDARIES = {
     #      스스로 규칙을 만들거나 바꾸지 않는다.
     # 🔴 `README.md`는 디렉터리가 아니라 **파일 단위**다
     #    — 접두어로 적으면 `.bak`까지 열린다.
-    "tech-writer": {"allow": ("docs/", "README.md")},
+    # 🔴 `except` 2종은 **판정 근거 문서**다(2026-08-22 신설). `docs/security.md`는
+    #    ISMS-P 통제 매핑·반출 금지선, `docs/skills.md`는 스킬 출처 등급을 담는데,
+    #    2026-08-20 쓰기 범위 확대로 **판정 대상이 자기 판정 근거를 고칠 수 있는**
+    #    상태가 됐다(docs/security.md §공개물 반출 차단 ↳ 잔여 위험 행 — 🔴 규율).
+    #    같은 날 정본 게이트(`protected_paths_guard.py` CANON_PATTERNS)에서
+    #    `docs/conventions/**`·`docs/architectures/**`를 뺐으므로, 규율에만 기대는
+    #    면이 늘어난 만큼 **가장 위험한 2종은 기계 강제로 승격**한다.
+    # 🔴 `docs/conventions/**`는 여기 넣지 않는다 — 링크·목차·요약 동기화(doc-sync
+    #    체인)가 이 워커의 정당한 업무라, 막으면 매 교정이 supervisor 왕복이 된다.
+    #    그쪽은 지시문 §역할 경계의 규율로 남는다("규칙 신설·변경은 supervisor").
+    "tech-writer": {
+        "allow": ("docs/", "README.md"),
+        # ✅ **라이브 실발동 확인**(2026-08-22 3셀 대조, `Edit` 도구 경로).
+        #    `except`에 프로브 경로를 **한시적으로** 올려 `docs/` 하위인데도 `deny`가
+        #    나는 것과, 그 문구가 `allow` 분기와 **다른 분기**임을 확인한 뒤 내렸다.
+        #    🔴 프로브를 `except`가 아닌 일반 경계로 돌리면 이 축은 관측되지 않는다 —
+        #    `docs/` 하위는 `allow`가 통과시켜 두 분기가 갈리지 않기 때문이다.
+        # ✅ **`permissions.allow`보다 이 hook의 `deny`가 이긴다**(2026-08-22 실측).
+        #    `.claude/settings.json`에 `Edit(docs/**)`를 `allow`로 넣은 상태에서
+        #    `except` 경로를 쳐도 **차단됐고 파일 내용도 안 바뀌었다**(대조군: 같은
+        #    세션의 `docs/` 일반 경로 쓰기는 성공 — 죽은 가드가 아니라 선별 차단).
+        #    🔴 이 순서가 반대였다면 `allow` 한 줄이 **워커 경계 전체를 무력화**했다.
+        #    편의를 위해 `allow`를 넓힐 때는 이 순서를 **다시 실측**하고 넓힌다.
+        "except": ("docs/security.md", "docs/skills.md"),
+    },
     # 디렉터 — **판정자**다. 계획·배정·판정만 하고 저장소에 쓰지 않는다.
     # `disallowedTools`가 1차 방어, 이건 2차(심층 방어)
     # — archivist·researcher와 같은 형태.
@@ -226,6 +256,33 @@ def main() -> None:
             f"`{worker}`는 가드 스크립트 `{relative_guard}`를 고칠 수 없다. "
             "경계를 강제하는 스크립트는 어느 워커의 소관도 아니다 — "
             "변경안을 반환해 supervisor가 `security` 컨펌 후 반영한다."
+        )
+    elif blocked := next(
+        (
+            item
+            for item in boundary.get("except", ())
+            # 🔴 여기는 **대소문자를 무시한다** — `deny` 분기와 같은 방향(막는 쪽)이다.
+            #    macOS 파일시스템이 대소문자를 무시하므로 `docs/Security.md`가 같은
+            #    실파일에 착지하는데 구분해 비교하면 **그대로 통과**한다.
+            #    막는 쪽의 과잉은 fail-closed라 안전하다(§BOUNDARIES 주석의 두 방향).
+            if (
+                target_text[len(project_text) + 1 :].lower().startswith(item.lower())
+                if item.endswith("/")
+                else target_text[len(project_text) + 1 :].lower() == item.lower()
+            )
+        ),
+        "",
+    ):
+        # `allow`/`deny` 판정보다 **먼저** 평가한다 — 넓은 `allow` 안에 박힌 구멍이라
+        # 뒤에 두면 `allow`가 먼저 통과시켜 이 축이 통째로 죽는다.
+        decision = "deny"
+        reason = (
+            f"`{worker}`는 `{blocked}`를 쓸 수 없다 — 이 문서는 "
+            "**그 워커를 판정하는 근거**다(통제·공급망 정본). "
+            "판정 대상이 판정 기준을 고치면 통제가 성립하지 않는다. "
+            "문안 정합조차 여기서는 예외가 아니다 — 변경안을 반환해 supervisor가 "
+            "`security` 컨펌 후 반영한다. "
+            "정본은 docs/conventions/agents.md §권한 매트릭스다."
         )
     else:
         relative = target_text[len(project_text) + 1 :]

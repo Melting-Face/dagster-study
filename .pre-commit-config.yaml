@@ -63,10 +63,16 @@ repos:
 
   # 셸 스크립트 린트 — scripts/*.sh (k8s 기동·worktree 생성 등 운영 진입점)
   # shellcheck-py는 바이너리를 wheel로 배포해 격리 venv에 들어간다(로컬 설치 불필요).
+  # 🔴 `-x`는 선택이 아니다 — 이 저장소의 `scripts/k8s-*.sh`는 전부 `k8s-env.sh`를 source하는데,
+  #   pre-commit은 **스테이지된 파일만** 훅에 넘긴다. `-x` 없이는 source 대상이 입력에 없다는 이유로
+  #   `SC1091`이 나서 **스크립트 한 개만 커밋하면 게이트가 깨진다**(2026-08-23 실발동으로 확인 —
+  #   같은 파일이 `k8s-env.sh`와 함께 넘어가면 통과해, 파일 결함이 아니라 입력 범위 문제였다).
+  #   `-x`는 source 대상을 따라가 실제로 검사하므로 커버리지도 함께 넓어진다.
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
+        args: [-x]
 
   # Dockerfile 린트 (규칙은 .hadolint.yaml)
   # 업스트림 `hadolint-docker`는 `docker` CLI를 요구하는데 이 머신은 podman뿐이라

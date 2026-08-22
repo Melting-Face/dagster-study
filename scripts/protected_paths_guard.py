@@ -117,20 +117,38 @@ GLOB_TO_RE = (
 #    겹치는 경로가 있어도 묻는 것이 달라 목록을 나눈다(중복이 아니라 다른 축).
 #    집행은 `permissions`의 `ask`가 하고, 이 목록은 **어떤 문구를 띄울지**만 고른다 —
 #    `permissions.ask`는 매처 문자열 배열이라 커스텀 문구를 담을 자리가 없기 때문이다.
+#    🔴 2026-08-22 **축소** — `docs/conventions/**`(14파일)·`docs/architectures/**`
+#    (9파일)를 뺐다. 게이트를 **경로 축**으로 걸었더니 `tech-writer`의 쓰기 범위
+#    `docs/**`(35파일) 중 **23파일(66%)** 이 대상이 돼, 규칙을 바꾸는 편집과
+#    오탈자·링크 교정이 구분 없이 전부 `ask`로 올라왔다. **전원이 매번 위반하는
+#    규칙은 규칙이 아니다**(바로 아래 terraform·k8s를 뺀 것과 같은 논리).
+#    ⇒ 판단 축을 **경로에서 가역성으로** 옮긴다: 문서 편집은 git이 되돌리고
+#    커밋 전 `git diff`가 사람의 관문이며, `permissions.ask`의
+#    `Bash(*git*commit*)`가 **최종 승인 1회**를 갖는다.
+#    아래 남은 6종은 전부 **실행 규칙·통제 배선**이라 편집이 즉시 행동을 바꾼다
+#    (가역이어도 되돌리기 전까지 이미 다르게 동작한다) — 그래서 남긴다.
+#    규칙 요약본 `CLAUDE.md`가 남아 규약의 최상위 서술은 계속 게이트를 받는다.
+#    문서 정본 2종을 규율로 내린 대가는 `worker_path_guard.py`의 `except` 축으로
+#    일부 회수했다(`docs/security.md`·`docs/skills.md` = 판정 근거 문서는 `deny`).
+#    🔴 **`ask`에서 규칙을 빼면 `Bash` 축 보호도 함께 사라진다**(2026-08-22 `security`
+#    실측 — 선언되지 않은 2차 효과였다). `load_protected_patterns()`가 보호 경로를
+#    **`permissions.ask`에서 파생**하기 때문이다(단일 출처 유지의 대가).
+#    실제로 `Edit(docs/conventions/**)` 제거 후 `sed -i` 경유 수정이 **통과**한다.
+#    ⇒ **`ask` 목록을 줄일 때는 도구 축이 둘 줄어든다**(파일 도구 + `Bash`)는 것을
+#    함께 판단한다. 이번 건은 그래도 수용했다 — 완화의 근거가 "문서는 가역이고
+#    최종 관문은 커밋"이라 `Bash` 축에도 같은 논거가 적용되기 때문이다.
 CANON_PATTERNS = (
     "CLAUDE.md",
-    "docs/conventions/**",
     ".claude/agents/**",
     "scripts/*_guard.py",
     "scripts/**/*_guard.py",
     "skills-lock.json",
-    # 아래 3종은 2026-08-21 추가 — **설계 결정이 박히는 자리**다(규약 정본과 같은 축).
+    # 아래 2종은 2026-08-21 추가 — **설계 결정이 박히는 자리**다(규약 정본과 같은 축).
     # 🔴 `terraform/**`·`k8s/**`를 통째로 넣지 않은 이유: 매니페스트 편집은 대부분
     #    설계가 아니라 구현이라 게이트가 상시 발동한다. **전원이 위반하는 규칙은
     #    규칙이 아니다**(docs/skills.md §출처 등급별 통제가 같은 이유로 개정됐다).
     #    비가역 집행 축은 `permissions.ask`의 `*terraform apply*`·
     #    `*kubectl apply*`가 이미 잡는다.
-    "docs/architectures/**",  # 기술 채택·미채택 결정 정본
     "compose.yml",  # 뼈대 서비스 구성 — 서비스 추가·제거는 설계 결정
     ".claude/settings.json",  # 권한·hook 배선 = 통제 설계 자체
 )

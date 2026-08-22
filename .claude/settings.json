@@ -3,6 +3,10 @@
   "useAutoModeDuringPlan": false,
   "permissions": {
     "defaultMode": "plan",
+    "allow": [
+      "Edit(docs/**)",
+      "Edit(README.md)"
+    ],
     "ask": [
       "Bash(docker compose down * -v*)",
       "Bash(docker compose down -v*)",
@@ -44,7 +48,6 @@
       "Edit(skills-lock.json)",
       "Edit(.claude/agents/**)",
       "Edit(CLAUDE.md)",
-      "Edit(docs/conventions/**)",
       "Edit(scripts/*_guard.py)",
       "Edit(scripts/**/*_guard.py)",
       "Edit(**/.claude/skills/**)",

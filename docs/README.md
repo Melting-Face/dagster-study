@@ -71,7 +71,7 @@
 
 ### 운영 (operations)
 
-- [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책, **§2-1 로컬 세션 로그 정리**(`cleanupPeriodDays` — 🔴 **대화형 기동에서만** 돌고 보존 단위는 파일이 아니라 **세션**(`subagents/`는 부모 수명을 따른다). 같은 디렉터리의 자동 메모리가 함께 지워지지 않도록 **수동 삭제는 `-name '*.jsonl'`로 유형 한정**), **§3 토큰 비용 계측**(`scripts/token_cost_report.py` — 캐시 읽기/캐시 쓰기/출력/미캐시 입력 4축 분리 집계, 2026-08-21 관측 스냅샷)
+- [환경변수·운영 정책](operations.md) — `.env`→compose→`EnvVar` 전파 체인, Iceberg snapshot·로그 보존 정책, **§2-1 로컬 세션 로그 정리**(`cleanupPeriodDays` — 🔴 **대화형 기동에서만** 돌고 보존 단위는 파일이 아니라 **세션**(`subagents/`는 부모 수명을 따른다). 같은 디렉터리의 자동 메모리가 함께 지워지지 않도록 **수동 삭제는 `-name '*.jsonl'`로 유형 한정**), **§3 토큰 비용 계측**(`scripts/token_cost_report.py` — 캐시 읽기/캐시 쓰기/출력/미캐시 입력 4축 분리 집계, **2026-08-21 · 2026-08-23 관측 2회를 나란히** 둔다 — 백분율은 관측 시점의 `CLAUDE.md` 바이트와 함께 읽는다)
 - [리소스 산정](resource-sizing.md) — 호스트 자원에 따른 서비스 옵션 조정(Trino 3파일 결합·daemon OOM 계산·Postgres·SeaweedFS)
 
 ### 보안 (security)

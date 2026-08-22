@@ -360,8 +360,13 @@ resources:
   jar(`hadoop-aws`·`aws-java-sdk-bundle`)는 러너 이미지에 이미 있어 **설정만** 추가하면 된다.
   S3A는 AWS SDK **v1**이라 SeaweedFS의 aws-chunked 문제(SDK v2 flexible checksum)와는 무관하다.
   참조: `k8s/spark/spark-connect-server.yaml`.
-- **서비스 접근**: **웹 UI는 Ingress**(고정 URL), **데이터 접속은 `port-forward`** 를 기본으로 한다.
+- **서비스 접근**: **HTTP 계열(웹 UI·REST)은 Ingress**(고정 URL), **그 밖의 데이터 접속(JDBC·S3)은
+  `port-forward`** 를 기본으로 한다. **gRPC는 TLS Ingress로 낸다**(2026-08-22 개정 — 아래 §gRPC).
   Dagster 리소스(SeaweedFS·카탈로그 DB 엔드포인트)는 이 노출 주소를 `EnvVar`로 주입한다(하드코딩 금지, §4).
+  🔴 **Flink는 REST와 UI가 같은 포트(8081)** 라 UI를 Ingress로 낸 순간 **REST도 함께 나간다** —
+  `port-forward`가 필요 없고(2026-08-22 실측: `curl http://flink.localtest.me:8080/overview` → JSON),
+  동시에 **인증 없이 잡 제출·취소가 가능한 면**이 열린다는 뜻이다. kind가 `127.0.0.1`로만 바인딩해
+  위험은 낮지만 **"UI만 열었다"로 읽지 않는다**(노출 범위는 포트가 아니라 그 포트가 제공하는 API가 정한다).
 - 🔴 **kind는 공개 포트를 클러스터 생성 시점에만 정할 수 있다.** 노드가 컨테이너라 사후에 포트를 추가할 수 없어,
   `kind-cluster.yaml`에 **`extraPortMappings`가 없으면 Ingress·NodePort 둘 다 호스트에서 닿지 않는다**
   (`hostNetwork: true`도 소용없다 — 노드는 podman VM 안이라 VM 네트워크까지만 닿는다).
@@ -373,8 +378,39 @@ resources:
 - **Ingress 규칙**: 컨트롤러는 **ingress-nginx**(kind provider 매니페스트, 버전은 `k8s-env.sh`에 핀).
   호스트명은 **`<service>.localtest.me`** — 공개 DNS가 127.0.0.1로 응답해 `/etc/hosts` 수정이 필요 없다.
   - Flink는 오퍼레이터 네이티브 **`FlinkDeployment.spec.ingress`**(`template`·`className`)를 쓴다.
-  - Spark(Connect UI)는 일반 `Ingress` 리소스로 4040을 노출한다. **gRPC(15002)는 Ingress로 내보내지 않는다**
-    — nginx의 gRPC 백엔드는 TLS 등 별도 설정이 필요하고, dbt는 port-forward/in-cluster 주소로 충분하다(YAGNI).
+  - Spark(Connect UI)는 일반 `Ingress` 리소스로 4040을 노출한다(`spark.localtest.me`, 평문 HTTP).
+    **gRPC(15002)는 별도 호스트 `spark-grpc.localtest.me`에 TLS로 낸다** — 아래 §gRPC.
+
+### gRPC를 Ingress로 내보내는 규칙 (2026-08-22 신설 · 실측)
+
+> 종전 규약은 *"gRPC는 Ingress로 내보내지 않는다(YAGNI)"* 였다. **CA 신뢰 축이 실측으로 닫히면서**
+> 뒤집었다 — port-forward는 매 세션 별도 터미널을 요구하고, 끊긴 상태가 **에러가 아니라 무한 대기**로
+> 보여 오진을 낳는다([../architectures/spark.md](../architectures/spark.md) §`local[2]`).
+
+- 🔴 **TLS는 선택이 아니라 전제다.** ingress-nginx의 `backend-protocol: "GRPC"`는 HTTP/2 위에서만
+  동작하고, nginx는 HTTP/2를 **TLS 리스너에서만** 협상한다. ⇒ **평문 gRPC 경로는 이 방식으로 만들 수 없다**
+  (평문으로 내려면 새 호스트 포트가 필요한데, kind는 포트를 **생성 시점에만** 정한다 = 클러스터 재생성).
+- **호스트를 나눈다** — `backend-protocol`은 **Ingress 단위** 설정이라 같은 호스트에 HTTP(UI)와 GRPC를
+  함께 둘 수 없다. `*.localtest.me`는 전부 127.0.0.1로 응답하므로 호스트를 늘리는 비용은 0이다.
+- **인증서는 로컬 CA 체인**(`k8s/local-ca.yaml`)에서 발급한다. 부트스트랩 Issuer → `isCA: true` CA →
+  리프 순서다. 🔴 **selfSigned로 리프를 바로 만들면 `CA:FALSE`라 신뢰 앵커로 못 쓴다.**
+- 🔴 **클라이언트 신뢰 주입 수단은 하나뿐이다** — `sc://` URL에는 CA를 지정하는 옵션이 **없다**.
+  gRPC 코어 환경변수 **`GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`** 로만 주입된다.
+
+  ```bash
+  # CA 내보내기(공개키라 비밀 아님 — 개인키는 Secret에 남는다)
+  kubectl get secret spark-grpc-tls -n default -o jsonpath='{.data.ca\.crt}' | base64 -d > ~/.lakehouse-ca.crt
+  export SPARK_REMOTE="sc://spark-grpc.localtest.me:8443/;use_ssl=true"
+  export GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=~/.lakehouse-ca.crt
+  ```
+
+- **검증 순서**(2026-08-22 실측, 이 순서로 통과함): ① `openssl s_client -CAfile …` → `Verify return code: 0`
+  ② `curl --cacert … https://spark-grpc.localtest.me:8443/` → **`http_ver=2`·`sslverify=0`·`code=415`**
+  ③ pyspark 질의 왕복 ④ `scripts/spark_connect_smoke.py`.
+  🔴 **②의 `415`는 실패가 아니라 성공 신호다** — gRPC 백엔드가 비-gRPC 요청에 주는 정상 응답이라
+  **그 코드가 나왔다는 것 자체가 GRPC 경로가 살아 있다는 양성 증거**다. `200`을 기대하면 오판한다.
+  🔴 **`openssl s_client -alpn h2`의 `No ALPN negotiated`는 판정 근거로 쓰지 않는다** — 같은 시점
+  `curl`이 `http_ver=2`를 냈다. 도구 하나의 부정 결과로 닫지 말고 **교차 확인**한다(원칙 7).
   - 설치 대기는 `wait --for=condition=ready pod`가 아니라 **`rollout status deploy/...`** 로 한다.
     파드 생성 전이면 전자는 `no matching resources found`로 **즉시 실패**한다(2026-08-19 실측).
   - 기동 직후 컨트롤러가 **liveness 실패로 1회 재시작**할 수 있다(노드가 다른 롤아웃으로 바쁠 때

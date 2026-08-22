@@ -230,8 +230,12 @@
   **어댑터 계약이 아니라 pyspark 내부 위임 동작에 의존**한다. 그래서 필요한 건 Thrift 배포가 아니라
   **업그레이드 회귀 감시**이고, 상한을 minor로 묶은 뒤(`dbt-spark<1.12`·`pyspark<3.6`)
   **상한 인상 직전에 `scripts/spark_connect_smoke.py`를 통과**시킨다([`docs/test.md`](docs/test.md) §5-1).
-  **노출은 HTTP UI만 Ingress**로 내고 gRPC·JDBC·S3는 `port-forward`를 쓴다 — kind는 **공개 포트를 생성 시점에만**
-  정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
+  **노출은 HTTP(UI·REST)와 gRPC를 Ingress**로 내고 JDBC·S3만 `port-forward`를 쓴다 — kind는 **공개 포트를
+  생성 시점에만** 정할 수 있어 `extraPortMappings`를 빠뜨리면 재생성이 유일한 해법이다.
+  🔴 **gRPC Ingress는 TLS가 전제**다(nginx는 HTTP/2를 TLS 리스너에서만 협상) — 발급은 `k8s/local-ca.yaml`
+  로컬 CA 체인이고, **클라이언트 신뢰 주입 수단은 `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` 하나뿐**이다
+  (`sc://` URL에 CA 옵션이 없다). `backend-protocol`이 Ingress 단위라 **UI와 호스트를 나눈다**.
+  🔴 **Flink는 REST와 UI가 같은 포트**라 UI를 내면 **잡 제출 API도 함께 나간다**("UI만 열었다"로 읽지 않는다).
   컴퓨트 **러너 이미지는 로컬 레지스트리에 직접 push**하고(`kind load` 불필요) **태그와 매니페스트를 함께 올린다**.
   상세·실측은 [`docs/conventions/k8s.md`](docs/conventions/k8s.md)(§9 Spark·§9-2 Flink·§9-3 동시 기동·§11 스토어·§12 CNPG)와
   [`docs/architectures/spark.md`](docs/architectures/spark.md).

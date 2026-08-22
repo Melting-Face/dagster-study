@@ -95,7 +95,10 @@ kubectl delete -f k8s/flink/flinkdeployment-session.yaml   # 회수
 | http://flink.localtest.me:8080 | Flink Web UI (JobManager) — **세션 클러스터가 떠 있을 때만** 응답(§2-0) |
 | http://spark.localtest.me:8080 | Spark Web UI (Connect 서버, 쿼리 이력 누적) — `--replicas=1`일 때만 |
 
-데이터 접속(카탈로그 Postgres·SeaweedFS·Spark Connect gRPC)은 `port-forward`를 쓴다.
+**Spark Connect(gRPC)도 Ingress로 나간다** — `sc://spark-grpc.localtest.me:8443/;use_ssl=true`.
+자체서명 CA를 클라이언트에 물려야 하며(`GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`), 방법은
+[`docs/conventions/k8s.md`](docs/conventions/k8s.md) §10 §gRPC. **카탈로그 Postgres·SeaweedFS는
+여전히 `port-forward`** 를 쓴다(JDBC·S3는 HTTP/2가 아니라 이 경로로 못 낸다).
 
 ```shell
 kubectl port-forward svc/catalog-postgres-rw 15432:5432   # Iceberg JDBC 카탈로그(CNPG 쓰기 서비스)

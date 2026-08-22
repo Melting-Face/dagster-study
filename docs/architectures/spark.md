@@ -50,7 +50,19 @@ Spark는 **범용 분산 데이터 처리 엔진**이다. driver가 DAG를 스�
   그래서 **Spark Connect 서버**를 Deployment로 상주시키고 dbt-spark가 `spark.remote`로 접속한다
   (`k8s/spark/spark-connect-server.yaml`). Thrift(HiveServer2) 대비 클라이언트가 가볍고 어댑터 변경이 없다.
   **상주 자원을 쓰므로** 쓰지 않을 때는 `kubectl scale deploy/spark-connect --replicas=0`
-  (시분할 규칙 [../resource-sizing.md](../resource-sizing.md)).
+  (**회수 규율** [../conventions/k8s.md](../conventions/k8s.md) §9-3, 배분 수치는
+  [../resource-sizing.md](../resource-sizing.md)). 🔴 **"시분할"은 폐지된 규약이다** —
+  2026-08-22 예산 상향(8 CPU/22.35 GiB)과 동시 피크 실측으로 **동시 기동이 허용**됐고,
+  남은 것은 시분할이 아니라 **안 쓰면 내린다는 회수 의무**다(규약이 바뀐 이유는 "샜던 게
+  괜찮아져서"가 아니라 "예산이 늘어서"이므로 회수는 그대로 산다).
+- **접속 경로는 TLS Ingress**(2026-08-22 개정): `sc://spark-grpc.localtest.me:8443/;use_ssl=true`.
+  종전 port-forward 전제를 뒤집은 근거는 **CA 신뢰 축이 실측으로 닫혔기 때문**이며, 규칙 정본은
+  [../conventions/k8s.md](../conventions/k8s.md) §10 §gRPC다. 실측 체인: `openssl` 검증 0 →
+  `curl` `http_ver=2`·`code=415` → pyspark 질의 왕복 → **`scripts/spark_connect_smoke.py` 전 항목 통과**(dbt 포함).
+  🔴 **port-forward를 지우지는 않는다** — 폴백으로 남긴다(CA 미배포 환경·Ingress 컨트롤러 장애 시).
+  실제로 이 검증 중 ingress-nginx가 **liveness 재시작 루프**(`/healthz` 타임아웃, 재시작 8회)에 빠져
+  Ingress 생성이 admission webhook 거부로 실패했다 — **자체 회복했지만, 데이터 경로를 Ingress에
+  묶으면 컨트롤러 가용성에 종속된다**는 뜻이다(port-forward에는 없던 결합).
 
 ### 🔴 Spark Connect는 `--master local[2]`로 돈다 — 실상과 한계 (2026-08-22)
 

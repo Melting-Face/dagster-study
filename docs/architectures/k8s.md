@@ -27,7 +27,9 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
   **ingress-nginx v1.15.1**(kind provider)로 Spark·Flink UI를 `port-forward` 없이 노출.
   Dagster 자산이 `SparkApplication`을 제출해 Iceberg에 적재하고(Phase 0 게이트 통과),
   **Flink이 같은 Iceberg 카탈로그를 조회**하는 것까지 확인.
-- **노출 경로의 분리**: **HTTP UI는 Ingress**, **비 HTTP(gRPC·JDBC·S3 API)는 `port-forward`**.
+- **노출 경로의 분리**: **HTTP(UI·REST)와 gRPC는 Ingress**, **JDBC·S3는 `port-forward`**.
+  가르는 기준은 프로토콜 계층이다 — nginx Ingress가 실어 나를 수 있는 것은 HTTP 계열(gRPC 포함,
+  단 **TLS 위 HTTP/2 전제**)이고, JDBC·S3 바이너리 경로는 그 대상이 아니다.
   kind는 **공개 포트를 클러스터 생성 시점에만** 정할 수 있어 `extraPortMappings`가 전제다
   (규칙·함정은 [../conventions/k8s.md](../conventions/k8s.md) §10).
 - **이행 기준(언제 K8s로)**: 다중 노드 스케일아웃, 무중단 배포, 오토스케일(HPA), 팀 다중 환경, SLA 요구.
@@ -42,7 +44,7 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**이다. 다�
   | profiles(옵션) | 오버레이(Kustomize)·values(Helm)로 토글 |
   | `${ENV}`·`.env` | `ConfigMap`·`Secret` 참조 |
   | volume(`:ro`) | `PersistentVolumeClaim` / configMap·secret 볼륨(readOnly) |
-  | `ports:`(호스트 퍼블리시) | `Service` + **`Ingress`**(HTTP UI) / **`port-forward`**(gRPC·JDBC·S3) |
+  | `ports:`(호스트 퍼블리시) | `Service` + **`Ingress`**(HTTP UI·REST·gRPC/TLS) / **`port-forward`**(JDBC·S3) |
 
 - 배포·보안 **규칙**은 [conventions/k8s.md](../conventions/k8s.md).
 

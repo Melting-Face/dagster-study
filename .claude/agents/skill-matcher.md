@@ -209,7 +209,7 @@ skill-matcher ← [요청서 회신 전달] ← supervisor ←────┘
 
   | 스킬 | 디스크 | lock | 출처 등급 |
   | --- | --- | --- | --- |
-  | **`find-skills`** | ✅ **있다** — `.claude/skills/find-skills` → `.agents/skills/find-skills/SKILL.md`(2026-08-21 20:00 설치, `Read` 가능) | 🔒 등재 — 단 **워킹트리 기준·미커밋**(HEAD `41613f4`에는 없다) | **B**(`vercel-labs/skills`) |
+  | **`find-skills`** | ✅ **있다** — `.claude/skills/find-skills` → `.agents/skills/find-skills/SKILL.md`(2026-08-21 20:00 설치, `Read` 가능) | 🔒 등재 — **커밋·워킹트리 두 기준 모두**(`3cd65b9`로 커밋돼 차이 0건). 🔴 여기에 HEAD 해시를 라벨로 박지 않는다 — **해시는 썩고 기준 구분은 안 썩는다** | **B**(`vercel-labs/skills`) |
   | **`auditing-skills`** | ❌ 없다(프로젝트·전역 모두) | ⚙️ 미등재 | **B**(`dbt-labs/dbt-agent-skills`) |
 
   🔴 **`find-skills`는 🔒인데 로컬 무결성 검증이 원리상 불가능하다** — 설치 CLI가

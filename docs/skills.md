@@ -416,7 +416,7 @@ lock의 해시가 **무엇의 해시인지 모른다.** 두 스키마 각각에 
 | `devops-qa` | `multi-stage-dockerfile` · `kubernetes-specialist`**(C)** · `terraform-style-guide`(A) | 감사 기준은 **스킬이 아니라 정본** (아래 충돌 규칙). `terraform-style-guide`는 여기서 **★5**(감사는 스택 활동 여부와 무관하게 상시 코퍼스라 `devops-engineer`의 ★4와 갈린다). `terraform-test`·`terraform-stacks`·`spark-optimization` 미등재(각 ★3 — 감사자는 "한도가 선언돼 있는가"만 보면 되고 튜닝 심화는 초과 스펙). `helm-chart-scaffolding` 강등(★2) + **디스크에도 없음**(죽은 참조) |
 | `analyst` | `using-dbt-for-analytics-engineering`(초안만) · `sql-optimization` | **읽기 질의만** — `dbt build`/`run`·정의 파일 수정 금지, gold 모델은 **제안만**(쓰기는 `analyst_path_guard.py`가 **기계 차단**). `spark-optimization` 강등(★2 — 축2가 0: `write` 계열이 "테이블 생성·덮어쓰기 금지"와 정면 충돌). 🔴 **`dataviz` 제거**(2026-08-20) — 🌐 런타임 제공이라 `Read`조차 못 한다. `answering-natural-language-questions-with-dbt`·`duckdb`는 **죽은 참조로 제거**(2026-08-21) |
 | `researcher` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST — 프로젝트 14종 전수 **재도출**. 인벤토리가 24→14로 바뀌었으므로 이전 결론의 인용이 아니다). 벤더 A등급 스킬을 "1차 출처 캐시"로 등재하는 방안을 검토했으나 **축1 탈락** — 이 워커는 저장소 조회·외부 조사만 하고 CLI를 조작하지 않는다. `fetching-dbt-docs` **죽은 참조 제거**(등급·캐비트 판단 근거는 지시문에 보존) |
-| `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST 재실측 — 14종 기준). ⚠️ 이전 판의 "24개 인벤토리"와 **결론은 같으나 분모가 다르다** — 수치는 관측 시각과 함께 읽는다. 대조 셀 `dignified-python` ★3 확인. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가**. 🔴 **2026-08-22 02:04 KST 재채점 — 후보 2건 추가 판정, 결론 불변**: `documentation-writer`(B·`github/awesome-copilot`) **★1**(축1만 — 축2는 신규 저작이 업무 5종 중 `docs/posts/**` ≈1/5, 축3은 [doc-sync.md](doc-sync.md)·`CLAUDE.md` §문서화 원칙이 이미 더 구체적) / `doc-coauthoring`(**A**·`anthropics/skills`) **★1**(같은 축 배분. "decision docs" 공저 워크플로가 `tech-writer`의 **규칙 신설 금지**와 겹치나 §역할 경계가 이미 방어선이라 **신규 단서 불필요**). 🔴 **A등급이 별점을 올리지 않는다** — 출처 신뢰성은 채점과 분리된 게이트다. 🔴 **분모 기준 병기**: lock **14종**(**커밋 스냅샷** — 미커밋분 제외) / **15종**(**워킹트리** — `find-skills` 미커밋 포함). 차이는 그 1종뿐이고 어느 기준이든 이 행의 결론은 불변(2026-08-22 02:48 KST 실측). 🔴 **여기에 커밋 해시를 라벨로 박지 않는다** — 초안은 `41613f4`를 적었으나 20분 사이 HEAD가 `41613f4`→`43f633e`→`da9c3e6`로 **세 번 움직였다**(병렬 세션 4개). **해시는 썩고 「커밋 ↔ 워킹트리」라는 기준 구분은 안 썩는다.** `researcher` 요청서 A 조사(2026-08-22 회신)에서 기준 (a)(b)(c) 완전 충족 **0건** — 🔴 단 `mcpmarket.com` 4종은 **HTTP 429로 관측 경로 자체가 막혀** `미확인`이다(**"없다"가 아니라 "못 봤다"** — 부정 결과의 유효 조건 미충족). ⇒ 이 갭은 **완전 종결이 아니라 「현재 등재 대상 없음 + 재조사 트리거 보존」**으로 닫는다. `skillcheck`류(SKILL.md 품질 검증)가 가리키는 갭은 **대상 소멸** — 사용자 결정(2026-08-22 "소비 전용 유지")으로 이 저장소에 **SKILL.md를 쓰거나 고치는 주체가 없다** |
+| `tech-writer` | **없음** | 등재 가능 스킬 **0건**(2026-08-21 16:19 KST 재실측 — 14종 기준). ⚠️ 이전 판의 "24개 인벤토리"와 **결론은 같으나 분모가 다르다** — 수치는 관측 시각과 함께 읽는다. 대조 셀 `dignified-python` ★3 확인. 🔴 `dataviz`·`artifact-*`는 🌐라 **등재 불가**. 🔴 **2026-08-22 02:04 KST 재채점 — 후보 2건 추가 판정, 결론 불변**: `documentation-writer`(B·`github/awesome-copilot`) **★1**(축1만 — 축2는 신규 저작이 업무 5종 중 `docs/posts/**` ≈1/5, 축3은 [doc-sync.md](doc-sync.md)·`CLAUDE.md` §문서화 원칙이 이미 더 구체적) / `doc-coauthoring`(**A**·`anthropics/skills`) **★1**(같은 축 배분. "decision docs" 공저 워크플로가 `tech-writer`의 **규칙 신설 금지**와 겹치나 §역할 경계가 이미 방어선이라 **신규 단서 불필요**). 🔴 **A등급이 별점을 올리지 않는다** — 출처 신뢰성은 채점과 분리된 게이트다. 🔴 **분모는 「커밋 스냅샷 ↔ 워킹트리」 두 기준을 항상 병기한다** — 2026-08-22 02:48 KST에는 14 / 15로 갈렸고(`find-skills` 미커밋), `3cd65b9` 커밋 후 **두 기준 모두 15로 수렴해 차이가 0건**이다(2026-08-22 13:37 KST 재실측). 🔴 **차이가 0이라고 병기를 그만두지 않는다** — 갈림은 병렬 세션의 상시 조건이라 언제든 다시 벌어지고, 그때 기준을 안 밝힌 값은 **어느 쪽인지 알 수 없는 채로 남는다**. 어느 기준이든 이 행의 결론(등재 가능 0건)은 불변. 🔴 **여기에 커밋 해시를 라벨로 박지 않는다** — 초안은 `41613f4`를 적었으나 20분 사이 HEAD가 `41613f4`→`43f633e`→`da9c3e6`로 **세 번 움직였다**(병렬 세션 4개). **해시는 썩고 「커밋 ↔ 워킹트리」라는 기준 구분은 안 썩는다.** `researcher` 요청서 A 조사(2026-08-22 회신)에서 기준 (a)(b)(c) 완전 충족 **0건** — 🔴 단 `mcpmarket.com` 4종은 **HTTP 429로 관측 경로 자체가 막혀** `미확인`이다(**"없다"가 아니라 "못 봤다"** — 부정 결과의 유효 조건 미충족). ⇒ 이 갭은 **완전 종결이 아니라 「현재 등재 대상 없음 + 재조사 트리거 보존」**으로 닫는다. `skillcheck`류(SKILL.md 품질 검증)가 가리키는 갭은 **대상 소멸** — 사용자 결정(2026-08-22 "소비 전용 유지")으로 이 저장소에 **SKILL.md를 쓰거나 고치는 주체가 없다** |
 | `security` | `kubernetes-specialist`**(C)** · `multi-stage-dockerfile` · `terraform-style-guide`(A·**재채점 대상**) | 🔴 **"전용 스킬 없음"은 맞지만 "참조할 스킬이 없다"는 아니다** — 2026-08-21 재채점에서 3종이 ★4 이상으로 나왔다(F1 대조 셀이 **정본 선언이 낡았음**을 반환). 도메인 스킬은 설정 해석 목적의 **읽기 참조만**이고 §C등급 단서(패턴 기반)가 적용된다. `docker-expert` **죽은 참조 제거** |
 | `skill-matcher` | **없음** — 후보 탐색은 **`researcher` 릴레이**(2026-08-20) | 갭을 식별해 **조사 요청서**를 반환하면 supervisor가 `researcher`에 넘기고, 회신 후보를 **채점·제안**한다(배선은 하지 않는다). 신뢰성 **최종 판정은 `security`**. 🔴 **`find-skills` ★0**(2026-08-22 신 3축 재채점 — 축1·2·3 전부 0, 게이트 2축도 단서 없이는 탈락). ⚠️ 이전 판의 "★3"은 **구 5축의 강등값(=미등재)** 이라 **같은 숫자가 반대 의미**였다(개정 3축에서 ★3은 만점=등재 임계) — 축을 재가중하면 구 판정을 재사용하지 않는다는 규칙의 실사례다. `auditing-skills` 강등(★3 — 구 5축 값. 디스크 부재로 신 루브릭 재채점 **`미확인`**) |
 | `director` | 도메인별 — [.claude/agents/director.md](../.claude/agents/director.md) §도메인 지식 표 | 도메인 지식은 인라인하지 않고 참조 |
@@ -787,7 +787,7 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
 | **B** | `dagster-io/skills` | **1** | **`dignified-python`** — 범용 Python(*"Not Dagster-specific"*) | 🔒 | — |
 | **B** | `dbt-labs/dbt-agent-skills` | **1** | **`auditing-skills`** — dbt가 아니라 *스킬*을 감사 | ⚙️ | 🔴 `skill-matcher`가 로드하면 **순환 신뢰**(등급과 무관한 별개 논점) |
 | **B** | `github/awesome-copilot` | **2** | `sql-optimization` · `multi-stage-dockerfile` | 🔒 | — |
-| **B** | `vercel-labs/skills` | **1** | `find-skills` | 🔒 **워킹트리 기준·미커밋** | ✅ 본문 검토 완료(2026-08-22) — 실행 파일 0건·문서로서 무해. 🔴 **`computedHash`는 blob 경로라 로컬 재현 불가**(위 §무결성 고정) · 어느 워커에도 **미등재**(★0) |
+| **B** | `vercel-labs/skills` | **1** | `find-skills` | 🔒 | ✅ 본문 검토 완료(2026-08-22) — 실행 파일 0건·문서로서 무해. 🔴 **`computedHash`는 blob 경로라 로컬 재현 불가**(위 §무결성 고정) · 어느 워커에도 **미등재**(★0) |
 | **C** | `wshobson/agents` | **4** | `github-actions-templates`·**`helm-chart-scaffolding`**·`shellcheck-configuration`·`spark-optimization` | 일부 🔒 | 🔴 **미검토** |
 | **C** | `jeffallan/claude-skills` | **2** | `kubernetes-specialist`·`spark-engineer` | 🔒 | `kubernetes-specialist` ✅ 검토 완료(위 단서 표) / **`spark-engineer` 🔴 재검토 필요** — 2026-08-21 "0건" 철회(§미스캔 범주). 🔴 **등급을 스킬 단위로 매기듯 검토 상태도 스킬 단위다** — 같은 출처라고 한 칸에 묶어 읽으면 철회된 쪽이 승인된 쪽에 업혀 간다 |
 | **C** | `sickn33/antigravity-awesome-skills` | **1** | `docker-expert` | ⚙️ | 🔴 **미검토** |
@@ -795,6 +795,11 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
 | **C** | `obra/superpowers` | **1** | `brainstorming` | 🔒 | 🔴 **미검토 · 실행 파일 4종** |
 | **D** | — | **0** | — | — | ✅ 전부 규명 |
 
+- 🔴 **[별건·미갱신] 이 표는 아래 프로젝트 lock(15종)과 모집단이 다르다** — 합계 29종은
+  **전역 24 + 프로젝트 12(중복 7)** 기준인데, **전역 스코프는 현재 0종**이고(2026-08-22 13:37 KST
+  실측: `~/.claude/skills/`·`~/.agents/skills/` 각 0) 현 lock에는 `brainstorming`·`docker-expert`·
+  `duckdb`·`helm-chart-scaffolding`이 **없다**. 즉 이 표의 종수·등급 분포는 **전역 소거 이후
+  재실측되지 않았다.** 의도적으로 범위 밖에 둔 별건이므로 **값을 인용하지 말고 재실측부터** 한다.
 - **합계 29종** = A **15** + B **5** + C 9. 설치 **슬롯**으로는 36(전역 24 + 프로젝트 12, 중복 7).
 - 🔴 **등급 판정은 자동화할 수 없다.** 출처 문자열만 보면 `hashicorp/agent-skills`는 "조직 계정 → C",
   `dignified-python`은 "`dagster-io` → A"로 **둘 다 틀리게** 떨어진다(분류 스크립트가 실제로 그랬다).
@@ -810,10 +815,15 @@ C등급 금지 요건(*"실행 파일 포함"*)이 **불성립**하고, 인젝�
   그중 **`helm-chart-scaffolding`은 C + 실행 파일**이라 정본상 **도입 금지 대상**인데
   현재 `devops-engineer`에 등재돼 있다 → §③ 재판정 필요.
 - ✅ **무결성 고정은 이제 실효가 있다** — §해시 재계산이 열렸고 현재 **전 항목이 🔒**다
-  (2026-08-21 관측, **HEAD 기준** lock 14 = 디스크 14, ⚙️ 0종). 🔴 단 **🔒는 여전히 C등급을 면제하지 않는다** —
+  (2026-08-22 13:37 KST 관측 — **HEAD 기준 = 워킹트리 기준** lock **15** = 디스크 **15**, ⚙️ 0종.
+  모집단: `skills-lock.json`의 `skills` 키 15개 ↔ `.claude/skills/` 엔트리 15개, 양방향 차집합 0.
+  🔴 디스크 15는 **실디렉터리 10 + `.agents/skills/` 심볼릭 링크 5**의 합이다 — 한쪽 경로만 세면 갈린다.
+  계측: `python3 -c "import json;print(len(json.load(open('skills-lock.json'))['skills']))"` · `ls -1 .claude/skills/`).
+  🔴 단 **🔒는 여전히 C등급을 면제하지 않는다** —
   "안 바뀜"과 "안전함"은 다른 축이고, 그 혼동이 A등급 허점의 원인이었다.
-  🔴 **그리고 "14/14 재현"의 분모가 이미 낡았다**(2026-08-22 01:35 KST 실측). 워킹트리 기준 lock은
-  **15종**이고(사용자가 `find-skills`를 설치, 미커밋), **그중 1종이 원리상 재현 불가**다 — 설치 CLI가
+  🔴 **그리고 "14/14 재현"의 분모가 이미 낡았다**(2026-08-22 01:35 KST 최초 관측). 현재 lock은
+  **15종**이고(`find-skills` 추가 — `3cd65b9`로 커밋돼 **커밋·워킹트리 두 기준이 일치**한다),
+  **그중 1종이 원리상 재현 불가**다 — 설치 CLI가
   `BLOB_ALLOWED_OWNERS`(`vercel`·`vercel-labs`·`heygen-com`)에 대해서만 `tryBlobInstall` 경로를 타
   `computedHash`에 **레지스트리가 준 값**(`download.hash`)을 넣기 때문이다. 폴더 해시가 아니므로
   `computeSkillFolderHash` 재구현으로는 **맞을 수가 없다**(경로 후보 6종 + 내용 단독까지 전수 대조해 전멸).

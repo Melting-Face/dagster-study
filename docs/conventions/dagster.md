@@ -44,8 +44,12 @@ class MyDbtTranslator(DagsterDbtTranslator):   # ← 가급적 사용하지 않�
 - **`Lazy~` 변형이 있으면 그쪽을 본다** — `PySparkResource`는 리소스 초기화에서 세션을 **즉시** 만들어,
   그 리소스를 쓰지 않는 run까지 백엔드 가용성에 묶는다. `LazyPySparkResource`는 `spark_session`
   **접근 시점**에 만든다.
-- 커스텀 리소스는 **통합에 없거나 의미가 다를 때만** 만든다(예: `TrinoResource` — 유지보수 프로시저
-  실행용 경량 dbapi 래퍼로, 공식 Trino 리소스가 없다).
+- 커스텀 리소스는 **통합에 없거나 의미가 다를 때만** 만든다(예: `TrinoResource` — 공식 Trino 리소스가
+  없어 만든 경량 dbapi 래퍼).
+  🔴 **`TrinoResource`는 더 이상 유지보수 프로시저 실행자가 아니다** — Iceberg 유지보수는 **Spark
+  프로시저로 이관**됐고(`defs/maintenance.py`가 `dagster_pyspark`의 `LazyPySparkResource`를 쓴다),
+  이 접속은 `defs/resources.py`에 **dbt-spark 이행 중 방언 값 대조용으로만** 남는다
+  ([architectures/trino.md](../architectures/trino.md) · [operations.md](../operations.md) §Iceberg 유지보수).
 
 ## 자산 모듈에서는 `from __future__ import annotations` 금지
 
@@ -121,11 +125,11 @@ src/dagster_project/
 │   ├── constants.py        # 공통 상수/기본값 (S3 파라미터 포함)
 │   ├── helper.py           # read_csv_gz_table(일반) · load_heavy_csv_gz_to_iceberg(대용량)
 │   ├── dbt.py              # 공유 DbtProject · build_dbt_resource (단일 dbt 프로젝트)
-│   └── trino.py            # TrinoResource (Iceberg 유지보수 프로시저 실행)
+│   └── trino.py            # TrinoResource (dbt-spark 이행 중 방언 값 대조용 — 유지보수는 Spark로 이관)
 └── defs/                   # load_defs가 재귀 자동발견하는 정의 루트
     ├── resources.py        # @dg.definitions: s3 · dbt · trino · io_manager_* · 테이블 바인딩
     ├── automation.py       # dbt_all_job · dbt_all_schedule (모듈 스코프 객체)
-    ├── maintenance.py      # iceberg_maintenance_job: 스냅샷 만료→orphan 정리(주간 스케줄)
+    ├── maintenance.py      # iceberg_maintenance_job: 컴팩션→스냅샷 만료→orphan 정리 3단계(주간 스케줄, 순서 강제)
     ├── mimic_iv/           # 데이터셋 서브프로젝트 (정의만)
     │   ├── constants.py    # NAMESPACE · GROUP_NAME · SOURCE_BASE
     │   ├── assets.py       # 명시적 @asset (bronze 적재)

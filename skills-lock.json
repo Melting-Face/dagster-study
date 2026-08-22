@@ -24,6 +24,12 @@
       "skillPath": "skills/dignified-python/skills/dignified-python/SKILL.md",
       "computedHash": "7ce4bc793bc67892758337f245daa2f65daa061692361f5744e681fb6236f7ed"
     },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
+    },
     "kubernetes-specialist": {
       "source": "jeffallan/claude-skills",
       "sourceType": "github",

@@ -135,6 +135,12 @@ kubectl apply -f \
     "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/${CNPG_BARMAN_PLUGIN_VERSION}/manifest.yaml"
 kubectl rollout status deployment -n "${CNPG_NS}" barman-cloud --timeout=180s
 
+# 4) 로컬 자체서명 CA — TLS 엔드포인트(Spark Connect gRPC Ingress 등)의 발급 체인.
+#    cert-manager가 보장된 뒤여야 하므로 위 ensure_cert_manager 다음에 둔다.
+log "로컬 CA 발급 체인 적용 (k8s/local-ca.yaml)"
+kubectl apply -f "${REPO_ROOT}/k8s/local-ca.yaml"
+kubectl wait --for=condition=Ready certificate/lakehouse-ca -n default --timeout=120s
+
 log "설치 완료. 오퍼레이터 상태:"
 kubectl get pods -n "${SPARK_OPERATOR_NS}"
 kubectl get pods -n "${CNPG_NS}"
